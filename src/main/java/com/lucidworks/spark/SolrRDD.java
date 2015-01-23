@@ -15,6 +15,7 @@ import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -23,15 +24,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 public class SolrRDD implements Serializable {
 
@@ -145,15 +138,31 @@ public class SolrRDD implements Serializable {
     this.collection = collection;
   }
 
+  /**
+   * Get a document by ID using real-time get
+   */
+  public JavaRDD<SolrDocument> get(JavaSparkContext jsc, final String docId) throws SolrServerException {
+    CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set("collection", collection);
+    params.set("qt", "/get");
+    params.set("id", docId);
+    QueryResponse resp = cloudSolrServer.query(params);
+    SolrDocument doc = (SolrDocument)resp.getResponse().get("doc");
+    List<SolrDocument> list = (doc != null) ? Arrays.asList(doc) : new ArrayList<SolrDocument>();
+    return jsc.parallelize(list, 1);
+  }
+
   public JavaRDD<SolrDocument> query(JavaSparkContext jsc, final SolrQuery query, boolean useDeepPagingCursor) throws SolrServerException {
     if (useDeepPagingCursor)
       return queryDeep(jsc, query);
 
+    query.set("collection", collection);
     CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
     List<SolrDocument> results = new ArrayList<SolrDocument>();
     Iterator<SolrDocument> resultsIter = new PagedResultsIterator(cloudSolrServer, query);
     while (resultsIter.hasNext()) results.add(resultsIter.next());
-    return jsc.parallelize(results);
+    return jsc.parallelize(results,1);
   }
 
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery query) throws SolrServerException {

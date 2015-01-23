@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schema name="example" version="1.5">
+  <field name="_version_" type="long" indexed="true" stored="true"/>
+  <field name="_root_" type="string" indexed="true" stored="false"/>
+  <field name="id" type="string" indexed="true" stored="true" required="true"/> 
+  <dynamicField name="*"  type="string" indexed="true" stored="true"/>
+  <uniqueKey>id</uniqueKey>
+  <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
+  <fieldType name="long" class="solr.TrieLongField" precisionStep="6"/>
+</schema>
