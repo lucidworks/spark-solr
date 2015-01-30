@@ -1,5 +1,7 @@
-package com.lucidworks.spark;
+package com.lucidworks.spark.example.streaming;
 
+import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
@@ -26,7 +28,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
   /**
    * Sends a stream of tweets to Solr.
    */
-  public int process(JavaStreamingContext jssc, CommandLine cli) throws Exception {
+  public void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception {
     String filtersArg = cli.getOptionValue("filters");
     String[] filters = (filtersArg != null) ? filtersArg.split(",") : new String[0];
 
@@ -63,14 +65,10 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
     // TODO: You can do other transformations / enrichments on the data before sending to Solr
 
     // when ready, send the docs into a SolrCloud cluster
-    String zkHost = cli.getOptionValue("zkHost", cli.getOptionValue("zkHost", "localhost:9983"));
-    String collection = cli.getOptionValue("collection", cli.getOptionValue("collection", "collection1"));
-    SolrSupport.indexDStreamOfDocs(zkHost, collection, 100, docs);
-
-    jssc.start();              // Start the computation
-    jssc.awaitTermination();   // Wait for the computation to terminate
-
-    return 0;
+    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
+    String collection = cli.getOptionValue("collection", "collection1");
+    int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
+    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
   }
 
   public Option[] getOptions() {

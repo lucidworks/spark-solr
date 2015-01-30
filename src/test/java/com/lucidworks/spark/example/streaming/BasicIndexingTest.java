@@ -1,21 +1,19 @@
-package com.lucidworks.spark;
+package com.lucidworks.spark.example.streaming;
 
 import java.io.File;
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import com.lucidworks.spark.SolrRDD;
+import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.StreamProcessorTestBase;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.Function;
-import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaDStream;
-import org.apache.spark.streaming.api.java.JavaStreamingContext;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -24,24 +22,9 @@ import static org.junit.Assert.assertTrue;
 /**
  * Indexes some docs into Solr and then verifies they were indexed correctly from Spark.
  */
-public class BasicIndexingTest extends TestSolrCloudClusterSupport implements Serializable {
+public class BasicIndexingTest extends StreamProcessorTestBase {
 
-  protected transient JavaStreamingContext jssc;
-
-  @Before
-  public void setupSparkStreamingContext() {
-    SparkConf conf = new SparkConf()
-      .setMaster("local")
-      .setAppName("test")
-      .set("spark.default.parallelism", "1");
-    jssc = new JavaStreamingContext(conf, new Duration(500));
-  }
-
-  @After
-  public void stopSparkStreamingContext() {
-    jssc.stop(true, true);
-  }
-
+  //@Ignore
   @Test
   public void testIndexing() throws Exception {
     // create a collection named "test"

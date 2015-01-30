@@ -1,5 +1,20 @@
 package com.lucidworks.spark;
 
+import java.io.IOException;
+import java.io.Serializable;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Random;
+import java.util.Set;
+
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
@@ -19,12 +34,6 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.net.ConnectException;
-import java.net.SocketException;
-import java.util.*;
 
 public class SolrRDD implements Serializable {
 

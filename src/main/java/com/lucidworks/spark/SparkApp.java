@@ -11,6 +11,10 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.lucidworks.spark.example.query.SolrQueryProcessor;
+import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
+import com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -56,10 +60,18 @@ public class SparkApp implements Serializable {
         jssc.sparkContext().addFile(cli.getOptionValue("pipeline"));
       }
 
-      return process(jssc, cli);
+      plan(jssc, cli);
+
+      jssc.start();              // Start the computation
+      jssc.awaitTermination();   // Wait for the computation to terminate
+
+      return 0;
     }
 
-    protected abstract int process(JavaStreamingContext jssc, CommandLine cli) throws Exception;
+    /**
+     * Create a concrete stream processing plan; the actually processing will be started and managed by the base class.
+     */
+    public abstract void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception;
   }
 
   public static Logger log = Logger.getLogger(SparkApp.class);
@@ -137,17 +149,11 @@ public class SparkApp implements Serializable {
               .withDescription("Name of collection; no default")
               .create("collection"),
       OptionBuilder
-              .withArgName("URL(s)")
+              .withArgName("#")
               .hasArg()
               .isRequired(false)
-              .withDescription("Comma-delimited list of Fusion indexing pipeline endpoints.")
-              .create("fusion"),
-      OptionBuilder
-              .withArgName("FILE")
-              .hasArg()
-              .isRequired(false)
-              .withDescription("Path to a pipeline definition file.")
-              .create("pipeline")
+              .withDescription("Number of docs to queue up on the client before sending to Solr; default is 10")
+              .create("batchSize")
     };
   }
 
@@ -157,6 +163,8 @@ public class SparkApp implements Serializable {
       return new TwitterToSolrStreamProcessor();
     else if ("query-solr".equals(streamProcType))
       return new SolrQueryProcessor();
+    else if ("oneusagov".equals(streamProcType))
+      return new OneUsaGovStreamProcessor();
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
     // classpath scanning
@@ -178,6 +186,7 @@ public class SparkApp implements Serializable {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
     formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
+    formatter.printHelp("oneusagov", getProcessorOptions(new OneUsaGovStreamProcessor()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {
@@ -308,9 +317,6 @@ public class SparkApp implements Serializable {
       File dir = new File(path);
       if (dir.isDirectory()) {
         String packagePath = packageName.replace('.',File.separatorChar);
-
-        System.out.println(">> packagePath="+packagePath);
-
         if (dir.getAbsolutePath().endsWith(packagePath)) {
           for (File file : dir.listFiles()) {
             if (file.getName().endsWith(".class")) {

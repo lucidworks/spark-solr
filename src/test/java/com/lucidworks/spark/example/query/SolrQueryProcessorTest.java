@@ -1,5 +1,6 @@
-package com.lucidworks.spark;
+package com.lucidworks.spark.example.query;
 
+import com.lucidworks.spark.SparkApp;
 import org.junit.Ignore;
 import org.junit.Test;
 
