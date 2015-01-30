@@ -19,7 +19,9 @@ First, build the Jar for this project:
 
 To run the Twitter examples, you'll need to configure your Twitter API credentials in:
 
+```
 src/main/resources/twitter4j.properties
+```
 
 and then re-build the package (mvn package).
 
@@ -76,9 +78,10 @@ The `com.lucidworks.spark.SolrSupport` class provides static helper functions fo
  Spark streaming application code. 
 
 ```
-    String zkHost = cli.getOptionValue("zkHost", cli.getOptionValue("zkHost", "localhost:9983"));
-    String collection = cli.getOptionValue("collection", cli.getOptionValue("collection", "collection1"));
-    SolrSupport.indexDStreamOfDocs(zkHost, collection, 100, docs);
+    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
+    String collection = cli.getOptionValue("collection", "collection1");
+    int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
+    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
 ```
 
 Developing a Spark Application
@@ -99,3 +102,5 @@ StreamProcessor
 -------------
 
 Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to build a Spark streaming application.
+See com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor or
+com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor for examples of how to write a StreamProcessor.
