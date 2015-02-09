@@ -11,10 +11,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.Set;
 
+import com.lucidworks.spark.query.PagedResultsIterator;
+import com.lucidworks.spark.query.SolrTermVector;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
@@ -31,9 +32,11 @@ import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.util.NamedList;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.mllib.feature.HashingTF;
 
 public class SolrRDD implements Serializable {
 
@@ -44,87 +47,63 @@ public class SolrRDD implements Serializable {
   /**
    * Iterates over the entire results set of a query (all hits).
    */
-  private class PagedResultsIterator implements Iterator<SolrDocument>, Iterable<SolrDocument> {
+  private class QueryResultsIterator extends PagedResultsIterator<SolrDocument> {
 
-    private SolrServer solrServer;
-    private SolrQuery solrQuery;
-    private SolrDocumentList currentPage;
-    private int currentPageSize = 0;
-    private int iterPos = 0;
-    private long totalDocs = 0;
-    private long numDocs = 0;
-    private String cursorMark = null;
-    private boolean closeAfterIterating = false;
-
-    private PagedResultsIterator(SolrServer solrServer, SolrQuery solrQuery) {
-      this(solrServer, solrQuery, null);
+    private QueryResultsIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark) {
+      super(solrServer, solrQuery, cursorMark);
     }
 
-    private PagedResultsIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark) {
-      this.solrServer = solrServer;
-      this.closeAfterIterating = !(solrServer instanceof CloudSolrServer);
-      this.solrQuery = solrQuery;
-      this.cursorMark = cursorMark;
-      if (solrQuery.getRows() == null)
-        solrQuery.setRows(DEFAULT_PAGE_SIZE); // default page size
+    protected List<SolrDocument> processQueryResponse(QueryResponse resp) {
+      return resp.getResults();
+    }
+  }
+
+  /**
+   * Returns an iterator over TermVectors
+   */
+  private class TermVectorIterator extends PagedResultsIterator<SolrTermVector> {
+
+    private String field = null;
+    private HashingTF hashingTF = null;
+
+    private TermVectorIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark, String field, int numFeatures) {
+      super(solrServer, solrQuery, cursorMark);
+      this.field = field;
+      hashingTF = new HashingTF(numFeatures);
     }
 
-    public boolean hasNext() {
-      if (currentPage == null || iterPos == currentPageSize) {
-        try {
-          currentPage = fetchNextPage();
-          currentPageSize = currentPage.size();
-          iterPos = 0;
-        } catch (SolrServerException sse) {
-          throw new RuntimeException(sse);
+    protected List<SolrTermVector> processQueryResponse(QueryResponse resp) {
+      NamedList<Object> response = resp.getResponse();
+
+      NamedList<Object> termVectorsNL = (NamedList<Object>) response.get("termVectors");
+      if (termVectorsNL == null)
+        throw new RuntimeException("No termVectors in response! " +
+          "Please check your query to make sure it is requesting term vector information from Solr correctly.");
+
+      List<SolrTermVector> termVectors = new ArrayList<SolrTermVector>(termVectorsNL.size());
+      Iterator<Map.Entry<String, Object>> iter = termVectorsNL.iterator();
+      while (iter.hasNext()) {
+        Map.Entry<String, Object> next = iter.next();
+        String nextKey = next.getKey();
+        Object nextValue = next.getValue();
+        if (nextValue instanceof NamedList) {
+          NamedList nextList = (NamedList) nextValue;
+          Object fieldTerms = nextList.get(field);
+          if (fieldTerms != null && fieldTerms instanceof NamedList) {
+            termVectors.add(SolrTermVector.newInstance(nextKey, hashingTF, (NamedList<Object>) fieldTerms));
+          }
         }
       }
-      boolean hasNext = (iterPos < currentPageSize);
-      if (!hasNext && closeAfterIterating) {
-        try {
-          solrServer.shutdown();
-        } catch (Exception exc) {}
-      }
-      return hasNext;
-    }
 
-    protected int getStartForNextPage() {
-      Integer currentStart = solrQuery.getStart();
-      return (currentStart != null) ? currentStart + solrQuery.getRows() : 0;
-    }
-
-    protected SolrDocumentList fetchNextPage() throws SolrServerException {
-      int start = (cursorMark != null) ? 0 : getStartForNextPage();
-      QueryResponse resp = querySolr(solrServer, solrQuery, start, cursorMark);
-      if (cursorMark != null)
-        cursorMark = resp.getNextCursorMark();
-
-      iterPos = 0;
       SolrDocumentList docs = resp.getResults();
       totalDocs = docs.getNumFound();
-      return docs;
-    }
 
-    public SolrDocument next() {
-      if (currentPage == null || iterPos >= currentPageSize)
-        throw new NoSuchElementException("No more docs available!");
-
-      ++numDocs;
-
-      return currentPage.get(iterPos++);
-    }
-
-    public void remove() {
-      throw new UnsupportedOperationException("remove is not supported");
-    }
-
-    public Iterator<SolrDocument> iterator() {
-      return this;
+      return termVectors;
     }
   }
 
   // can't serialize CloudSolrServers so we cache them in a static context to reuse by the zkHost
-  private static final Map<String,CloudSolrServer> cachedServers = new HashMap<String,CloudSolrServer>();
+  private static final Map<String, CloudSolrServer> cachedServers = new HashMap<String, CloudSolrServer>();
 
   protected static CloudSolrServer getSolrServer(String zkHost) {
     CloudSolrServer cloudSolrServer = null;
@@ -157,7 +136,7 @@ public class SolrRDD implements Serializable {
     params.set("qt", "/get");
     params.set("id", docId);
     QueryResponse resp = cloudSolrServer.query(params);
-    SolrDocument doc = (SolrDocument)resp.getResponse().get("doc");
+    SolrDocument doc = (SolrDocument) resp.getResponse().get("doc");
     List<SolrDocument> list = (doc != null) ? Arrays.asList(doc) : new ArrayList<SolrDocument>();
     return jsc.parallelize(list, 1);
   }
@@ -169,9 +148,9 @@ public class SolrRDD implements Serializable {
     query.set("collection", collection);
     CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
     List<SolrDocument> results = new ArrayList<SolrDocument>();
-    Iterator<SolrDocument> resultsIter = new PagedResultsIterator(cloudSolrServer, query);
+    Iterator<SolrDocument> resultsIter = new QueryResultsIterator(cloudSolrServer, query, null);
     while (resultsIter.hasNext()) results.add(resultsIter.next());
-    return jsc.parallelize(results,1);
+    return jsc.parallelize(results, 1);
   }
 
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery query) throws SolrServerException {
@@ -189,12 +168,46 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrDocument> docs = jsc.parallelize(shards).flatMap(
       new FlatMapFunction<String, SolrDocument>() {
         public Iterable<SolrDocument> call(String shardUrl) throws Exception {
-          return new PagedResultsIterator(new HttpSolrServer(shardUrl), query, "*");
+          return new QueryResultsIterator(new HttpSolrServer(shardUrl), query, "*");
         }
       }
     );
     return docs;
   }
+
+  public JavaRDD<SolrTermVector> queryTermVectors(JavaSparkContext jsc, final SolrQuery query, final String field, final int numFeatures) throws SolrServerException {
+    // first get a list of replicas to query for this collection
+    List<String> shards = buildShardList(getSolrServer(zkHost));
+
+    if (query.getRequestHandler() == null) {
+      System.out.println(">> set requestHandler to /tvrh");
+      query.setRequestHandler("/tvrh");
+    }
+    query.set("shards.qt", query.getRequestHandler());
+
+    query.set("tv.fl", field);
+    query.set("fq", field + ":[* TO *]"); // terms field not null!
+    query.set("tv.tf_idf", "true");
+
+    // we'll be directing queries to each shard, so we don't want distributed
+    query.set("distrib", false);
+    query.set("collection", collection);
+    query.setStart(0);
+    if (query.getRows() == null)
+      query.setRows(DEFAULT_PAGE_SIZE); // default page size
+
+    // parallelize the requests to the shards
+    JavaRDD<SolrTermVector> docs = jsc.parallelize(shards).flatMap(
+      new FlatMapFunction<String, SolrTermVector>() {
+        public Iterable<SolrTermVector> call(String shardUrl) throws Exception {
+          return new TermVectorIterator(new HttpSolrServer(shardUrl), query, "*", field, numFeatures);
+        }
+      }
+    );
+    return docs;
+  }
+
+  // TODO: need to build up a LBSolrServer here with all possible replicas
 
   protected List<String> buildShardList(CloudSolrServer cloudSolrServer) {
     ZkStateReader zkStateReader = cloudSolrServer.getZkStateReader();
@@ -203,7 +216,7 @@ public class SolrRDD implements Serializable {
     Set<String> liveNodes = clusterState.getLiveNodes();
     Collection<Slice> slices = clusterState.getSlices(collection);
     if (slices == null)
-      throw new IllegalArgumentException("Collection "+collection+" not found!");
+      throw new IllegalArgumentException("Collection " + collection + " not found!");
 
     Random random = new Random();
     List<String> shards = new ArrayList<String>();
@@ -216,7 +229,7 @@ public class SolrRDD implements Serializable {
       }
       int numReplicas = replicas.size();
       if (numReplicas == 0)
-        throw new IllegalStateException("Shard "+slice.getName()+" does not have any active replicas!");
+        throw new IllegalStateException("Shard " + slice.getName() + " does not have any active replicas!");
 
       String replicaUrl = (numReplicas == 1) ? replicas.get(0) : replicas.get(random.nextInt(replicas.size()));
       shards.add(replicaUrl);
@@ -264,7 +277,7 @@ public class SolrRDD implements Serializable {
     return docs;
   }
 
-  protected static QueryResponse querySolr(SolrServer solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
+  public static QueryResponse querySolr(SolrServer solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
     QueryResponse resp = null;
     try {
       if (cursorMark != null) {
@@ -279,9 +292,9 @@ public class SolrRDD implements Serializable {
       // re-try once in the event of a communications error with the server
       Throwable rootCause = SolrException.getRootCause(exc);
       boolean wasCommError =
-              (rootCause instanceof ConnectException ||
-               rootCause instanceof IOException ||
-               rootCause instanceof SocketException);
+        (rootCause instanceof ConnectException ||
+          rootCause instanceof IOException ||
+          rootCause instanceof SocketException);
       if (wasCommError) {
         try {
           Thread.sleep(2000L);

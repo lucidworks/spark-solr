@@ -11,6 +11,7 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.lucidworks.spark.example.query.ReadTermVectors;
 import com.lucidworks.spark.example.query.SolrQueryProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 import com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor;
@@ -163,6 +164,8 @@ public class SparkApp implements Serializable {
       return new TwitterToSolrStreamProcessor();
     else if ("query-solr".equals(streamProcType))
       return new SolrQueryProcessor();
+    else if ("term-vectors".equals(streamProcType))
+      return new ReadTermVectors();
     else if ("oneusagov".equals(streamProcType))
       return new OneUsaGovStreamProcessor();
 
@@ -187,6 +190,7 @@ public class SparkApp implements Serializable {
     formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
     formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
     formatter.printHelp("oneusagov", getProcessorOptions(new OneUsaGovStreamProcessor()));
+    formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {

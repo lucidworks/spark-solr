@@ -30,7 +30,7 @@ import static org.junit.Assert.*;
  */
 public class OneUsaGovStreamProcessorTest extends StreamProcessorTestBase {
 
-  //@Ignore
+  @Ignore
   @Test
   public void testOneUsaGovStream() throws Exception {
     String confName = "testConfig";
