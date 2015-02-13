@@ -28,9 +28,9 @@ import static org.junit.Assert.*;
 /**
  * Indexes data pulled from the 1.usa.gov feed.
  */
+@Ignore
 public class OneUsaGovStreamProcessorTest extends StreamProcessorTestBase {
 
-  @Ignore
   @Test
   public void testOneUsaGovStream() throws Exception {
     String confName = "testConfig";

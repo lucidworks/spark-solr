@@ -73,9 +73,6 @@ public class OneUsaGovStreamProcessor extends SparkApp.StreamProcessor {
     );
 
     // when ready, send the docs into a SolrCloud cluster
-    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
-    String collection = cli.getOptionValue("collection", "collection1");
-    int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
   }
 

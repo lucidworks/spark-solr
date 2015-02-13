@@ -22,9 +22,9 @@ import static org.junit.Assert.assertTrue;
 /**
  * Indexes some docs into Solr and then verifies they were indexed correctly from Spark.
  */
+@Ignore
 public class BasicIndexingTest extends StreamProcessorTestBase {
 
-  //@Ignore
   @Test
   public void testIndexing() throws Exception {
     // create a collection named "test"
