@@ -12,7 +12,7 @@ public class SolrQueryProcessorTest {
   @Test
   public void testQueryProcessor() {
     String[] args = new String[] {
-      "query-solr", "-zkHost", "localhost:9983",
+      "query-solr", "-zkHost", "localhost:9985",
       "-collection", "gettingstarted", "-query", "*:*",
       "-master", "local[2]", "-v"
     };
