@@ -16,6 +16,7 @@ import java.util.Set;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
+import com.lucidworks.spark.util.SolrJsonSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
@@ -36,7 +37,16 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.mllib.feature.HashingTF;
+import org.apache.spark.sql.api.java.JavaSQLContext;
+import org.apache.spark.sql.api.java.JavaSchemaRDD;
+
+import org.apache.spark.sql.api.java.DataType;
+import org.apache.spark.sql.api.java.StructType;
+import org.apache.spark.sql.api.java.StructField;
+import org.apache.spark.sql.api.java.Row;
+
 
 public class SolrRDD implements Serializable {
 
@@ -105,7 +115,7 @@ public class SolrRDD implements Serializable {
   // can't serialize CloudSolrServers so we cache them in a static context to reuse by the zkHost
   private static final Map<String, CloudSolrServer> cachedServers = new HashMap<String, CloudSolrServer>();
 
-  protected static CloudSolrServer getSolrServer(String zkHost) {
+  public static CloudSolrServer getSolrServer(String zkHost) {
     CloudSolrServer cloudSolrServer = null;
     synchronized (cachedServers) {
       cloudSolrServer = cachedServers.get(zkHost);
@@ -275,6 +285,128 @@ public class SolrRDD implements Serializable {
       }
     );
     return docs;
+  }
+
+  private static final Map<String,DataType> solrDataTypes = new HashMap<String, DataType>();
+  static {
+    // TODO: handle multi-valued somehow?
+    solrDataTypes.put("solr.StrField", DataType.StringType);
+    solrDataTypes.put("solr.TextField", DataType.StringType);
+    solrDataTypes.put("solr.BoolField", DataType.BooleanType);
+    solrDataTypes.put("solr.TrieIntField", DataType.IntegerType);
+    solrDataTypes.put("solr.TrieLongField", DataType.LongType);
+    solrDataTypes.put("solr.TrieFloatField", DataType.FloatType);
+    solrDataTypes.put("solr.TrieDoubleField", DataType.DoubleType);
+    solrDataTypes.put("solr.TrieDateField", DataType.TimestampType);
+  }
+
+  public JavaSchemaRDD applySchema(JavaSQLContext sqlContext,
+                                   SolrQuery query,
+                                   JavaRDD<SolrDocument> docs,
+                                   String zkHost,
+                                   String collection)
+    throws Exception
+  {
+    // TODO: Use the LBHttpSolrServer here instead of just one node
+    CloudSolrServer solrServer = getSolrServer(zkHost);
+    Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
+    if (liveNodes.isEmpty())
+      throw new RuntimeException("No live nodes found for cluster: "+zkHost);
+    String solrBaseUrl = solrServer.getZkStateReader().getBaseUrlForNodeName(liveNodes.iterator().next());
+    if (!solrBaseUrl.endsWith("?"))
+      solrBaseUrl += "/";
+
+    // Build up a schema based on the fields requested
+    final String[] fields = query.getFields().split(",");
+    Map<String,String> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
+    List<StructField> listOfFields = new ArrayList<StructField>();
+    for (String field : fields) {
+      String fieldType = fieldTypeMap.get(field);
+      DataType dataType = (fieldType != null) ? solrDataTypes.get(fieldType) : null;
+      if (dataType == null) dataType = DataType.StringType;
+      listOfFields.add(DataType.createStructField(field, dataType, true));
+    }
+
+    // now convert each SolrDocument to a Row object
+    JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
+      public Row call(SolrDocument doc) throws Exception {
+        List<Object> vals = new ArrayList<Object>(fields.length);
+        for (String field : fields)
+          vals.add(doc.getFirstValue(field));
+        return Row.create(vals.toArray());
+      }
+    });
+
+    return sqlContext.applySchema(rows, DataType.createStructType(listOfFields));
+  }
+
+  private static Map<String,String> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+
+    // collect mapping of Solr field to type
+    Map<String,String> fieldTypeMap = new HashMap<String,String>();
+    for (String field : fields) {
+
+      if (fieldTypeMap.containsKey(field))
+        continue;
+
+      // Hit Solr Schema API to get field type for field
+      String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field;
+      try {
+
+        String fieldType = null;
+        try {
+          Map<String, Object> fieldMeta =
+            SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldUrl, 2);
+          fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
+        } catch (SolrException solrExc) {
+          int errCode = solrExc.code();
+          if (errCode == 404) {
+            int lio = field.lastIndexOf('_');
+            if (lio != -1) {
+              // see if the field is a dynamic field
+              String dynField = "*"+field.substring(lio);
+
+              fieldType = fieldTypeMap.get(dynField);
+              if (fieldType == null) {
+                String dynamicFieldsUrl = solrBaseUrl+collection+"/schema/dynamicfields/"+dynField;
+                try {
+                  Map<String, Object> dynFieldMeta =
+                    SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), dynamicFieldsUrl, 2);
+                  fieldType = SolrJsonSupport.asString("/dynamicField/type", dynFieldMeta);
+
+                  fieldTypeMap.put(dynField, fieldType);
+                } catch (Exception exc) {
+                  // just ignore this and throw the outer exc
+                  throw solrExc;
+                }
+              }
+            }
+          }
+        }
+
+        if (fieldType == null) {
+          log.warn("Can't figure out field type for field: " + field);
+          continue;
+        }
+
+        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+fieldType;
+        Map<String, Object> fieldTypeMeta =
+          SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
+        String fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
+
+        // map all the other fields for this type to speed up the schema analysis
+        List<String> otherFields = SolrJsonSupport.asList("/fieldType/fields", fieldTypeMeta);
+        for (String other : otherFields)
+          fieldTypeMap.put(other, fieldTypeClass);
+
+        fieldTypeMap.put(field, fieldTypeClass);
+
+      } catch (Exception exc) {
+        log.warn("Can't get field type for field "+field+" due to: "+exc);
+      }
+    }
+
+    return fieldTypeMap;
   }
 
   public static QueryResponse querySolr(SolrServer solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {

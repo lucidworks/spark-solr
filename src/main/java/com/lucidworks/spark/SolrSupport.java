@@ -4,28 +4,49 @@ import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.Serializable;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.ConnectException;
 import java.net.SocketException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import com.lucidworks.spark.filter.DocFilterContext;
+import com.lucidworks.spark.util.EmbeddedSolrServerFactory;
 import org.apache.commons.httpclient.ConnectTimeoutException;
 import org.apache.commons.httpclient.NoHttpResponseException;
 import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.impl.CloudSolrServer;
 import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.api.java.JavaDStream;
 
-import org.apache.spark.api.java.function.*;
-
-public class SolrSupport {
+/**
+ * A stateless utility class that provides static method for working with the SolrJ API.
+ */
+public class SolrSupport implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrSupport.class);
 
@@ -59,8 +80,11 @@ public class SolrSupport {
               public void call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
                 final SolrServer solrServer = getSolrServer(zkHost);
                 List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>();
+                Date indexedAt = new Date();
                 while (solrInputDocumentIterator.hasNext()) {
-                  batch.add(solrInputDocumentIterator.next());
+                  SolrInputDocument inputDoc = solrInputDocumentIterator.next();
+                  inputDoc.setField("_indexed_at_tdt", indexedAt);
+                  batch.add(inputDoc);
                   if (batch.size() >= batchSize)
                     sendBatchToSolr(solrServer, collection, batch);
                 }
@@ -75,9 +99,13 @@ public class SolrSupport {
     );
   }
 
-  public static void sendBatchToSolr(SolrServer solrServer, String collection, List<SolrInputDocument> batch) {
+  public static void sendBatchToSolr(SolrServer solrServer, String collection, Collection<SolrInputDocument> batch) {
     UpdateRequest req = new UpdateRequest();
     req.setParam("collection", collection);
+
+    if (log.isDebugEnabled())
+      log.debug("Sending batch of " + batch.size() + " to collection " + collection);
+
     req.add(batch);
     try {
       solrServer.request(req);
@@ -108,6 +136,8 @@ public class SolrSupport {
           throw new RuntimeException(e);
         }
       }
+    } finally {
+      batch.clear();
     }
   }
 
@@ -124,8 +154,12 @@ public class SolrSupport {
    * Uses reflection to map bean public fields and getters to dynamic fields in Solr.
    */
   public static SolrInputDocument autoMapToSolrInputDoc(final String docId, final Object obj, final Map<String,String> dynamicFieldOverrides) {
+    return autoMapToSolrInputDoc("id", docId, obj, dynamicFieldOverrides);
+  }
+
+  public static SolrInputDocument autoMapToSolrInputDoc(final String idFieldName, final String docId, final Object obj, final Map<String,String> dynamicFieldOverrides) {
     SolrInputDocument doc = new SolrInputDocument();
-    doc.setField("id", docId);
+    doc.setField(idFieldName, docId);
     if (obj == null)
       return doc;
 
@@ -134,6 +168,10 @@ public class SolrSupport {
     Field[] publicFields = obj.getClass().getFields();
     if (publicFields != null) {
       for (Field f : publicFields) {
+        // only non-static public
+        if (Modifier.isStatic(f.getModifiers()) || !Modifier.isPublic(f.getModifiers()))
+          continue;
+
         Object value = null;
         try {
           value = f.get(obj);
@@ -188,18 +226,24 @@ public class SolrSupport {
     if (type.isArray())
       return; // TODO: Array types not supported yet ...
 
-    if (dynamicFieldSuffix == null)
+    if (dynamicFieldSuffix == null) {
       dynamicFieldSuffix = getDefaultDynamicFieldMapping(type);
-
-    if ("_s".equals(dynamicFieldSuffix) && !(value instanceof String)) {
-      doc.addField(fieldName + dynamicFieldSuffix, value.toString());
-    } else {
-      doc.addField(fieldName + dynamicFieldSuffix, value);
+      // treat strings with multiple terms as text only if using the default!
+      if ("_s".equals(dynamicFieldSuffix)) {
+        String str = (String)value;
+        if (str.indexOf(" ") != -1)
+          dynamicFieldSuffix = "_t";
+      }
     }
+
+    if (dynamicFieldSuffix != null) // don't auto-map if we don't have a type
+      doc.addField(fieldName + dynamicFieldSuffix, value);
   }
 
   protected static String getDefaultDynamicFieldMapping(Class clazz) {
-    if (Long.class.equals(clazz) || long.class.equals(clazz))
+    if (String.class.equals(clazz))
+      return "_s";
+    else if (Long.class.equals(clazz) || long.class.equals(clazz))
       return "_l";
     else if (Integer.class.equals(clazz) || int.class.equals(clazz))
       return "_i";
@@ -209,7 +253,87 @@ public class SolrSupport {
       return "_f";
     else if (Boolean.class.equals(clazz) || boolean.class.equals(clazz))
       return "_b";
-
-    return "_s"; // default is string
+    else if (Date.class.equals(clazz))
+      return "_tdt";
+    return null; // default is don't auto-map
   }
+
+  /**
+   * Implements a basic document filtering scheme using Solr query matching against incoming documents.
+   */
+  public static JavaDStream<SolrInputDocument> filterDocuments(final DocFilterContext filterContext,
+                                                               final String zkHost,
+                                                               final String collection,
+                                                               JavaDStream<SolrInputDocument> docs)
+  {
+    final AtomicInteger partitionIndex = new AtomicInteger(0);
+    final String idFieldName = filterContext.getDocIdFieldName();
+
+    JavaDStream<SolrInputDocument> enriched = docs.mapPartitions(
+      new FlatMapFunction<Iterator<SolrInputDocument>, SolrInputDocument>() {
+        public Iterable<SolrInputDocument> call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
+          final long startNano = System.nanoTime();
+
+          final int partitionId = partitionIndex.incrementAndGet();
+
+          final String partitionFq = "docfilterid_i:" + partitionId;
+          // TODO: Can this be used concurrently? probably better to have each partition check it out from a pool
+          final EmbeddedSolrServer solr =
+            EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, collection);
+
+          // index all docs in this partition, then match queries
+          int numDocs = 0;
+          final Map<String, SolrInputDocument> inputDocs = new HashMap<String, SolrInputDocument>();
+          while (solrInputDocumentIterator.hasNext()) {
+            ++numDocs;
+
+            SolrInputDocument doc = solrInputDocumentIterator.next();
+            doc.setField("docfilterid_i", partitionId); // for clean-out
+            solr.add(doc);
+
+            inputDocs.put((String) doc.getFieldValue(idFieldName), doc);
+          }
+          solr.commit();
+
+          for (SolrQuery q : filterContext.getQueries()) {
+            SolrQuery query = q.getCopy();
+            query.setFields(idFieldName);
+            query.setRows(inputDocs.size());
+            query.addFilterQuery(partitionFq);
+
+            QueryResponse queryResponse = null;
+            try {
+              queryResponse = solr.query(query);
+            } catch (SolrServerException e) {
+              throw new RuntimeException(e);
+            }
+
+            for (SolrDocument doc : queryResponse.getResults()) {
+              String docId = (String) doc.getFirstValue(idFieldName);
+              SolrInputDocument inputDoc = inputDocs.get(docId);
+              if (inputDoc != null)
+                filterContext.onMatch(q, inputDoc);
+            }
+          }
+
+          solr.deleteByQuery(partitionFq, 100); // no rush on cleaning these docs up ...
+
+          final long durationNano = System.nanoTime() - startNano;
+
+          if (log.isDebugEnabled())
+            log.debug("Partition " + partitionId + " took " +
+              TimeUnit.MILLISECONDS.convert(durationNano, TimeUnit.NANOSECONDS) + "ms to process " + numDocs + " docs");
+
+          for (SolrInputDocument inputDoc : inputDocs.values()) {
+            inputDoc.removeField("docfilterid_i"); // leave no trace of our inner-workings
+          }
+
+          return inputDocs.values();
+        }
+      }
+    );
+
+    return enriched;
+  }
+
 }

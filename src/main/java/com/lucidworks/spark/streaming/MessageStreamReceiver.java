@@ -30,7 +30,9 @@ public class MessageStreamReceiver extends Receiver<String> implements MessageHa
   public void handleMessage(String msg) {
     String trimmed = (msg != null) ? msg.trim() : null;
     if (trimmed != null && trimmed.length() > 0) {
-      log.debug("Received data: "+trimmed);
+      if (log.isDebugEnabled())
+        log.debug("Received data: "+trimmed);
+
       store(trimmed);
     }
   }

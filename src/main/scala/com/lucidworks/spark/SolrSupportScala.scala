@@ -92,6 +92,8 @@ object SolrSupportScala {
           }
         }
       }
+    } finally {
+      batch.clear();
     }
   }
 

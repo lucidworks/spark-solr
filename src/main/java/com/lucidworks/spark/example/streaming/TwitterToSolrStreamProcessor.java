@@ -29,10 +29,8 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
    * Sends a stream of tweets to Solr.
    */
   public void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception {
-    String filtersArg = cli.getOptionValue("filters");
+    String filtersArg = cli.getOptionValue("tweetFilters");
     String[] filters = (filtersArg != null) ? filtersArg.split(",") : new String[0];
-
-    final boolean verbose = cli.hasOption("verbose");
 
     // start receiving a stream of tweets ...
     JavaReceiverInputDStream<Status> tweets =
@@ -47,27 +45,21 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
          */
         public SolrInputDocument call(Status status) {
 
-          if (verbose)
-            log.info("Received tweet: "+status.getId()+": "+status.getText().replaceAll("\\s+", " "));
+          if (log.isDebugEnabled())
+            log.debug("Received tweet: " + status.getId() + ": " + status.getText().replaceAll("\\s+", " "));
 
-          SolrInputDocument doc = new SolrInputDocument();
-          doc.setField("id", String.format("t-%d", status.getId()));
+          // simple mapping from primitives to dynamic Solr fields using reflection
+          SolrInputDocument doc =
+            SolrSupport.autoMapToSolrInputDoc("tweet-"+status.getId(), status, null);
           doc.setField("provider_s", "twitter");
-          doc.setField("tweet_s", status.getText());
           doc.setField("author_s", status.getUser().getScreenName());
-          doc.setField("created_at_tdt", status.getCreatedAt());
-          doc.setField("type_s", status.isRetweet() ? "retweet" : "post");
+          doc.setField("type_s", status.isRetweet() ? "echo" : "post");
           return doc;
         }
       }
     );
 
-    // TODO: You can do other transformations / enrichments on the data before sending to Solr
-
     // when ready, send the docs into a SolrCloud cluster
-    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
-    String collection = cli.getOptionValue("collection", "collection1");
-    int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
   }
 
@@ -78,7 +70,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
               .hasArg()
               .isRequired(false)
               .withDescription("List of Twitter keywords to filter on, separated by commas")
-              .create("filters")
+              .create("tweetFilters")
     };
   }
 }

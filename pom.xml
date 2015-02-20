@@ -239,7 +239,6 @@
             <artifactId>solr-core</artifactId>
             <version>4.10.3</version>
             <type>jar</type>
-            <scope>test</scope>
         </dependency>
 
         <dependency>

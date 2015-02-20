@@ -1,4 +1,4 @@
-package com.lucidworks.spark.example.query;
+package com.lucidworks.spark.example.streaming;
 
 import com.lucidworks.spark.SparkApp;
 import org.junit.Ignore;
@@ -6,14 +6,14 @@ import org.junit.Test;
 
 import static org.junit.Assert.fail;
 
-public class SolrQueryProcessorTest {
+public class DocumentFilteringStreamProcessorTest  {
 
   @Ignore
   @Test
-  public void testQueryProcessor() {
+  public void testIndexing() throws Exception {
     String[] args = new String[] {
-      "query-solr", "-zkHost", "localhost:9985",
-      "-collection", "gettingstarted", "-query", "*:*",
+      "docfilter", "-zkHost", "localhost:9983",
+      "-collection", "gettingstarted",
       "-master", "local[2]", "-v"
     };
 

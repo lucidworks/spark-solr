@@ -13,6 +13,7 @@ import java.util.zip.ZipInputStream;
 
 import com.lucidworks.spark.example.query.ReadTermVectors;
 import com.lucidworks.spark.example.query.SolrQueryProcessor;
+import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 import com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor;
 
@@ -48,7 +49,17 @@ public class SparkApp implements Serializable {
    * Defines the interface to a stream processing implementation that can be run from this command-line app.
    */
   public static abstract class StreamProcessor implements RDDProcessor {
+    
+    protected String zkHost;
+    protected String collection;
+    protected int batchSize;
+    
     public int run(SparkConf conf, CommandLine cli) throws Exception {
+
+      this.zkHost = cli.getOptionValue("zkHost", "localhost:9983");
+      this.collection = cli.getOptionValue("collection", "collection1");
+      this.batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
+
       // Create a local StreamingContext with two working thread and batch interval
       int batchIntervalSecs = Integer.parseInt(cli.getOptionValue("batchInterval", "1"));
       JavaStreamingContext jssc = new JavaStreamingContext(conf, new Duration(batchIntervalSecs * 1000L));
@@ -67,6 +78,18 @@ public class SparkApp implements Serializable {
       jssc.awaitTermination();   // Wait for the computation to terminate
 
       return 0;
+    }
+
+    public String getCollection() {
+      return collection;
+    }
+
+    public String getZkHost() {
+      return zkHost;
+    }
+
+    public int getBatchSize() {
+      return batchSize;
     }
 
     /**
@@ -168,6 +191,8 @@ public class SparkApp implements Serializable {
       return new ReadTermVectors();
     else if ("oneusagov".equals(streamProcType))
       return new OneUsaGovStreamProcessor();
+    else if ("docfilter".equals(streamProcType))
+      return new DocumentFilteringStreamProcessor();
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
     // classpath scanning
@@ -191,6 +216,7 @@ public class SparkApp implements Serializable {
     formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
     formatter.printHelp("oneusagov", getProcessorOptions(new OneUsaGovStreamProcessor()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
+    formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {
@@ -380,5 +406,4 @@ public class SparkApp implements Serializable {
     }
     return objBytes;
   }
-
 }
