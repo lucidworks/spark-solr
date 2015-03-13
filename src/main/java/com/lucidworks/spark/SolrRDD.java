@@ -85,7 +85,7 @@ public class SolrRDD implements Serializable {
     protected List<SolrTermVector> processQueryResponse(QueryResponse resp) {
       NamedList<Object> response = resp.getResponse();
 
-      NamedList<Object> termVectorsNL = (NamedList<Object>) response.get("termVectors");
+      NamedList<Object> termVectorsNL = (NamedList<Object>)response.get("termVectors");
       if (termVectorsNL == null)
         throw new RuntimeException("No termVectors in response! " +
           "Please check your query to make sure it is requesting term vector information from Solr correctly.");

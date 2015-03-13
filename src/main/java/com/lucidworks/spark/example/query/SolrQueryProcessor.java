@@ -109,7 +109,8 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     solrQuerySchemaRDD.registerTempTable("tweets");
 
     // SQL can be run over RDDs that have been registered as tables.
-    JavaSchemaRDD results = sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
+    JavaSchemaRDD results =
+      sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
 
     // The results of SQL queries are SchemaRDDs and support all the normal RDD operations.
     // The columns of a row in the result can be accessed by ordinal.

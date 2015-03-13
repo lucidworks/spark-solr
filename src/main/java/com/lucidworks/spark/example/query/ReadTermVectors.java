@@ -87,10 +87,12 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
     SolrRDD solrRDD = new SolrRDD(zkHost, collection);
 
     // query Solr for term vectors
-    JavaRDD<SolrTermVector> termVectorsFromSolr = solrRDD.queryTermVectors(jsc, solrQuery, field, numFeatures);
+    JavaRDD<SolrTermVector> termVectorsFromSolr =
+      solrRDD.queryTermVectors(jsc, solrQuery, field, numFeatures);
     termVectorsFromSolr.cache();
 
-    JavaRDD<Vector> vectors = termVectorsFromSolr.map(new Function<SolrTermVector, Vector>() {
+    JavaRDD<Vector> vectors =
+      termVectorsFromSolr.map(new Function<SolrTermVector, Vector>() {
       public Vector call(SolrTermVector solrTermVector) throws Exception {
         return (Vector)solrTermVector;
       }
