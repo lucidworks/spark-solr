@@ -63,7 +63,8 @@
                                     <exclude>org.scala-lang:scala-library</exclude>
                                     <exclude>commons-httpclient:commons-httpclient</exclude>
                                     <exclude>org.apache.curator:*</exclude>
-                                    <exclude>org.apache.commons:commons-lang3</exclude>
+                                    <exclude>org.apache.zookeeper:*</exclude>
+                                    <exclude>org.apache.commons:*</exclude>
                                     <exclude>com.google.code.findbugs</exclude>
                                     <exclude>com.ning:compress-lzf</exclude>
                                     <exclude>org.xerial.snappy:snappy-java</exclude>
@@ -74,16 +75,27 @@
                                     <exclude>com.esotericsoftware.minlog:minlog</exclude>
                                     <exclude>org.objenesis:objenesis</exclude>
                                     <exclude>commons-net:commons-net</exclude>
+                                    <exclude>commons-codec:commons-codec</exclude>
+                                    <exclude>commons-logging:commons-logging</exclude>
+                                    <exclude>commons-collections:commons-collections</exclude>
+                                    <exclude>commons-configuration:commons-configuration</exclude>
                                     <exclude>org.apache.james:*</exclude>
                                     <exclude>org.ow2.asm:asm-debug-all</exclude>
                                     <exclude>javax.xml.stream:stax-api</exclude>
-                                    <exclude>javax.ws.rs:javax.ws.rs-api</exclude>
+                                    <exclude>javax.ws.rs:*</exclude>
                                     <exclude>xml-apis:xml-apis</exclude>
                                     <exclude>org.ow2.asm:asm</exclude>
                                     <exclude>com.codahale.metrics:metrics-core</exclude>
                                     <exclude>com.sun.xml.bind:jaxb-impl</exclude>
-                                    <exclude>com.sun.jersey:jersey-client</exclude>
-                                    <exclude>org.mortbay.jetty:jetty-util</exclude>
+                                    <exclude>javax.xml.bind:*</exclude>
+                                    <exclude>com.sun.jersey:*</exclude>
+                                    <exclude>org.mortbay.jetty:*</exclude>
+                                    <exclude>org.apache.avro:*</exclude>
+                                    <exclude>javax.servlet:*</exclude>
+                                    <exclude>org.codehaus.jettison:*</exclude>
+                                    <exclude>joda-time:joda-time</exclude>
+                                    <exclude>com.fasterxml.jackson:*</exclude>
+                                    <exclude>com.jcraft:jsch</exclude>
                                 </excludes>
                             </artifactSet>
                             <relocations>
@@ -252,6 +264,12 @@
         <dependency>
             <groupId>org.codehaus.jackson</groupId>
             <artifactId>jackson-mapper-asl</artifactId>
+            <version>1.9.11</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-core-asl</artifactId>
             <version>1.9.11</version>
         </dependency>
 
