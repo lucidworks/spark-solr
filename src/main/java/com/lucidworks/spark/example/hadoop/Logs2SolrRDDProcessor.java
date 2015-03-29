@@ -8,7 +8,7 @@ import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.SparkConf;
 
@@ -48,7 +48,7 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
     jsc.binaryFiles(cli.getOptionValue("hdfsPath")).foreach(
       new VoidFunction<Tuple2<String, PortableDataStream>>() {
         public void call(Tuple2<String, PortableDataStream> t2) throws Exception {
-          final SolrServer solrServer = SolrSupport.getSolrServer(zkHost);
+          final SolrClient solrServer = SolrSupport.getSolrServer(zkHost);
           List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>(batchSize);
           String path = t2._1;
           BufferedReader br = null;

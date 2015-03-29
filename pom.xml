@@ -5,7 +5,7 @@
     <groupId>com.lucidworks.spark</groupId>
     <artifactId>spark-solr</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>5x-1.0-SNAPSHOT</version>
     <name>spark-solr</name>
     <url>http://maven.apache.org</url>
     <properties>
@@ -162,21 +162,21 @@
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-solrj</artifactId>
-            <version>4.10.3</version>
+            <version>5.0.0</version>
             <type>jar</type>
         </dependency>
 
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-core</artifactId>
-            <version>4.10.3</version>
+            <version>5.0.0</version>
             <type>jar</type>
         </dependency>
 
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-test-framework</artifactId>
-            <version>4.10.3</version>
+            <version>5.0.0</version>
             <type>jar</type>
             <scope>test</scope>
         </dependency>
