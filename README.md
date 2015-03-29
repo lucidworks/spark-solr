@@ -29,7 +29,7 @@ Now, let's populate a SolrCloud index with tweets:
 
 ```
 ./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
-  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT.jar \
+  <PROJECT_PATH>/target/spark-solr-5x-1.0-SNAPSHOT.jar \
   twitter-to-solr -zkHost localhost:9983 -collection collection1
 ```
 
@@ -38,7 +38,7 @@ query into a Spark RDD:
 
 ```
 ./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
-  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT.jar \
+  <PROJECT_PATH>/target/spark-solr-5x-1.0-SNAPSHOT.jar \
   query-solr -zkHost=localhost:9983 -collection=collection1 -query="*:*"
 ```
 
