@@ -7,7 +7,7 @@ import java.util.Map;
 
 import com.lucidworks.spark.SolrSupport;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
@@ -52,7 +52,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   private EmbeddedSolrServer bootstrapEmbeddedSolrServer(String zkHost, String collection) throws Exception {
 
-    CloudSolrServer cloudClient = (CloudSolrServer)SolrSupport.getSolrServer(zkHost);
+    CloudSolrClient cloudClient = (CloudSolrClient)SolrSupport.getSolrServer(zkHost);
     cloudClient.connect();
 
     ZkStateReader zkStateReader = cloudClient.getZkStateReader();

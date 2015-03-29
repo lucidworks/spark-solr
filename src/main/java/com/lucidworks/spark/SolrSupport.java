@@ -28,13 +28,13 @@ import org.apache.commons.httpclient.ConnectTimeoutException;
 import org.apache.commons.httpclient.NoHttpResponseException;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
 import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
-import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -55,15 +55,15 @@ public class SolrSupport implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrSupport.class);
 
-  private static Map<String,CloudSolrServer> solrServers = new HashMap<String, CloudSolrServer>();
-  private static Map<String,ConcurrentUpdateSolrServer> leaderServers = new HashMap<String,ConcurrentUpdateSolrServer>();
+  private static Map<String,CloudSolrClient> solrServers = new HashMap<String, CloudSolrClient>();
+  private static Map<String,ConcurrentUpdateSolrClient> leaderServers = new HashMap<String,ConcurrentUpdateSolrClient>();
 
-  public static CloudSolrServer getSolrServer(String key) {
-    CloudSolrServer solr = null;
+  public static CloudSolrClient getSolrServer(String key) {
+    CloudSolrClient solr = null;
     synchronized (solrServers) {
       solr = solrServers.get(key);
       if (solr == null) {
-        solr = new CloudSolrServer(key);
+        solr = new CloudSolrClient(key);
         solr.connect();
         solrServers.put(key, solr);
       }
@@ -83,7 +83,7 @@ public class SolrSupport implements Serializable {
     final ShardPartitioner shardPartitioner = new ShardPartitioner(zkHost, collection);
     pairs.partitionBy(shardPartitioner).foreachPartition(new VoidFunction<Iterator<Tuple2<String, SolrInputDocument>>>() {
       public void call(Iterator<Tuple2<String, SolrInputDocument>> tupleIter) throws Exception {
-        ConcurrentUpdateSolrServer cuss = null;
+        ConcurrentUpdateSolrClient cuss = null;
         while (tupleIter.hasNext()) {
           Tuple2<String, SolrInputDocument> next = tupleIter.next();
           if (cuss == null) {
@@ -99,7 +99,7 @@ public class SolrSupport implements Serializable {
     });
   }
 
-  public static ConcurrentUpdateSolrServer getCUSS(final String zkHost,
+  public static ConcurrentUpdateSolrClient getCUSS(final String zkHost,
                                                       final String collection,
                                                       final String shardId,
                                                       final int queueSize,
@@ -107,14 +107,14 @@ public class SolrSupport implements Serializable {
                                                       final int pollQueueTime) throws Exception
   {
     final String leaderKey = collection + "|" + shardId;
-    ConcurrentUpdateSolrServer cuss = null;
+    ConcurrentUpdateSolrClient cuss = null;
 
     synchronized (leaderServers) {
       cuss = leaderServers.get(leaderKey);
       if (cuss == null) {
-        CloudSolrServer solrServer = getSolrServer(zkHost);
+        CloudSolrClient solrServer = getSolrServer(zkHost);
         final String leaderUrl = solrServer.getZkStateReader().getLeaderUrl(collection, shardId, 5000);
-        cuss = new ConcurrentUpdateSolrServer(leaderUrl, queueSize, numRunners) {
+        cuss = new ConcurrentUpdateSolrClient(leaderUrl, queueSize, numRunners) {
           public void handleError(Throwable ex) {
             log.error("Request to '" + leaderUrl + "' failed due to: " + ex);
             synchronized (leaderServers) {
@@ -159,7 +159,7 @@ public class SolrSupport implements Serializable {
     docs.foreachPartition(
       new VoidFunction<Iterator<SolrInputDocument>>() {
         public void call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
-          final SolrServer solrServer = getSolrServer(zkHost);
+          final SolrClient solrServer = getSolrServer(zkHost);
           List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>();
           Date indexedAt = new Date();
           while (solrInputDocumentIterator.hasNext()) {
@@ -176,7 +176,7 @@ public class SolrSupport implements Serializable {
     );
   }
 
-  public static void sendBatchToSolr(SolrServer solrServer, String collection, Collection<SolrInputDocument> batch) {
+  public static void sendBatchToSolr(SolrClient solrServer, String collection, Collection<SolrInputDocument> batch) {
     UpdateRequest req = new UpdateRequest();
     req.setParam("collection", collection);
 

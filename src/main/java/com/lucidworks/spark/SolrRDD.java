@@ -19,10 +19,10 @@ import com.lucidworks.spark.query.SolrTermVector;
 import com.lucidworks.spark.util.SolrJsonSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
-import org.apache.solr.client.solrj.impl.HttpSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -59,7 +59,7 @@ public class SolrRDD implements Serializable {
    */
   private class QueryResultsIterator extends PagedResultsIterator<SolrDocument> {
 
-    private QueryResultsIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark) {
+    private QueryResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
       super(solrServer, solrQuery, cursorMark);
     }
 
@@ -76,7 +76,7 @@ public class SolrRDD implements Serializable {
     private String field = null;
     private HashingTF hashingTF = null;
 
-    private TermVectorIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark, String field, int numFeatures) {
+    private TermVectorIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark, String field, int numFeatures) {
       super(solrServer, solrQuery, cursorMark);
       this.field = field;
       hashingTF = new HashingTF(numFeatures);
@@ -113,14 +113,14 @@ public class SolrRDD implements Serializable {
   }
 
   // can't serialize CloudSolrServers so we cache them in a static context to reuse by the zkHost
-  private static final Map<String, CloudSolrServer> cachedServers = new HashMap<String, CloudSolrServer>();
+  private static final Map<String, CloudSolrClient> cachedServers = new HashMap<String, CloudSolrClient>();
 
-  public static CloudSolrServer getSolrServer(String zkHost) {
-    CloudSolrServer cloudSolrServer = null;
+  public static CloudSolrClient getSolrServer(String zkHost) {
+    CloudSolrClient cloudSolrServer = null;
     synchronized (cachedServers) {
       cloudSolrServer = cachedServers.get(zkHost);
       if (cloudSolrServer == null) {
-        cloudSolrServer = new CloudSolrServer(zkHost);
+        cloudSolrServer = new CloudSolrClient(zkHost);
         cloudSolrServer.connect();
         cachedServers.put(zkHost, cloudSolrServer);
       }
@@ -140,7 +140,7 @@ public class SolrRDD implements Serializable {
    * Get a document by ID using real-time get
    */
   public JavaRDD<SolrDocument> get(JavaSparkContext jsc, final String docId) throws SolrServerException {
-    CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
+    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set("collection", collection);
     params.set("qt", "/get");
@@ -156,7 +156,7 @@ public class SolrRDD implements Serializable {
       return queryDeep(jsc, query);
 
     query.set("collection", collection);
-    CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
+    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
     List<SolrDocument> results = new ArrayList<SolrDocument>();
     Iterator<SolrDocument> resultsIter = new QueryResultsIterator(cloudSolrServer, query, null);
     while (resultsIter.hasNext()) results.add(resultsIter.next());
@@ -178,7 +178,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrDocument> docs = jsc.parallelize(shards).flatMap(
       new FlatMapFunction<String, SolrDocument>() {
         public Iterable<SolrDocument> call(String shardUrl) throws Exception {
-          return new QueryResultsIterator(new HttpSolrServer(shardUrl), query, "*");
+          return new QueryResultsIterator(new HttpSolrClient(shardUrl), query, "*");
         }
       }
     );
@@ -210,7 +210,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrTermVector> docs = jsc.parallelize(shards).flatMap(
       new FlatMapFunction<String, SolrTermVector>() {
         public Iterable<SolrTermVector> call(String shardUrl) throws Exception {
-          return new TermVectorIterator(new HttpSolrServer(shardUrl), query, "*", field, numFeatures);
+          return new TermVectorIterator(new HttpSolrClient(shardUrl), query, "*", field, numFeatures);
         }
       }
     );
@@ -219,7 +219,7 @@ public class SolrRDD implements Serializable {
 
   // TODO: need to build up a LBSolrServer here with all possible replicas
 
-  protected List<String> buildShardList(CloudSolrServer cloudSolrServer) {
+  protected List<String> buildShardList(CloudSolrClient cloudSolrServer) {
     ZkStateReader zkStateReader = cloudSolrServer.getZkStateReader();
 
     ClusterState clusterState = zkStateReader.getClusterState();
@@ -261,7 +261,7 @@ public class SolrRDD implements Serializable {
     if (query.getRows() == null)
       query.setRows(DEFAULT_PAGE_SIZE); // default page size
 
-    CloudSolrServer cloudSolrServer = getSolrServer(zkHost);
+    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
     String nextCursorMark = "*";
     while (true) {
       cursors.add(nextCursorMark);
@@ -308,7 +308,7 @@ public class SolrRDD implements Serializable {
     throws Exception
   {
     // TODO: Use the LBHttpSolrServer here instead of just one node
-    CloudSolrServer solrServer = getSolrServer(zkHost);
+    CloudSolrClient solrServer = getSolrServer(zkHost);
     Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
     if (liveNodes.isEmpty())
       throw new RuntimeException("No live nodes found for cluster: "+zkHost);
@@ -409,7 +409,7 @@ public class SolrRDD implements Serializable {
     return fieldTypeMap;
   }
 
-  public static QueryResponse querySolr(SolrServer solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
+  public static QueryResponse querySolr(SolrClient solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
     QueryResponse resp = null;
     try {
       if (cursorMark != null) {

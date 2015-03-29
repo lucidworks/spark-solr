@@ -2,9 +2,9 @@ package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.SolrRDD;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocumentList;
 
@@ -20,7 +20,7 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
 
   protected static final int DEFAULT_PAGE_SIZE = 50;
 
-  protected SolrServer solrServer;
+  protected SolrClient solrServer;
   protected SolrQuery solrQuery;
   protected int currentPageSize = 0;
   protected int iterPos = 0;
@@ -31,13 +31,13 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
 
   protected List<T> currentPage;
 
-  public PagedResultsIterator(SolrServer solrServer, SolrQuery solrQuery) {
+  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
     this(solrServer, solrQuery, null);
   }
 
-  public PagedResultsIterator(SolrServer solrServer, SolrQuery solrQuery, String cursorMark) {
+  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
     this.solrServer = solrServer;
-    this.closeAfterIterating = !(solrServer instanceof CloudSolrServer);
+    this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
     this.solrQuery = solrQuery;
     this.cursorMark = cursorMark;
     if (solrQuery.getRows() == null)
