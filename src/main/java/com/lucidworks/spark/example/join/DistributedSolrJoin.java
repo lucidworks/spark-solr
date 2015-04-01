@@ -10,6 +10,7 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.api.java.function.VoidFunction;
@@ -49,20 +50,32 @@ public class DistributedSolrJoin implements SparkApp.RDDProcessor {
 
     // parents
     final SolrQuery solrQuery = new SolrQuery("*:*");
-    //solrQuery.setFields("*");
+    solrQuery.setFields("id");
+
+    solrQuery.setRows(1000);
 
     List<SolrQuery.SortClause> sorts = new ArrayList<SolrQuery.SortClause>();
     sorts.add(new SolrQuery.SortClause("id", "asc"));
     sorts.add(new SolrQuery.SortClause("_version_", "asc"));
     solrQuery.setSorts(sorts);
 
+    System.out.println(">> starting to query solr");
+
     long _startMs = System.currentTimeMillis();
 
-    SolrRDD parentSolrRDD = new SolrRDD(zkHost, "parent");
+    SolrRDD parentSolrRDD = new SolrRDD(zkHost,collection);
+
+    JavaRDD<SolrDocument> results = parentSolrRDD.queryShards(jsc, solrQuery);
+    long count = results.count();
+    long _diffMs = (System.currentTimeMillis() - _startMs);
+
+    System.out.println(">> count="+count+"; took: "+_diffMs);
+
+    /*
     JavaPairRDD<String,SolrDocument> parents =
-            parentSolrRDD.queryShards(jsc, solrQuery).mapToPair(new PairFunction<SolrDocument, String, SolrDocument>() {
+            results.mapToPair(new PairFunction<SolrDocument, String, SolrDocument>() {
               public Tuple2<String, SolrDocument> call(SolrDocument doc) throws Exception {
-                return new Tuple2<String, SolrDocument>((String) doc.getFirstValue("joinkey_s"), doc);
+                return new Tuple2<String, SolrDocument>((String) doc.getFirstValue("id"), doc);
               }
             });
 
@@ -87,6 +100,7 @@ public class DistributedSolrJoin implements SparkApp.RDDProcessor {
     long _diffMs = (System.currentTimeMillis() - _startMs);
 
     System.out.println(">> count="+count+"; took: "+_diffMs);
+    */
 
     /*
     joined.flatMap(new FlatMapFunction<Tuple2<String, Tuple2<SolrDocument, SolrDocument>>, Object>() {

@@ -11,6 +11,8 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
+import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.ReadTermVectors;
 import com.lucidworks.spark.example.query.SolrQueryProcessor;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
@@ -193,6 +195,10 @@ public class SparkApp implements Serializable {
       return new OneUsaGovStreamProcessor();
     else if ("docfilter".equals(streamProcType))
       return new DocumentFilteringStreamProcessor();
+    else if ("hdfs-to-solr".equals(streamProcType))
+      return new HdfsToSolrRDDProcessor();
+    else if ("logs2solr".equals(streamProcType))
+      return new Logs2SolrRDDProcessor();
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
     // classpath scanning
@@ -217,6 +223,8 @@ public class SparkApp implements Serializable {
     formatter.printHelp("oneusagov", getProcessorOptions(new OneUsaGovStreamProcessor()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
     formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
+    formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));
+    formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {

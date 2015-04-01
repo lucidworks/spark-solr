@@ -31,17 +31,22 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
+import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
+import org.apache.solr.client.solrj.impl.BinaryResponseParser;
 import org.apache.solr.client.solrj.impl.CloudSolrServer;
+import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrServer;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.api.java.JavaDStream;
+import scala.Tuple2;
 
 /**
  * A stateless utility class that provides static method for working with the SolrJ API.
@@ -50,19 +55,83 @@ public class SolrSupport implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrSupport.class);
 
-  private static Map<String,SolrServer> solrServers = new HashMap<String, SolrServer>();
+  private static Map<String,CloudSolrServer> solrServers = new HashMap<String, CloudSolrServer>();
+  private static Map<String,ConcurrentUpdateSolrServer> leaderServers = new HashMap<String,ConcurrentUpdateSolrServer>();
 
-  public static SolrServer getSolrServer(String key) {
-    SolrServer solr = null;
+  public static CloudSolrServer getSolrServer(String key) {
+    CloudSolrServer solr = null;
     synchronized (solrServers) {
       solr = solrServers.get(key);
       if (solr == null) {
         solr = new CloudSolrServer(key);
+        solr.connect();
         solrServers.put(key, solr);
       }
     }
     return solr;
   }
+
+  public static void streamDocsIntoSolr(final String zkHost,
+                                        final String collection,
+                                        final String idField,
+                                        JavaPairRDD<String,SolrInputDocument> pairs,
+                                        final int queueSize,
+                                        final int numRunners,
+                                        final int pollQueueTime)
+    throws Exception
+  {
+    final ShardPartitioner shardPartitioner = new ShardPartitioner(zkHost, collection);
+    pairs.partitionBy(shardPartitioner).foreachPartition(new VoidFunction<Iterator<Tuple2<String, SolrInputDocument>>>() {
+      public void call(Iterator<Tuple2<String, SolrInputDocument>> tupleIter) throws Exception {
+        ConcurrentUpdateSolrServer cuss = null;
+        while (tupleIter.hasNext()) {
+          Tuple2<String, SolrInputDocument> next = tupleIter.next();
+          if (cuss == null) {
+            // once! all docs in this partition have the same leader!
+            String shardId = shardPartitioner.getShardId(next._1);
+            cuss = getCUSS(zkHost, collection, shardId, queueSize, numRunners, pollQueueTime);
+          }
+          SolrInputDocument doc = next._2;
+          doc.setField("indexed_at_tdt", new Date());
+          cuss.add(doc);
+        }
+      }
+    });
+  }
+
+  public static ConcurrentUpdateSolrServer getCUSS(final String zkHost,
+                                                      final String collection,
+                                                      final String shardId,
+                                                      final int queueSize,
+                                                      final int numRunners,
+                                                      final int pollQueueTime) throws Exception
+  {
+    final String leaderKey = collection + "|" + shardId;
+    ConcurrentUpdateSolrServer cuss = null;
+
+    synchronized (leaderServers) {
+      cuss = leaderServers.get(leaderKey);
+      if (cuss == null) {
+        CloudSolrServer solrServer = getSolrServer(zkHost);
+        final String leaderUrl = solrServer.getZkStateReader().getLeaderUrl(collection, shardId, 5000);
+        cuss = new ConcurrentUpdateSolrServer(leaderUrl, queueSize, numRunners) {
+          public void handleError(Throwable ex) {
+            log.error("Request to '" + leaderUrl + "' failed due to: " + ex);
+            synchronized (leaderServers) {
+              leaderServers.remove(leaderKey);
+            }
+          }
+        };
+        cuss.setParser(new BinaryResponseParser());
+        cuss.setRequestWriter(new BinaryRequestWriter());
+        cuss.setPollQueueTime(pollQueueTime);
+
+        leaderServers.put(leaderKey, cuss);
+      }
+    }
+    return cuss;
+  }
+
 
   /**
    * Helper function for indexing a DStream of SolrInputDocuments to Solr.
@@ -75,25 +144,33 @@ public class SolrSupport implements Serializable {
     docs.foreachRDD(
       new Function<JavaRDD<SolrInputDocument>, Void>() {
         public Void call(JavaRDD<SolrInputDocument> solrInputDocumentJavaRDD) throws Exception {
-          solrInputDocumentJavaRDD.foreachPartition(
-            new VoidFunction<Iterator<SolrInputDocument>>() {
-              public void call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
-                final SolrServer solrServer = getSolrServer(zkHost);
-                List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>();
-                Date indexedAt = new Date();
-                while (solrInputDocumentIterator.hasNext()) {
-                  SolrInputDocument inputDoc = solrInputDocumentIterator.next();
-                  inputDoc.setField("_indexed_at_tdt", indexedAt);
-                  batch.add(inputDoc);
-                  if (batch.size() >= batchSize)
-                    sendBatchToSolr(solrServer, collection, batch);
-                }
-                if (!batch.isEmpty())
-                  sendBatchToSolr(solrServer, collection, batch);
-              }
-            }
-          );
+          indexDocs(zkHost, collection, batchSize, solrInputDocumentJavaRDD);
           return null;
+        }
+      }
+    );
+  }
+
+  public static void indexDocs(final String zkHost,
+                                    final String collection,
+                                    final int batchSize,
+                                    JavaRDD<SolrInputDocument> docs) {
+
+    docs.foreachPartition(
+      new VoidFunction<Iterator<SolrInputDocument>>() {
+        public void call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
+          final SolrServer solrServer = getSolrServer(zkHost);
+          List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>();
+          Date indexedAt = new Date();
+          while (solrInputDocumentIterator.hasNext()) {
+            SolrInputDocument inputDoc = solrInputDocumentIterator.next();
+            inputDoc.setField("_indexed_at_tdt", indexedAt);
+            batch.add(inputDoc);
+            if (batch.size() >= batchSize)
+              sendBatchToSolr(solrServer, collection, batch);
+          }
+          if (!batch.isEmpty())
+            sendBatchToSolr(solrServer, collection, batch);
         }
       }
     );
