@@ -33,13 +33,13 @@ public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {
         .withArgName("INT")
         .hasArg()
         .isRequired(false)
-        .withDescription("Queue size for ConcurrentUpdateSolrServer; default is 1000")
+        .withDescription("Queue size for ConcurrentUpdateSolrClient; default is 1000")
         .create("queueSize"),
       OptionBuilder
         .withArgName("INT")
         .hasArg()
         .isRequired(false)
-        .withDescription("Number of runner threads per ConcurrentUpdateSolrServer instance; default is 2")
+        .withDescription("Number of runner threads per ConcurrentUpdateSolrClient instance; default is 2")
         .create("numRunners"),
       OptionBuilder
         .withArgName("INT")

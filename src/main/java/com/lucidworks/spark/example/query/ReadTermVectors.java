@@ -87,24 +87,17 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
     SolrRDD solrRDD = new SolrRDD(zkHost, collection);
 
     // query Solr for term vectors
-    JavaRDD<SolrTermVector> termVectorsFromSolr =
+    JavaRDD<Vector> termVectorsFromSolr =
       solrRDD.queryTermVectors(jsc, solrQuery, field, numFeatures);
     termVectorsFromSolr.cache();
 
-    JavaRDD<Vector> vectors =
-      termVectorsFromSolr.map(new Function<SolrTermVector, Vector>() {
-      public Vector call(SolrTermVector solrTermVector) throws Exception {
-        return (Vector)solrTermVector;
-      }
-    });
-
     // Cluster the data using KMeans
-    KMeansModel clusters = KMeans.train(vectors.rdd(), numClusters, numIterations);
+    KMeansModel clusters = KMeans.train(termVectorsFromSolr.rdd(), numClusters, numIterations);
 
     // TODO: do something interesting with the clusters
 
     // Evaluate clustering by computing Within Set Sum of Squared Errors
-    double WSSSE = clusters.computeCost(vectors.rdd());
+    double WSSSE = clusters.computeCost(termVectorsFromSolr.rdd());
     System.out.println("Within Set Sum of Squared Errors = " + WSSSE);
 
     jsc.stop();

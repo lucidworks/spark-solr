@@ -7,8 +7,9 @@ import java.util.Map;
 
 import com.lucidworks.spark.SolrSupport;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.cloud.ZkController;
+import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.CoreDescriptor;
@@ -52,7 +53,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   private EmbeddedSolrServer bootstrapEmbeddedSolrServer(String zkHost, String collection) throws Exception {
 
-    CloudSolrServer cloudClient = (CloudSolrServer)SolrSupport.getSolrServer(zkHost);
+    CloudSolrClient cloudClient = (CloudSolrClient)SolrSupport.getSolrServer(zkHost);
     cloudClient.connect();
 
     ZkStateReader zkStateReader = cloudClient.getZkStateReader();
@@ -78,7 +79,9 @@ public class EmbeddedSolrServerFactory implements Serializable {
     FileUtils.forceMkdir(instanceDir);
 
     File confDir = new File(instanceDir, "conf");
-    ZkController.downloadConfigDir(cloudClient.getZkStateReader().getZkClient(), configName, confDir);
+    ZkConfigManager zkConfigManager =
+      new ZkConfigManager(cloudClient.getZkStateReader().getZkClient());
+    zkConfigManager.downloadConfigDir(configName, confDir.toPath());
     if (!confDir.isDirectory())
       throw new IOException("Failed to download /configs/"+configName+" from ZooKeeper!");
 

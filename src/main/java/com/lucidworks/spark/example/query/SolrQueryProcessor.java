@@ -15,11 +15,11 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
-import org.apache.spark.sql.api.java.JavaSQLContext;
-import org.apache.spark.sql.api.java.JavaSchemaRDD;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 
-import org.apache.spark.sql.api.java.Row;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -101,20 +101,22 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
 
 
     // Now use schema information in Solr to build a queryable SchemaRDD
-    JavaSQLContext sqlContext = new JavaSQLContext(jsc);
-    JavaSchemaRDD solrQuerySchemaRDD =
+
+    SQLContext sqlContext = new SQLContext(jsc);
+    DataFrame solrQuerySchemaRDD =
       solrRDD.applySchema(sqlContext, solrQuery, solrJavaRDD, zkHost, collection);
 
     // Register the SchemaRDD as a table.
     solrQuerySchemaRDD.registerTempTable("tweets");
 
     // SQL can be run over RDDs that have been registered as tables.
-    JavaSchemaRDD results =
+    DataFrame results =
       sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
 
     // The results of SQL queries are SchemaRDDs and support all the normal RDD operations.
     // The columns of a row in the result can be accessed by ordinal.
-    List<Long> count = results.map(new Function<Row, Long>() {
+    JavaRDD<Row> resultsRDD = results.javaRDD();
+    List<Long> count = resultsRDD.map(new Function<Row, Long>() {
       public Long call(Row row) {
         return row.getLong(0);
       }

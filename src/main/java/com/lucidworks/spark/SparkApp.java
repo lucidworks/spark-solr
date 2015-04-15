@@ -17,7 +17,6 @@ import com.lucidworks.spark.example.query.ReadTermVectors;
 import com.lucidworks.spark.example.query.SolrQueryProcessor;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
-import com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
@@ -191,8 +190,6 @@ public class SparkApp implements Serializable {
       return new SolrQueryProcessor();
     else if ("term-vectors".equals(streamProcType))
       return new ReadTermVectors();
-    else if ("oneusagov".equals(streamProcType))
-      return new OneUsaGovStreamProcessor();
     else if ("docfilter".equals(streamProcType))
       return new DocumentFilteringStreamProcessor();
     else if ("hdfs-to-solr".equals(streamProcType))
@@ -220,7 +217,6 @@ public class SparkApp implements Serializable {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
     formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
-    formatter.printHelp("oneusagov", getProcessorOptions(new OneUsaGovStreamProcessor()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
     formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
     formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));

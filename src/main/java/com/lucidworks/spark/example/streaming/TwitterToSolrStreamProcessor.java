@@ -59,6 +59,9 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
       }
     );
 
+    // analyze text to get an MLlib model
+
+
     // when ready, send the docs into a SolrCloud cluster
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
   }

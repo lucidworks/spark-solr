@@ -5,7 +5,7 @@ import java.util.*;
 
 import org.apache.log4j.Logger;
 
-import org.apache.solr.client.solrj.impl.CloudSolrServer;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.cloud.ZkController;
@@ -30,14 +30,14 @@ public class TestSolrCloudClusterSupport {
   static final Logger log = Logger.getLogger(TestSolrCloudClusterSupport.class);
 
   protected static MiniSolrCloudCluster cluster;
-  protected static CloudSolrServer cloudSolrServer;
+  protected static CloudSolrClient cloudSolrServer;
 
   @BeforeClass
   public static void startCluster() throws Exception {
     File solrXml = new File("src/test/resources/solr.xml");
-    cluster = new MiniSolrCloudCluster(1, null, solrXml, null, null);
+    cluster = new MiniSolrCloudCluster(1, null, solrXml, null, null, null);
 
-    cloudSolrServer = new CloudSolrServer(cluster.getZkServer().getZkAddress(), true);
+    cloudSolrServer = new CloudSolrClient(cluster.getZkServer().getZkAddress(), true);
     cloudSolrServer.connect();
 
     assertTrue(!cloudSolrServer.getZkStateReader().getClusterState().getLiveNodes().isEmpty());
@@ -60,7 +60,10 @@ public class TestSolrCloudClusterSupport {
 
       // upload the test configs
       SolrZkClient zkClient = cloudSolrServer.getZkStateReader().getZkClient();
-      ZkController.uploadConfigDir(zkClient, confDir, confName);
+      ZkConfigManager zkConfigManager =
+        new ZkConfigManager(zkClient);
+
+      zkConfigManager.uploadConfigDir(confDir.toPath(), confName);
     }
 
     ModifiableSolrParams modParams = new ModifiableSolrParams();
