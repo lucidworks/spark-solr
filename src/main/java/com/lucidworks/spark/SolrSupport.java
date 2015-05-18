@@ -24,8 +24,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.lucidworks.spark.filter.DocFilterContext;
 import com.lucidworks.spark.util.EmbeddedSolrServerFactory;
-import org.apache.commons.httpclient.ConnectTimeoutException;
-import org.apache.commons.httpclient.NoHttpResponseException;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
@@ -221,8 +219,6 @@ public class SolrSupport implements Serializable {
   private static boolean shouldRetry(Exception exc) {
     Throwable rootCause = SolrException.getRootCause(exc);
     return (rootCause instanceof ConnectException ||
-            rootCause instanceof ConnectTimeoutException ||
-            rootCause instanceof NoHttpResponseException ||
             rootCause instanceof SocketException);
 
   }

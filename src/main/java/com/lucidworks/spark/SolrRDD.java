@@ -16,13 +16,16 @@ import java.util.Set;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
+import com.lucidworks.spark.query.StreamingResultsIterator;
 import com.lucidworks.spark.util.SolrJsonSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.response.FieldStatsInfo;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -46,16 +49,14 @@ import org.apache.spark.sql.DataFrame;
 
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.Row;
-
 
 public class SolrRDD implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrRDD.class);
 
-  private static final int DEFAULT_PAGE_SIZE = 50;
+  private static final int DEFAULT_PAGE_SIZE = 1000;
 
   /**
    * Iterates over the entire results set of a query (all hits).
@@ -118,7 +119,7 @@ public class SolrRDD implements Serializable {
   // can't serialize CloudSolrServers so we cache them in a static context to reuse by the zkHost
   private static final Map<String, CloudSolrClient> cachedServers = new HashMap<String, CloudSolrClient>();
 
-  public static CloudSolrClient getSolrServer(String zkHost) {
+  public static CloudSolrClient getSolrClient(String zkHost) {
     CloudSolrClient cloudSolrServer = null;
     synchronized (cachedServers) {
       cloudSolrServer = cachedServers.get(zkHost);
@@ -143,7 +144,7 @@ public class SolrRDD implements Serializable {
    * Get a document by ID using real-time get
    */
   public JavaRDD<SolrDocument> get(JavaSparkContext jsc, final String docId) throws SolrServerException {
-    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
+    CloudSolrClient cloudSolrServer = getSolrClient(zkHost);
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set("collection", collection);
     params.set("qt", "/get");
@@ -168,16 +169,18 @@ public class SolrRDD implements Serializable {
       return queryDeep(jsc, query);
 
     query.set("collection", collection);
-    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
+    CloudSolrClient cloudSolrServer = getSolrClient(zkHost);
     List<SolrDocument> results = new ArrayList<SolrDocument>();
     Iterator<SolrDocument> resultsIter = new QueryResultsIterator(cloudSolrServer, query, null);
     while (resultsIter.hasNext()) results.add(resultsIter.next());
     return jsc.parallelize(results, 1);
   }
 
-  public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery query) throws SolrServerException {
+  public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery) throws SolrServerException {
     // first get a list of replicas to query for this collection
-    List<String> shards = buildShardList(getSolrServer(zkHost));
+    List<String> shards = buildShardList(getSolrClient(zkHost));
+
+    final SolrQuery query = origQuery.getCopy();
 
     // we'll be directing queries to each shard, so we don't want distributed
     query.set("distrib", false);
@@ -187,10 +190,106 @@ public class SolrRDD implements Serializable {
       query.setRows(DEFAULT_PAGE_SIZE); // default page size
 
     // parallelize the requests to the shards
-    JavaRDD<SolrDocument> docs = jsc.parallelize(shards).flatMap(
+    JavaRDD<SolrDocument> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, SolrDocument>() {
         public Iterable<SolrDocument> call(String shardUrl) throws Exception {
-          return new QueryResultsIterator(new HttpSolrClient(shardUrl), query, "*");
+          return new StreamingResultsIterator(new HttpSolrClient(shardUrl), query, "*");
+        }
+      }
+    );
+    return docs;
+  }
+
+  public class ShardSplit implements Serializable {
+    public SolrQuery query;
+    public String shardUrl;
+    public String rangeField;
+    public long lowerInc;
+    public Long upperExc;
+
+    public ShardSplit(SolrQuery query, String shardUrl, String rangeField, long lowerInc, Long upperExc) {
+      this.query = query;
+      this.shardUrl = shardUrl;
+      this.rangeField = rangeField;
+      this.lowerInc = lowerInc;
+      this.upperExc = upperExc;
+    }
+
+    public SolrQuery getSplitQuery() {
+      SolrQuery splitQuery = query.getCopy();
+      String upperClause = upperExc != null ? upperExc.toString()+"}" : "*]";
+      splitQuery.addFilterQuery(rangeField+":["+lowerInc+" TO "+upperClause);
+      return splitQuery;
+    }
+  }
+
+  public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery, final String splitFieldName, final int splitsPerShard) throws SolrServerException {
+
+    // if only doing 1 split per shard, then queryShards does that already
+    if (splitsPerShard <= 1)
+      return queryShards(jsc, origQuery);
+
+    long timerDiffMs = 0L;
+    long timerStartMs = 0L;
+
+    // first get a list of replicas to query for this collection
+    List<String> shards = buildShardList(getSolrClient(zkHost));
+
+    timerStartMs = System.currentTimeMillis();
+
+    // we'll be directing queries to each shard, so we don't want distributed
+    final SolrQuery query = origQuery.getCopy();
+    query.set("distrib", false);
+    query.set("collection", collection);
+    query.setStart(0);
+    if (query.getRows() == null)
+      query.setRows(DEFAULT_PAGE_SIZE); // default page size
+
+    JavaRDD<ShardSplit> splitsRDD = jsc.parallelize(shards, shards.size()).flatMap(new FlatMapFunction<String, ShardSplit>() {
+      public Iterable<ShardSplit> call(String shardUrl) throws Exception {
+        SolrQuery statsQuery = query.getCopy();
+        statsQuery.clearSorts();
+        statsQuery.setRows(0);
+        statsQuery.set("stats", true);
+        statsQuery.set("stats.field", splitFieldName);
+
+        HttpSolrClient solrClient = new HttpSolrClient(shardUrl);
+        QueryResponse qr = solrClient.query(statsQuery);
+        Map<String, FieldStatsInfo> statsInfoMap = qr.getFieldStatsInfo();
+        FieldStatsInfo stats = (statsInfoMap != null) ? statsInfoMap.get(splitFieldName) : null;
+        if (stats == null)
+          throw new IllegalStateException("Failed to get stats for field '" + splitFieldName + "'!");
+
+        Number min = (Number)stats.getMin();
+        Number max = (Number)stats.getMax();
+
+        long range = max.longValue() - min.longValue();
+        if (range <= 0)
+          throw new IllegalStateException("Field '" + splitFieldName + "' cannot be split into " + splitsPerShard + " splits; min=" + min + ", max=" + max);
+
+        long bucketSize = Math.round(range / splitsPerShard);
+        List<ShardSplit> splits = new ArrayList<ShardSplit>();
+        long lowerInc = min.longValue();
+        for (int b = 0; b < splitsPerShard; b++) {
+          long upperExc = lowerInc + bucketSize;
+          Long upperLimit = b < (splitsPerShard-1) ? upperExc : null;
+          splits.add(new ShardSplit(query, shardUrl, splitFieldName, lowerInc, upperLimit));
+          lowerInc = upperExc;
+        }
+
+        return splits;
+      }
+    });
+
+    List<ShardSplit> splits = splitsRDD.collect();
+    timerDiffMs = (System.currentTimeMillis() - timerStartMs);
+    log.info("Collected "+splits.size()+" splits, took "+timerDiffMs+"ms");
+
+    // parallelize the requests to the shards
+    JavaRDD<SolrDocument> docs = jsc.parallelize(splits, splits.size()).flatMap(
+      new FlatMapFunction<ShardSplit, SolrDocument>() {
+        public Iterable<SolrDocument> call(ShardSplit split) throws Exception {
+          return new StreamingResultsIterator(new HttpSolrClient(split.shardUrl), split.getSplitQuery(), "*");
         }
       }
     );
@@ -199,10 +298,9 @@ public class SolrRDD implements Serializable {
 
   public JavaRDD<Vector> queryTermVectors(JavaSparkContext jsc, final SolrQuery query, final String field, final int numFeatures) throws SolrServerException {
     // first get a list of replicas to query for this collection
-    List<String> shards = buildShardList(getSolrServer(zkHost));
+    List<String> shards = buildShardList(getSolrClient(zkHost));
 
     if (query.getRequestHandler() == null) {
-      System.out.println(">> set requestHandler to /tvrh");
       query.setRequestHandler("/tvrh");
     }
     query.set("shards.qt", query.getRequestHandler());
@@ -219,7 +317,7 @@ public class SolrRDD implements Serializable {
       query.setRows(DEFAULT_PAGE_SIZE); // default page size
 
     // parallelize the requests to the shards
-    JavaRDD<Vector> docs = jsc.parallelize(shards).flatMap(
+    JavaRDD<Vector> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, Vector>() {
         public Iterable<Vector> call(String shardUrl) throws Exception {
           return new TermVectorIterator(new HttpSolrClient(shardUrl), query, "*", field, numFeatures);
@@ -260,20 +358,42 @@ public class SolrRDD implements Serializable {
     return shards;
   }
 
-  public JavaRDD<SolrDocument> queryDeep(JavaSparkContext jsc, final SolrQuery query) throws SolrServerException {
-    List<String> cursors = new ArrayList<String>();
-
-    // stash this for later use when we're actually querying for data
-    String fields = query.getFields();
-
+  public JavaRDD<SolrDocument> queryDeep(JavaSparkContext jsc, final SolrQuery origQuery) throws SolrServerException {
+    final SolrClient solrClient = getSolrClient(zkHost);
+    final SolrQuery query = origQuery.getCopy();
     query.set("collection", collection);
     query.setStart(0);
-    query.setFields("id");
-
     if (query.getRows() == null)
       query.setRows(DEFAULT_PAGE_SIZE); // default page size
 
-    CloudSolrClient cloudSolrServer = getSolrServer(zkHost);
+    long startMs = System.currentTimeMillis();
+
+    List<String> cursors = collectCursors(solrClient, query);
+
+    long tookMs = System.currentTimeMillis() - startMs;
+
+    log.info("Took "+tookMs+"ms to collect "+cursors.size()+" cursor marks");
+
+    int numPartitions = Math.min(36,cursors.size());
+    JavaRDD<String> cursorJavaRDD = jsc.parallelize(cursors, numPartitions);
+    // now we need to execute all the cursors in parallel
+    JavaRDD<SolrDocument> docs = cursorJavaRDD.flatMap(
+      new FlatMapFunction<String, SolrDocument>() {
+        public Iterable<SolrDocument> call(String cursorMark) throws Exception {
+          return querySolr(getSolrClient(zkHost), query, 0, cursorMark).getResults();
+        }
+      }
+    );
+    return docs;
+  }
+
+  protected List<String> collectCursors(final SolrClient solrClient, final SolrQuery origQuery) throws SolrServerException {
+    List<String> cursors = new ArrayList<String>();
+
+    final SolrQuery query = origQuery.getCopy();
+    query.set("distrib", false);
+    query.setFields("id");
+
     String nextCursorMark = "*";
     while (true) {
       cursors.add(nextCursorMark);
@@ -281,7 +401,7 @@ public class SolrRDD implements Serializable {
 
       QueryResponse resp = null;
       try {
-        resp = cloudSolrServer.query(query);
+        resp = solrClient.query(query);
       } catch (Exception exc) {
         if (exc instanceof SolrServerException) {
           throw (SolrServerException)exc;
@@ -295,19 +415,7 @@ public class SolrRDD implements Serializable {
         break;
     }
 
-    JavaRDD<String> cursorJavaRDD = jsc.parallelize(cursors);
-
-    query.setFields(fields);
-
-    // now we need to execute all the cursors in parallel
-    JavaRDD<SolrDocument> docs = cursorJavaRDD.flatMap(
-      new FlatMapFunction<String, SolrDocument>() {
-        public Iterable<SolrDocument> call(String cursorMark) throws Exception {
-          return querySolr(getSolrServer(zkHost), query, 0, cursorMark).getResults();
-        }
-      }
-    );
-    return docs;
+    return cursors;
   }
 
   private static final Map<String,DataType> solrDataTypes = new HashMap<String, DataType>();
@@ -331,7 +439,7 @@ public class SolrRDD implements Serializable {
     throws Exception
   {
     // TODO: Use the LBHttpSolrServer here instead of just one node
-    CloudSolrClient solrServer = getSolrServer(zkHost);
+    CloudSolrClient solrServer = getSolrClient(zkHost);
     Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
     if (liveNodes.isEmpty())
       throw new RuntimeException("No live nodes found for cluster: "+zkHost);
@@ -433,6 +541,10 @@ public class SolrRDD implements Serializable {
   }
 
   public static QueryResponse querySolr(SolrClient solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
+    return querySolr(solrServer, solrQuery, startIndex, cursorMark, null);
+  }
+
+  public static QueryResponse querySolr(SolrClient solrServer, SolrQuery solrQuery, int startIndex, String cursorMark, StreamingResponseCallback callback) throws SolrServerException {
     QueryResponse resp = null;
     try {
       if (cursorMark != null) {
@@ -441,8 +553,15 @@ public class SolrRDD implements Serializable {
       } else {
         solrQuery.setStart(startIndex);
       }
-      resp = solrServer.query(solrQuery);
+
+      if (callback != null) {
+        resp = solrServer.queryAndStreamResponse(solrQuery, callback);
+      } else {
+        resp = solrServer.query(solrQuery);
+      }
     } catch (Exception exc) {
+
+      exc.printStackTrace();
 
       // re-try once in the event of a communications error with the server
       Throwable rootCause = SolrException.getRootCause(exc);
@@ -458,7 +577,11 @@ public class SolrRDD implements Serializable {
         }
 
         try {
-          resp = solrServer.query(solrQuery);
+          if (callback != null) {
+            resp = solrServer.queryAndStreamResponse(solrQuery, callback);
+          } else {
+            resp = solrServer.query(solrQuery);
+          }
         } catch (Exception excOnRetry) {
           if (excOnRetry instanceof SolrServerException) {
             throw (SolrServerException)excOnRetry;
