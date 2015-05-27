@@ -49,7 +49,7 @@ The `com.lucidworks.spark.SolrRDD` class transforms the results of a Solr query 
 
 ```
 SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(jsc, solrQuery, useDeepPagingCursor);
+JavaRDD<SolrDocument> solrJavaRDD = solrRDD.queryShards(jsc, solrQuery);
 ```
 
 Once you've converted the results in an RDD, you can use the Spark API to perform analytics against the data from Solr.
@@ -65,9 +65,6 @@ JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, St
   }
 });
 ```
-
-Also, notice in the example above, the third argument to the solrRDD.query() function indicates whether to use
-deep-paging cursors, which allows you to process very large result sets across a Spark cluster.
 
 Writing data to Solr from Spark Streaming
 ========

@@ -34,7 +34,7 @@ public class BasicIndexingTest extends StreamProcessorTestBase {
     int numShards = 1;
     int replicationFactor = 1;
 
-    createCollection(testCollection, numShards, replicationFactor, confName, confDir);
+    createCollection(testCollection, numShards, replicationFactor, 1, confName, confDir);
 
     // Create a stream of input docs to be indexed
     String[] inputDocs = new String[] {

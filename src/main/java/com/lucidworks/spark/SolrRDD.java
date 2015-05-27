@@ -25,11 +25,7 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.cloud.ClusterState;
-import org.apache.solr.common.cloud.Replica;
-import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.ZkCoreNodeProps;
-import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.spark.SparkContext;
@@ -387,28 +383,39 @@ public class SolrRDD implements Serializable {
     ZkStateReader zkStateReader = cloudSolrServer.getZkStateReader();
 
     ClusterState clusterState = zkStateReader.getClusterState();
-    Set<String> liveNodes = clusterState.getLiveNodes();
-    Collection<Slice> slices = clusterState.getSlices(collection);
-    if (slices == null)
-      throw new IllegalArgumentException("Collection " + collection + " not found!");
 
-    Random random = new Random();
-    List<String> shards = new ArrayList<String>();
-    for (Slice slice : slices) {
-      List<String> replicas = new ArrayList<String>();
-      for (Replica r : slice.getReplicas()) {
-        ZkCoreNodeProps replicaCoreProps = new ZkCoreNodeProps(r);
-        if (liveNodes.contains(replicaCoreProps.getNodeName()))
-          replicas.add(replicaCoreProps.getCoreUrl());
-      }
-      int numReplicas = replicas.size();
-      if (numReplicas == 0)
-        throw new IllegalStateException("Shard " + slice.getName() + " does not have any active replicas!");
-
-      String replicaUrl = (numReplicas == 1) ? replicas.get(0) : replicas.get(random.nextInt(replicas.size()));
-      shards.add(replicaUrl);
+    String[] collections = null;
+    if (clusterState.hasCollection(collection)) {
+      collections = new String[]{collection};
+    } else {
+      // might be a collection alias?
+      Aliases aliases = zkStateReader.getAliases();
+      String aliasedCollections = aliases.getCollectionAlias(collection);
+      if (aliasedCollections == null)
+        throw new IllegalArgumentException("Collection " + collection + " not found!");
+      collections = aliasedCollections.split(",");
     }
 
+    Set<String> liveNodes = clusterState.getLiveNodes();
+    Random random = new Random(5150);
+
+    List<String> shards = new ArrayList<String>();
+    for (String coll : collections) {
+      for (Slice slice : clusterState.getSlices(coll)) {
+        List<String> replicas = new ArrayList<String>();
+        for (Replica r : slice.getReplicas()) {
+          ZkCoreNodeProps replicaCoreProps = new ZkCoreNodeProps(r);
+          if (liveNodes.contains(replicaCoreProps.getNodeName()))
+            replicas.add(replicaCoreProps.getCoreUrl());
+        }
+        int numReplicas = replicas.size();
+        if (numReplicas == 0)
+          throw new IllegalStateException("Shard " + slice.getName() + " does not have any active replicas!");
+
+        String replicaUrl = (numReplicas == 1) ? replicas.get(0) : replicas.get(random.nextInt(replicas.size()));
+        shards.add(replicaUrl);
+      }
+    }
     return shards;
   }
 
@@ -529,6 +536,9 @@ public class SolrRDD implements Serializable {
         fieldSet.addAll(hit.getFieldNames());
       fields = fieldSet.toArray(new String[0]);
     }
+
+    if (fields == null || fields.length == 0)
+      throw new IllegalArgumentException("Query ("+query+") does not specify any fields to build a SparkSQL from!");
 
     Map<String,String> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
     List<StructField> listOfFields = new ArrayList<StructField>();
