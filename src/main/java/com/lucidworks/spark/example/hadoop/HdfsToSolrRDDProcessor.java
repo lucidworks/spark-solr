@@ -6,6 +6,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -79,6 +80,13 @@ public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {
     int numRunners = Integer.parseInt(cli.getOptionValue("numRunners", "2"));
     int pollQueueTime = Integer.parseInt(cli.getOptionValue("pollQueueTime", "20"));
     SolrSupport.streamDocsIntoSolr(zkHost, collection, "id", pairs, queueSize, numRunners, pollQueueTime);
+
+    // send a final commit in case soft auto-commits are not enabled
+    CloudSolrClient cloudSolrClient = SolrSupport.getSolrServer(zkHost);
+    cloudSolrClient.setDefaultCollection(collection);
+    cloudSolrClient.commit(true, true);
+    cloudSolrClient.close();
+
     return 0;
   }
 }

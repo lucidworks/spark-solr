@@ -21,7 +21,7 @@ import java.util.List;
 
 
 /**
- * How to join Solr data using Spark.
+ * TODO: How to join Solr data using Spark. (this class isn't implemented correctly yet)
  */
 public class DistributedSolrJoin implements SparkApp.RDDProcessor {
 

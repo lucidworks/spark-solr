@@ -104,3 +104,45 @@ StreamProcessor
 Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to build a Spark streaming application.
 See com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor or
 com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor for examples of how to write a StreamProcessor.
+
+Working at the Spark Shell
+========
+
+When launching the Spark shell (Scala mode), you need to add this project's JAR file to the environment using ADD_JARS:
+
+```
+ADD_JARS=$PROJECT_HOME/target/spark-solr-1.0-SNAPSHOT.jar bin/spark-shell
+```
+
+You should see a message like this from Spark during shell initialization:
+
+```
+15/05/27 10:07:53 INFO SparkContext: Added JAR file:/spark-solr/target/spark-solr-1.0-SNAPSHOT.jar at http://192.168.1.3:57936/jars/spark-solr-1.0-SNAPSHOT.jar with timestamp 1432742873044
+```
+
+To use SolrRDD to access data in Solr, you need to import the class and create an instance of SolrRDD by passing in the ZooKeeper connection string and collection name:
+
+```
+import com.lucidworks.spark.SolrRDD;
+var solrRDD = new SolrRDD("localhost:9983","gettingstarted");
+```
+
+To get query results as an RDD, use the query method:
+
+```
+var tweets = solrRDD.query(sc,"*:*");
+var count = tweets.count();
+```
+
+Behind the scenes, Spark will query each shard of the gettingstarted collection and then count the results.
+
+To get query results as a temp table (DataFrame), you can use the asTempTable method:
+
+```
+var tweets = solrRDD.asTempTable(sqlContext, "*:*", "tweets");
+sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'").show();
+```
+
+Notice that SolrRDD figured out the schema for you by retrieving metadata from Solr using the Schema API. In other words, the query does not specify the `type_s` field but it is still available as part of the temp table definition because field metadata for your Solr query are retrieved dynamically if not supplied.
+
+To see the schema created from Solr metadata, simply do: `tweets.printSchema();`

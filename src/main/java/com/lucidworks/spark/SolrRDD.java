@@ -4,20 +4,15 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
 import com.lucidworks.spark.query.StreamingResultsIterator;
 import com.lucidworks.spark.util.SolrJsonSupport;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
@@ -37,6 +32,7 @@ import org.apache.solr.common.cloud.ZkCoreNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -56,7 +52,50 @@ public class SolrRDD implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrRDD.class);
 
-  private static final int DEFAULT_PAGE_SIZE = 1000;
+  public static final int DEFAULT_PAGE_SIZE = 1000;
+
+  public static SolrQuery ALL_DOCS = toQuery(null);
+
+  public static SolrQuery toQuery(String queryString) {
+
+    if (queryString == null || queryString.length() == 0)
+      queryString = "*:*";
+
+    SolrQuery q = new SolrQuery();
+    if (queryString.indexOf("=") == -1) {
+      // no name-value pairs ... just assume this single clause is the q part
+      q.setQuery(queryString);
+    } else {
+      NamedList<Object> params = new NamedList<Object>();
+      for (NameValuePair nvp : URLEncodedUtils.parse(queryString, StandardCharsets.UTF_8)) {
+        String value = nvp.getValue();
+        if (value != null && value.length() > 0) {
+          String name = nvp.getName();
+          if ("sort".equals(name)) {
+            if (value.indexOf(" ") == -1) {
+              q.addSort(SolrQuery.SortClause.asc(value));
+            } else {
+              String[] split = value.split(" ");
+              q.addSort(SolrQuery.SortClause.create(split[0], split[1]));
+            }
+          } else {
+            params.add(name, value);
+          }
+        }
+      }
+      q.add(ModifiableSolrParams.toSolrParams(params));
+    }
+
+    Integer rows = q.getRows();
+    if (rows == null)
+      q.setRows(DEFAULT_PAGE_SIZE);
+
+    List<SolrQuery.SortClause> sorts = q.getSorts();
+    if (sorts == null || sorts.isEmpty())
+      q.addSort(SolrQuery.SortClause.asc("id"));
+
+    return q;
+  }
 
   /**
    * Iterates over the entire results set of a query (all hits).
@@ -135,6 +174,10 @@ public class SolrRDD implements Serializable {
   protected String zkHost;
   protected String collection;
 
+  public SolrRDD(String collection) {
+    this("localhost:9983", collection); // assume local embedded ZK if not supplied
+  }
+
   public SolrRDD(String zkHost, String collection) {
     this.zkHost = zkHost;
     this.collection = collection;
@@ -174,6 +217,17 @@ public class SolrRDD implements Serializable {
     Iterator<SolrDocument> resultsIter = new QueryResultsIterator(cloudSolrServer, query, null);
     while (resultsIter.hasNext()) results.add(resultsIter.next());
     return jsc.parallelize(results, 1);
+  }
+
+  /**
+   * Makes it easy to query from the Spark shell.
+   */
+  public JavaRDD<SolrDocument> query(SparkContext sc, String queryStr) throws SolrServerException {
+    return queryShards(new JavaSparkContext(sc), toQuery(queryStr));
+  }
+
+  public JavaRDD<SolrDocument> query(SparkContext sc, SolrQuery solrQuery) throws SolrServerException {
+    return queryShards(new JavaSparkContext(sc), solrQuery);
   }
 
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery) throws SolrServerException {
@@ -431,11 +485,21 @@ public class SolrRDD implements Serializable {
     solrDataTypes.put("solr.TrieDateField", DataTypes.TimestampType);
   }
 
+  public DataFrame asTempTable(SQLContext sqlContext, String queryString, String tempTable) throws Exception {
+    SolrQuery solrQuery = toQuery(queryString);
+    DataFrame rows = applySchema(sqlContext, solrQuery, query(sqlContext.sparkContext(), solrQuery));
+    rows.registerTempTable(tempTable);
+    return rows;
+  }
+
+  public DataFrame queryForRows(SQLContext sqlContext, String queryString) throws Exception {
+    SolrQuery solrQuery = toQuery(queryString);
+    return applySchema(sqlContext, solrQuery, query(sqlContext.sparkContext(), solrQuery));
+  }
+
   public DataFrame applySchema(SQLContext sqlContext,
                                    SolrQuery query,
-                                   JavaRDD<SolrDocument> docs,
-                                   String zkHost,
-                                   String collection)
+                                   JavaRDD<SolrDocument> docs)
     throws Exception
   {
     // TODO: Use the LBHttpSolrServer here instead of just one node
@@ -448,7 +512,24 @@ public class SolrRDD implements Serializable {
       solrBaseUrl += "/";
 
     // Build up a schema based on the fields requested
-    final String[] fields = query.getFields().split(",");
+    String fieldList = query.getFields();
+    String[] fields = null;
+    if (fieldList != null) {
+      fields = query.getFields().split(",");
+    } else {
+      // just go out to Solr and get 10 docs and extract a field list from that
+      SolrQuery probeForFieldsQuery = query.getCopy();
+      probeForFieldsQuery.set("collection", collection);
+      probeForFieldsQuery.setStart(0);
+      probeForFieldsQuery.setRows(10);
+      QueryResponse probeForFieldsResp = solrServer.query(probeForFieldsQuery);
+      SolrDocumentList hits = probeForFieldsResp.getResults();
+      Set<String> fieldSet = new TreeSet<String>();
+      for (SolrDocument hit : hits)
+        fieldSet.addAll(hit.getFieldNames());
+      fields = fieldSet.toArray(new String[0]);
+    }
+
     Map<String,String> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (String field : fields) {
@@ -459,10 +540,11 @@ public class SolrRDD implements Serializable {
     }
 
     // now convert each SolrDocument to a Row object
+    final String[] queryFields = fields;
     JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
       public Row call(SolrDocument doc) throws Exception {
-        List<Object> vals = new ArrayList<Object>(fields.length);
-        for (String field : fields)
+        List<Object> vals = new ArrayList<Object>(queryFields.length);
+        for (String field : queryFields)
           vals.add(doc.getFirstValue(field));
         return RowFactory.create(vals.toArray());
       }

@@ -62,19 +62,9 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     String queryStr = cli.getOptionValue("query", "*:*");
 
     JavaSparkContext jsc = new JavaSparkContext(conf);
-
-    // TODO: Would be better to accept a JSON representation of a SolrQuery
-    final SolrQuery solrQuery = new SolrQuery(queryStr);
-    solrQuery.setFields("text_t","type_s");
-
-    List<SolrQuery.SortClause> sorts = new ArrayList<SolrQuery.SortClause>();
-    sorts.add(new SolrQuery.SortClause("id", "asc"));
-    sorts.add(new SolrQuery.SortClause("created_at_tdt", "asc"));
-    solrQuery.setSorts(sorts);
-
     SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-
-    JavaRDD<SolrDocument> solrJavaRDD = solrRDD.queryShards(jsc, solrQuery);
+    final SolrQuery solrQuery = SolrRDD.toQuery(queryStr);
+    JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(jsc.sc(), solrQuery);
 
     JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {
       public Iterable<String> call(SolrDocument doc) {
@@ -95,7 +85,6 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
         return i1 + i2;
       }
     });
-
     for (Tuple2<?,?> tuple : counts.top(20, new WordCountSorter()))
       System.out.println(tuple._1() + ": " + tuple._2());
 
@@ -103,15 +92,12 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     // Now use schema information in Solr to build a queryable SchemaRDD
 
     SQLContext sqlContext = new SQLContext(jsc);
-    DataFrame solrQuerySchemaRDD =
-      solrRDD.applySchema(sqlContext, solrQuery, solrJavaRDD, zkHost, collection);
 
-    // Register the SchemaRDD as a table.
-    solrQuerySchemaRDD.registerTempTable("tweets");
+    // Pro Tip: SolrRDD will figure out the schema if you don't supply a list of field names in your query
 
+    DataFrame tweets = solrRDD.asTempTable(sqlContext, queryStr, "tweets");
     // SQL can be run over RDDs that have been registered as tables.
-    DataFrame results =
-      sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
+    DataFrame results = sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
 
     // The results of SQL queries are SchemaRDDs and support all the normal RDD operations.
     // The columns of a row in the result can be accessed by ordinal.
@@ -121,7 +107,6 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
         return row.getLong(0);
       }
     }).collect();
-
     System.out.println("# of echos : "+count);
 
     jsc.stop();
