@@ -17,6 +17,10 @@ First, build the Jar for this project:
 
 `mvn clean package`
 
+This will build 2 jars in the `/target` directory: spark-solr-1.0-SNAPSHOT.jar and spark-solr-1.0-SNAPSHOT-shaded.jar. 
+The first is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to 
+submit one of the included example apps to Spark.
+
 To run the Twitter examples, you'll need to configure your Twitter API credentials in:
 
 ```
@@ -29,7 +33,7 @@ Now, let's populate a SolrCloud index with tweets:
 
 ```
 ./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
-  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT.jar \
+  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT-shaded.jar \
   twitter-to-solr -zkHost localhost:9983 -collection collection1
 ```
 
@@ -38,7 +42,7 @@ query into a Spark RDD:
 
 ```
 ./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
-  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT.jar \
+  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT-shaded.jar \
   query-solr -zkHost=localhost:9983 -collection=collection1 -query="*:*"
 ```
 
@@ -108,13 +112,13 @@ Working at the Spark Shell
 When launching the Spark shell (Scala mode), you need to add this project's JAR file to the environment using ADD_JARS:
 
 ```
-ADD_JARS=$PROJECT_HOME/target/spark-solr-1.0-SNAPSHOT.jar bin/spark-shell
+ADD_JARS=$PROJECT_HOME/target/spark-solr-1.0-SNAPSHOT-shaded.jar bin/spark-shell
 ```
 
 You should see a message like this from Spark during shell initialization:
 
 ```
-15/05/27 10:07:53 INFO SparkContext: Added JAR file:/spark-solr/target/spark-solr-1.0-SNAPSHOT.jar at http://192.168.1.3:57936/jars/spark-solr-1.0-SNAPSHOT.jar with timestamp 1432742873044
+15/05/27 10:07:53 INFO SparkContext: Added JAR file:/spark-solr/target/spark-solr-1.0-SNAPSHOT-shaded.jar at http://192.168.1.3:57936/jars/spark-solr-1.0-SNAPSHOT-shaded.jar with timestamp 1432742873044
 ```
 
 To use SolrRDD to access data in Solr, you need to import the class and create an instance of SolrRDD by passing in the ZooKeeper connection string and collection name:

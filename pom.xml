@@ -11,6 +11,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.7</java.version>
+        <spark.version>1.3.1</spark.version>
+        <solr.version>5.1.0</solr.version>
     </properties>
     <build>
         <plugins>
@@ -33,6 +35,8 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>shaded</shadedClassifierName>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -49,12 +53,11 @@
                                     <exclude>org.apache.spark:spark-streaming_2.10</exclude>
                                     <exclude>org.apache.hadoop:*</exclude>
                                     <exclude>com.google.protobuf_spark:*</exclude>
-                                    <exclude>com.google.guava:guava</exclude>
                                     <exclude>org.scala-lang:scala-library</exclude>
                                     <exclude>com.twitter:chill_2.10</exclude>
                                     <exclude>com.twitter:chill-java</exclude>
-                                    <exclude>org.spark-project.akka:akka-remote_2.10</exclude>
-                                    <exclude>org.spark-project.akka:akka-slf4j_2.10</exclude>
+                                    <exclude>org.spark-project.akka:*</exclude>
+                                    <exclude>org.spark-project:*</exclude>
                                     <exclude>net.java.dev.jets3t:jets3t</exclude>
                                     <exclude>org.eclipse.jetty:*</exclude>
                                     <exclude>org.eclipse.jetty.orbit:*</exclude>
@@ -79,7 +82,8 @@
                                     <exclude>javax.ws.rs:javax.ws.rs-api</exclude>
                                     <exclude>xml-apis:xml-apis</exclude>
                                     <exclude>org.ow2.asm:asm</exclude>
-                                    <exclude>com.codahale.metrics:metrics-core</exclude>
+                                    <exclude>com.codahale.metrics:*</exclude>
+                                    <exclude>io.dropwizard.metrics:*</exclude>
                                     <exclude>com.sun.xml.bind:jaxb-impl</exclude>
                                     <exclude>com.sun.jersey:jersey-client</exclude>
                                     <exclude>org.mortbay.jetty:jetty-util</exclude>
@@ -95,11 +99,44 @@
                                     <shadedPattern>shaded.codehaus.jackson</shadedPattern>
                                 </relocation>
                                 <relocation>
+                                    <pattern>com.fasterxml.jackson</pattern>
+                                    <shadedPattern>shaded.fasterxml.jackson</shadedPattern>
+                                </relocation>
+                                <relocation>
                                     <pattern>org.objectweb.asm</pattern>
                                     <shadedPattern>shaded.objectweb.asm</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.joda.time</pattern>
+                                    <shadedPattern>shaded.joda.time</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.google.guava</pattern>
+                                    <shadedPattern>shaded.google.guava</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>com.sun.jersey</pattern>
+                                    <shadedPattern>shaded.sun.jersey</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>javax.ws.rs</pattern>
+                                    <shadedPattern>shaded.javax.ws.rs</shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>2.4</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -110,7 +147,7 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.10</artifactId>
-            <version>1.3.1</version>
+            <version>${spark.version}</version>
             <scope>compile</scope>
         </dependency>
 
@@ -131,20 +168,20 @@
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_2.10</artifactId>
-            <version>1.3.1</version>
+            <version>${spark.version}</version>
             <scope>compile</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-mllib_2.10</artifactId>
-            <version>1.3.1</version>
+            <version>${spark.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming-twitter_2.10</artifactId>
-            <version>1.3.1</version>
+            <version>${spark.version}</version>
         </dependency>
 
         <dependency>
@@ -162,21 +199,21 @@
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-solrj</artifactId>
-            <version>5.1.0</version>
+            <version>${solr.version}</version>
             <type>jar</type>
         </dependency>
 
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-core</artifactId>
-            <version>5.1.0</version>
+            <version>${solr.version}</version>
             <type>jar</type>
         </dependency>
 
         <dependency>
             <groupId>org.apache.solr</groupId>
             <artifactId>solr-test-framework</artifactId>
-            <version>5.1.0</version>
+            <version>${solr.version}</version>
             <type>jar</type>
             <scope>test</scope>
         </dependency>
@@ -184,6 +221,12 @@
         <dependency>
             <groupId>org.codehaus.jackson</groupId>
             <artifactId>jackson-mapper-asl</artifactId>
+            <version>1.9.11</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-core-asl</artifactId>
             <version>1.9.11</version>
         </dependency>
 
