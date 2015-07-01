@@ -12,10 +12,12 @@ import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.eclipse.jetty.servlet.ServletHolder;
 import org.junit.BeforeClass;
 import org.junit.AfterClass;
 import org.noggit.CharArr;
 import org.noggit.JSONWriter;
+import org.restlet.ext.servlet.ServerServlet;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -37,7 +39,14 @@ public class TestSolrCloudClusterSupport {
     File targetDir = new File("target");
     if (!targetDir.isDirectory())
       fail("Project 'target' directory not found at: "+targetDir.getAbsolutePath());
-    cluster = new MiniSolrCloudCluster(1, null, targetDir, solrXml, null, null, null);
+
+    // need the schema stuff
+    final SortedMap<ServletHolder,String> extraServlets = new TreeMap<ServletHolder,String>();
+    final ServletHolder solrSchemaRestApi = new ServletHolder("SolrSchemaRestApi", ServerServlet.class);
+    solrSchemaRestApi.setInitParameter("org.restlet.application", "org.apache.solr.rest.SolrSchemaRestApi");
+    extraServlets.put(solrSchemaRestApi, "/schema/*");
+
+    cluster = new MiniSolrCloudCluster(1, null, targetDir, solrXml, extraServlets, null, null);
 
     cloudSolrServer = new CloudSolrClient(cluster.getZkServer().getZkAddress(), true);
     cloudSolrServer.connect();
@@ -49,6 +58,14 @@ public class TestSolrCloudClusterSupport {
   public static void stopCluster() throws Exception {
     cloudSolrServer.shutdown();
     cluster.shutdown();
+  }
+
+  protected static void deleteCollection(String collectionName) {
+    try {
+      cluster.deleteCollection(collectionName);
+    } catch (Exception exc) {
+      log.error("Failed to delete collection '"+collectionName+"' due to: "+exc);
+    }
   }
 
   protected static void createCollection(String collectionName, int numShards, int replicationFactor, int maxShardsPerNode, String confName) throws Exception {

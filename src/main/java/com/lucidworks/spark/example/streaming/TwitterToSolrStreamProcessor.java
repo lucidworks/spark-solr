@@ -28,7 +28,8 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
   /**
    * Sends a stream of tweets to Solr.
    */
-  public void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception {
+  @Override
+  public void setup(JavaStreamingContext jssc, CommandLine cli) throws Exception {
     String filtersArg = cli.getOptionValue("tweetFilters");
     String[] filters = (filtersArg != null) ? filtersArg.split(",") : new String[0];
 
@@ -58,9 +59,6 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
         }
       }
     );
-
-    // analyze text to get an MLlib model
-
 
     // when ready, send the docs into a SolrCloud cluster
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);

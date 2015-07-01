@@ -10,6 +10,7 @@
   <dynamicField indexed="true" name="*_b" stored="true" type="boolean"/>
   <dynamicField indexed="true" name="*_f" stored="true" type="float"/>
   <dynamicField indexed="true" name="*_d" stored="true" type="double"/>
+  <dynamicField indexed="true" name="*_tdt" stored="true" type="tdate"/>
   <uniqueKey>id</uniqueKey>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
   <fieldType name="long" class="solr.TrieLongField" precisionStep="6"/>
@@ -17,4 +18,5 @@
   <fieldType name="float" class="solr.TrieFloatField" precisionStep="0" positionIncrementGap="0"/>
   <fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0"/>
   <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
+  <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0"/>
 </schema>

@@ -74,7 +74,7 @@ public class SparkApp implements Serializable {
         jssc.sparkContext().addFile(cli.getOptionValue("pipeline"));
       }
 
-      plan(jssc, cli);
+      setup(jssc, cli);
 
       jssc.start();              // Start the computation
       jssc.awaitTermination();   // Wait for the computation to terminate
@@ -95,9 +95,9 @@ public class SparkApp implements Serializable {
     }
 
     /**
-     * Create a concrete stream processing plan; the actually processing will be started and managed by the base class.
+     * Setup for stream processing; the actually processing will be started and managed by the base class.
      */
-    public abstract void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception;
+    public abstract void setup(JavaStreamingContext jssc, CommandLine cli) throws Exception;
   }
 
   public static Logger log = Logger.getLogger(SparkApp.class);

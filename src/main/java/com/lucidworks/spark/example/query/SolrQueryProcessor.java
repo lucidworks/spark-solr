@@ -12,20 +12,15 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.sql.DataFrame;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  * Example of how to query Solr and process the result set as a Spark RDD
@@ -62,6 +57,7 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     String queryStr = cli.getOptionValue("query", "*:*");
 
     JavaSparkContext jsc = new JavaSparkContext(conf);
+
     SolrRDD solrRDD = new SolrRDD(zkHost, collection);
     final SolrQuery solrQuery = SolrRDD.toQuery(queryStr);
     JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(jsc.sc(), solrQuery);
@@ -88,26 +84,20 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     for (Tuple2<?,?> tuple : counts.top(20, new WordCountSorter()))
       System.out.println(tuple._1() + ": " + tuple._2());
 
-
     // Now use schema information in Solr to build a queryable SchemaRDD
 
     SQLContext sqlContext = new SQLContext(jsc);
 
     // Pro Tip: SolrRDD will figure out the schema if you don't supply a list of field names in your query
 
-    DataFrame tweets = solrRDD.asTempTable(sqlContext, queryStr, "tweets");
-    // SQL can be run over RDDs that have been registered as tables.
-    DataFrame results = sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'");
+    Map<String, String> options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", collection);
+    options.put("query", queryStr);
 
-    // The results of SQL queries are SchemaRDDs and support all the normal RDD operations.
-    // The columns of a row in the result can be accessed by ordinal.
-    JavaRDD<Row> resultsRDD = results.javaRDD();
-    List<Long> count = resultsRDD.map(new Function<Row, Long>() {
-      public Long call(Row row) {
-        return row.getLong(0);
-      }
-    }).collect();
-    System.out.println("# of echos : "+count);
+    DataFrame df = sqlContext.read().format("solr").options(options).load();
+    long numEchos = df.filter(df.col("type_s").equalTo("echo")).count();
+    System.out.println("numEchos >> "+numEchos);
 
     jsc.stop();
 

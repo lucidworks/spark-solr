@@ -12,9 +12,9 @@ public class SolrQueryProcessorTest {
   @Test
   public void testQueryProcessor() {
     String[] args = new String[] {
-      "query-solr-benchmark", "-zkHost", "localhost:9983",
+      "query-solr", "-zkHost", "localhost:9983",
       "-collection", "gettingstarted", "-query", "*:*",
-      "-master", "local[2]", "-rows", "5", "-splitsPerShard", "2"
+      "-master", "local[2]"
     };
 
     try {

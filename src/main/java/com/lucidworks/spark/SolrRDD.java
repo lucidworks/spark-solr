@@ -43,6 +43,7 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.types.StructType;
 
 public class SolrRDD implements Serializable {
 
@@ -274,9 +275,8 @@ public class SolrRDD implements Serializable {
   }
 
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery, final String splitFieldName, final int splitsPerShard) throws SolrServerException {
-
     // if only doing 1 split per shard, then queryShards does that already
-    if (splitsPerShard <= 1)
+    if (splitFieldName == null || splitsPerShard <= 1)
       return queryShards(jsc, origQuery);
 
     long timerDiffMs = 0L;
@@ -509,15 +509,28 @@ public class SolrRDD implements Serializable {
                                    JavaRDD<SolrDocument> docs)
     throws Exception
   {
-    // TODO: Use the LBHttpSolrServer here instead of just one node
-    CloudSolrClient solrServer = getSolrClient(zkHost);
-    Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
-    if (liveNodes.isEmpty())
-      throw new RuntimeException("No live nodes found for cluster: "+zkHost);
-    String solrBaseUrl = solrServer.getZkStateReader().getBaseUrlForNodeName(liveNodes.iterator().next());
-    if (!solrBaseUrl.endsWith("?"))
-      solrBaseUrl += "/";
+    // now convert each SolrDocument to a Row object
+    StructType schema = getQuerySchema(query);
+    JavaRDD<Row> rows = toRows(schema, docs);
+    return sqlContext.applySchema(rows, schema);
+  }
 
+  public JavaRDD<Row> toRows(StructType schema, JavaRDD<SolrDocument> docs) {
+    final String[] queryFields = schema.fieldNames();
+    JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
+      public Row call(SolrDocument doc) throws Exception {
+        List<Object> vals = new ArrayList<Object>(queryFields.length);
+        for (String field : queryFields) {
+          vals.add(doc.getFirstValue(field));
+        }
+        return RowFactory.create(vals.toArray());
+      }
+    });
+    return rows;
+  }
+
+  public StructType getQuerySchema(SolrQuery query) throws Exception {
+    CloudSolrClient solrServer = getSolrClient(zkHost);
     // Build up a schema based on the fields requested
     String fieldList = query.getFields();
     String[] fields = null;
@@ -526,7 +539,9 @@ public class SolrRDD implements Serializable {
     } else {
       // just go out to Solr and get 10 docs and extract a field list from that
       SolrQuery probeForFieldsQuery = query.getCopy();
+      probeForFieldsQuery.remove("distrib");
       probeForFieldsQuery.set("collection", collection);
+      probeForFieldsQuery.set("fl", "*");
       probeForFieldsQuery.setStart(0);
       probeForFieldsQuery.setRows(10);
       QueryResponse probeForFieldsResp = solrServer.query(probeForFieldsQuery);
@@ -538,7 +553,14 @@ public class SolrRDD implements Serializable {
     }
 
     if (fields == null || fields.length == 0)
-      throw new IllegalArgumentException("Query ("+query+") does not specify any fields to build a SparkSQL from!");
+      throw new IllegalArgumentException("Query ("+query+") does not specify any fields needed to build a schema!");
+
+    Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
+    if (liveNodes.isEmpty())
+      throw new RuntimeException("No live nodes found for cluster: "+zkHost);
+    String solrBaseUrl = solrServer.getZkStateReader().getBaseUrlForNodeName(liveNodes.iterator().next());
+    if (!solrBaseUrl.endsWith("?"))
+      solrBaseUrl += "/";
 
     Map<String,String> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
     List<StructField> listOfFields = new ArrayList<StructField>();
@@ -549,18 +571,7 @@ public class SolrRDD implements Serializable {
       listOfFields.add(DataTypes.createStructField(field, dataType, true));
     }
 
-    // now convert each SolrDocument to a Row object
-    final String[] queryFields = fields;
-    JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
-      public Row call(SolrDocument doc) throws Exception {
-        List<Object> vals = new ArrayList<Object>(queryFields.length);
-        for (String field : queryFields)
-          vals.add(doc.getFirstValue(field));
-        return RowFactory.create(vals.toArray());
-      }
-    });
-
-    return sqlContext.applySchema(rows, DataTypes.createStructType(listOfFields));
+    return DataTypes.createStructType(listOfFields);
   }
 
   private static Map<String,String> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
@@ -575,7 +586,6 @@ public class SolrRDD implements Serializable {
       // Hit Solr Schema API to get field type for field
       String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field;
       try {
-
         String fieldType = null;
         try {
           Map<String, Object> fieldMeta =
@@ -596,10 +606,10 @@ public class SolrRDD implements Serializable {
                   Map<String, Object> dynFieldMeta =
                     SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), dynamicFieldsUrl, 2);
                   fieldType = SolrJsonSupport.asString("/dynamicField/type", dynFieldMeta);
-
                   fieldTypeMap.put(dynField, fieldType);
                 } catch (Exception exc) {
                   // just ignore this and throw the outer exc
+                  exc.printStackTrace();
                   throw solrExc;
                 }
               }
@@ -625,7 +635,7 @@ public class SolrRDD implements Serializable {
         fieldTypeMap.put(field, fieldTypeClass);
 
       } catch (Exception exc) {
-        log.warn("Can't get field type for field "+field+" due to: "+exc);
+        log.warn("Can't get field type for field " + field+" due to: "+exc);
       }
     }
 
@@ -653,7 +663,7 @@ public class SolrRDD implements Serializable {
       }
     } catch (Exception exc) {
 
-      exc.printStackTrace();
+      log.error("Query ["+solrQuery+"] failed due to: "+exc);
 
       // re-try once in the event of a communications error with the server
       Throwable rootCause = SolrException.getRootCause(exc);

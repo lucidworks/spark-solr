@@ -69,7 +69,8 @@ public class DocumentFilteringStreamProcessor extends SparkApp.StreamProcessor {
 
   public String getName() { return "docfilter"; }
 
-  public void plan(JavaStreamingContext jssc, CommandLine cli) throws Exception {
+  @Override
+  public void setup(JavaStreamingContext jssc, CommandLine cli) throws Exception {
 
     // load the DocFilterContext implementation, which knows how to load queries
     DocFilterContext docFilterContext = loadDocFilterContext(jssc, cli);
