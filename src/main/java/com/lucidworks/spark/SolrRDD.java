@@ -5,7 +5,15 @@ import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.TreeSet;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
@@ -420,6 +428,11 @@ public class SolrRDD implements Serializable {
   }
 
   public JavaRDD<SolrDocument> queryDeep(JavaSparkContext jsc, final SolrQuery origQuery) throws SolrServerException {
+    return queryDeep(jsc, origQuery, 36);
+  }
+
+  public JavaRDD<SolrDocument> queryDeep(JavaSparkContext jsc, final SolrQuery origQuery, final int maxPartitions) throws SolrServerException {
+
     final SolrClient solrClient = getSolrClient(zkHost);
     final SolrQuery query = origQuery.getCopy();
     query.set("collection", collection);
@@ -428,14 +441,11 @@ public class SolrRDD implements Serializable {
       query.setRows(DEFAULT_PAGE_SIZE); // default page size
 
     long startMs = System.currentTimeMillis();
-
-    List<String> cursors = collectCursors(solrClient, query);
-
+    List<String> cursors = collectCursors(solrClient, query, true);
     long tookMs = System.currentTimeMillis() - startMs;
-
     log.info("Took "+tookMs+"ms to collect "+cursors.size()+" cursor marks");
+    int numPartitions = Math.min(maxPartitions,cursors.size());
 
-    int numPartitions = Math.min(36,cursors.size());
     JavaRDD<String> cursorJavaRDD = jsc.parallelize(cursors, numPartitions);
     // now we need to execute all the cursors in parallel
     JavaRDD<SolrDocument> docs = cursorJavaRDD.flatMap(
@@ -449,10 +459,19 @@ public class SolrRDD implements Serializable {
   }
 
   protected List<String> collectCursors(final SolrClient solrClient, final SolrQuery origQuery) throws SolrServerException {
+    return collectCursors(solrClient, origQuery, false);
+  }
+
+  protected List<String> collectCursors(final SolrClient solrClient, final SolrQuery origQuery, final boolean distrib) throws SolrServerException {
     List<String> cursors = new ArrayList<String>();
 
     final SolrQuery query = origQuery.getCopy();
-    query.set("distrib", false);
+    // tricky - if distrib == false, then set the param, otherwise, leave it out (default is distrib=true)
+    if (!distrib) {
+      query.set("distrib", false);
+    } else {
+      query.remove("distrib");
+    }
     query.setFields("id");
 
     String nextCursorMark = "*";

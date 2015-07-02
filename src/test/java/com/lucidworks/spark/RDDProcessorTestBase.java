@@ -6,8 +6,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
-import org.junit.After;
-import org.junit.Before;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 
 import java.io.File;
 import java.io.Serializable;
@@ -20,10 +20,10 @@ import static org.junit.Assert.assertTrue;
  */
 public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable {
 
-  protected transient JavaSparkContext jsc;
+  protected static transient JavaSparkContext jsc;
 
-  @Before
-  public void setupJavaSparkContext() {
+  @BeforeClass
+  public static void setupJavaSparkContext() {
     SparkConf conf = new SparkConf()
       .setMaster("local")
       .setAppName("test")
@@ -31,13 +31,20 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
     jsc = new JavaSparkContext(conf);
   }
 
-  @After
-  public void stopSparkContext() {
+  @AfterClass
+  public static void stopSparkContext() {
     jsc.stop();
   }
 
   protected void buildCollection(String zkHost, String collection) throws Exception {
     String[] inputDocs = new String[] { collection+"-1,foo,bar,1", collection+"-2,foo,baz,2", collection+"-3,bar,baz,3" };
+    buildCollection(zkHost, collection, inputDocs);
+  }
+
+  protected void buildCollection(String zkHost, String collection, int numDocs) throws Exception {
+    String[] inputDocs = new String[numDocs];
+    for (int n=0; n < numDocs; n++)
+      inputDocs[n] = collection+"-"+n+",foo"+n+",bar"+n+","+n;
     buildCollection(zkHost, collection, inputDocs);
   }
 

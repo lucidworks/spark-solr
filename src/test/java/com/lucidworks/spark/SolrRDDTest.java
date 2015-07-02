@@ -1,5 +1,6 @@
 package com.lucidworks.spark;
 
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.cloud.Aliases;
@@ -8,6 +9,8 @@ import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.Test;
+
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -44,5 +47,24 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     long numFound = resultsRDD.count();
     assertTrue("expected " + expectedNumDocs + " docs in query results from alias " + aliasName + ", but got " + numFound,
       numFound == expectedNumDocs);
+  }
+
+  @Test
+  public void testQueryDeep() throws Exception {
+    String zkHost = cluster.getZkServer().getZkAddress();
+    String testCollection = "queryDeep";
+    int numDocs = 2000;
+    buildCollection(zkHost, testCollection, numDocs);
+    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection);
+    SolrQuery testQuery = new SolrQuery();
+    testQuery.setQuery("*:*");
+    testQuery.setRows(200);
+    testQuery.addSort(new SolrQuery.SortClause("field3_i", SolrQuery.ORDER.desc));
+    testQuery.addSort(new SolrQuery.SortClause("id", SolrQuery.ORDER.asc));
+    JavaRDD<SolrDocument> docs = solrRDD.queryDeep(jsc, testQuery);
+    List<SolrDocument> docList = docs.collect();
+    assertTrue("expected "+numDocs+" from queryDeep but only found "+docList.size(), docList.size() == numDocs);
+    assertTrue("expected last doc with field3_i=="+(numDocs-1)+" but got "+docList.get(0),
+      numDocs-1 == (Integer)(docList.get(0)).getFirstValue("field3_i"));
   }
 }
