@@ -227,12 +227,14 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       public SolrInputDocument call(Row row) throws Exception {
         StructType schema = row.schema();
         SolrInputDocument doc = new SolrInputDocument();
-        for (StructField f : schema.fields()) {
+        StructField[] fields = schema.fields();
+        for (int i=0; i < fields.length; i++) {
+          StructField f = fields[i];
           String fname = f.name();
           if (fname.equals("_version_"))
             continue;
 
-          Object val = row.get(row.fieldIndex(fname));
+          Object val = !row.isNullAt(i) ? row.get(i) : null;
           if (val != null)
             doc.setField(fname, val);
         }

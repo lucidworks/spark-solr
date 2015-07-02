@@ -95,7 +95,7 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     options.put("collection", collection);
     options.put("query", queryStr);
 
-    DataFrame df = sqlContext.read().format("solr").options(options).load();
+    DataFrame df = sqlContext.load("solr", options);
     long numEchos = df.filter(df.col("type_s").equalTo("echo")).count();
     System.out.println("numEchos >> "+numEchos);
 

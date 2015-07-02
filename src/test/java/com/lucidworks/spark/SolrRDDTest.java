@@ -23,12 +23,12 @@ public class SolrRDDTest extends RDDProcessorTestBase {
   @Test
   public void testCollectionAliasSupport() throws Exception {
     String zkHost = cluster.getZkServer().getZkAddress();
-    buildCollection(zkHost, "test1");
-    buildCollection(zkHost, "test2");
+    buildCollection(zkHost, "test1Aliased");
+    buildCollection(zkHost, "test2Aliased");
 
     // create a collection alias that uses test1 and test2 under the covers
     String aliasName = "test";
-    String createAliasCollectionsList = "test1,test2";
+    String createAliasCollectionsList = "test1Aliased,test2Aliased";
     ModifiableSolrParams modParams = new ModifiableSolrParams();
     modParams.set(CoreAdminParams.ACTION, CollectionParams.CollectionAction.CREATEALIAS.name());
     modParams.set("name", aliasName);
@@ -47,6 +47,9 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     long numFound = resultsRDD.count();
     assertTrue("expected " + expectedNumDocs + " docs in query results from alias " + aliasName + ", but got " + numFound,
       numFound == expectedNumDocs);
+
+    deleteCollection("test1Aliased");
+    deleteCollection("test2Aliased");
   }
 
   @Test
@@ -66,5 +69,6 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     assertTrue("expected "+numDocs+" from queryDeep but only found "+docList.size(), docList.size() == numDocs);
     assertTrue("expected last doc with field3_i=="+(numDocs-1)+" but got "+docList.get(0),
       numDocs-1 == (Integer)(docList.get(0)).getFirstValue("field3_i"));
+    deleteCollection(testCollection);
   }
 }

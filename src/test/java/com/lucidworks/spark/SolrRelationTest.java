@@ -38,7 +38,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put("zkhost", zkHost);
     options.put("collection", testCollection);
 
-    DataFrame df = sqlContext.read().format("solr").options(options).load();
+    DataFrame df = sqlContext.load("solr", options);
 
     df.show();
 
@@ -82,10 +82,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
     options.put("collection", "testFilterSupport2");
-    df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    df.save("solr", SaveMode.Overwrite, options);
     Thread.sleep(1000);
 
-    DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+    DataFrame df2 = sqlContext.load("solr", options);
     df2.show();
 
     deleteCollection(testCollection);

@@ -5,15 +5,7 @@ import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
@@ -409,7 +401,13 @@ public class SolrRDD implements Serializable {
 
     List<String> shards = new ArrayList<String>();
     for (String coll : collections) {
-      for (Slice slice : clusterState.getSlices(coll)) {
+      Collection<Slice> slices = clusterState.getSlices(coll);
+      if (slices == null) {
+        log.warn("\n\nCollection '"+coll+"' has no shards!\n\n");
+        continue;
+      }
+
+      for (Slice slice : slices) {
         List<String> replicas = new ArrayList<String>();
         for (Replica r : slice.getReplicas()) {
           ZkCoreNodeProps replicaCoreProps = new ZkCoreNodeProps(r);
