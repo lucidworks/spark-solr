@@ -35,7 +35,8 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
-                            <outputFile>target/lucidworks-spark-rdd-2.0.3.jar</outputFile>
+                            <finalName>lucidworks-spark-rdd-2.0.3.jar</finalName>
+                            <!-- <outputFile>target/lucidworks-spark-rdd-2.0.3.jar</outputFile> -->
                             <shadedArtifactAttached>true</shadedArtifactAttached>
                             <shadedClassifierName>shaded</shadedClassifierName>
                             <filters>
