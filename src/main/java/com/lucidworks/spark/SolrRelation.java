@@ -232,7 +232,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
           if (fname.equals("_version_"))
             continue;
 
-          Object val = row.get(row.fieldIndex(fname));
+          int fieldIndex = row.fieldIndex(fname);
+          Object val = row.isNullAt(fieldIndex) ? null : row.get(fieldIndex);
           if (val != null)
             doc.setField(fname, val);
         }

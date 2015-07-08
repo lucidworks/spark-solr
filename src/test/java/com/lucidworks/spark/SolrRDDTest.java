@@ -8,6 +8,7 @@ import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
@@ -50,6 +51,24 @@ public class SolrRDDTest extends RDDProcessorTestBase {
   }
 
   @Test
+  public void testQueryShards() throws Exception {
+    String zkHost = cluster.getZkServer().getZkAddress();
+    String testCollection = "queryShards";
+    int numDocs = 2000;
+    buildCollection(zkHost, testCollection, numDocs, 3);
+
+    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection);
+    SolrQuery testQuery = new SolrQuery();
+    testQuery.setQuery("*:*");
+    testQuery.setRows(57);
+    testQuery.addSort(new SolrQuery.SortClause("id", SolrQuery.ORDER.asc));
+    JavaRDD<SolrDocument> docs = solrRDD.queryShards(jsc, testQuery);
+    List<SolrDocument> docList = docs.collect();
+    assertTrue("expected "+numDocs+" from queryShards but only found "+docList.size(), docList.size() == numDocs);
+    deleteCollection(testCollection);
+  }
+
+  @Test
   public void testQueryDeep() throws Exception {
     String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "queryDeep";
@@ -64,7 +83,9 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     JavaRDD<SolrDocument> docs = solrRDD.queryDeep(jsc, testQuery);
     List<SolrDocument> docList = docs.collect();
     assertTrue("expected "+numDocs+" from queryDeep but only found "+docList.size(), docList.size() == numDocs);
-    assertTrue("expected last doc with field3_i=="+(numDocs-1)+" but got "+docList.get(0),
+    assertTrue("expected last doc with field3_i==" +(numDocs-1)+" but got "+docList.get(0),
       numDocs-1 == (Integer)(docList.get(0)).getFirstValue("field3_i"));
+
+    deleteCollection(testCollection);
   }
 }

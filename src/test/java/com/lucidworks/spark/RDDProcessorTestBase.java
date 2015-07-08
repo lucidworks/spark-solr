@@ -38,22 +38,25 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
 
   protected void buildCollection(String zkHost, String collection) throws Exception {
     String[] inputDocs = new String[] { collection+"-1,foo,bar,1", collection+"-2,foo,baz,2", collection+"-3,bar,baz,3" };
-    buildCollection(zkHost, collection, inputDocs);
+    buildCollection(zkHost, collection, inputDocs, 2);
   }
 
   protected void buildCollection(String zkHost, String collection, int numDocs) throws Exception {
+    buildCollection(zkHost, collection, numDocs, 2);
+  }
+
+  protected void buildCollection(String zkHost, String collection, int numDocs, int numShards) throws Exception {
     String[] inputDocs = new String[numDocs];
     for (int n=0; n < numDocs; n++)
       inputDocs[n] = collection+"-"+n+",foo"+n+",bar"+n+","+n;
-    buildCollection(zkHost, collection, inputDocs);
+    buildCollection(zkHost, collection, inputDocs, numShards);
   }
 
-  protected void buildCollection(String zkHost, String collection, String[] inputDocs) throws Exception {
+  protected void buildCollection(String zkHost, String collection, String[] inputDocs, int numShards) throws Exception {
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
-    int numShards = 2;
     int replicationFactor = 1;
-    createCollection(collection, numShards, replicationFactor, 2, confName, confDir);
+    createCollection(collection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
 
     // index some docs into both collections
     int numDocsIndexed = indexDocs(zkHost, collection, inputDocs);
