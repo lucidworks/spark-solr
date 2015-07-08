@@ -32,7 +32,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "testFilterSupport";
-    buildCollection(zkHost, testCollection, testData);
+    buildCollection(zkHost, testCollection, testData, 2);
 
     Map<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
