@@ -4,6 +4,7 @@ import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -56,12 +57,14 @@ public class SolrSupport implements Serializable {
   private static Map<String,CloudSolrClient> solrServers = new HashMap<String, CloudSolrClient>();
   private static Map<String,ConcurrentUpdateSolrClient> leaderServers = new HashMap<String,ConcurrentUpdateSolrClient>();
 
-  public static CloudSolrClient getSolrServer(String key) {
+  public static CloudSolrClient getSolrServer(String host,String collection) {
     CloudSolrClient solr = null;
     synchronized (solrServers) {
+      String key = host + collection;
       solr = solrServers.get(key);
       if (solr == null) {
-        solr = new CloudSolrClient(key);
+        solr = new CloudSolrClient(host);
+        solr.setDefaultCollection(collection);
         solr.connect();
         solrServers.put(key, solr);
       }
@@ -110,7 +113,7 @@ public class SolrSupport implements Serializable {
     synchronized (leaderServers) {
       cuss = leaderServers.get(leaderKey);
       if (cuss == null) {
-        CloudSolrClient solrServer = getSolrServer(zkHost);
+        CloudSolrClient solrServer = getSolrServer(zkHost,collection);
         final String leaderUrl = solrServer.getZkStateReader().getLeaderUrl(collection, shardId, 5000);
         cuss = new ConcurrentUpdateSolrClient(leaderUrl, queueSize, numRunners) {
           public void handleError(Throwable ex) {
@@ -157,7 +160,7 @@ public class SolrSupport implements Serializable {
     docs.foreachPartition(
       new VoidFunction<Iterator<SolrInputDocument>>() {
         public void call(Iterator<SolrInputDocument> solrInputDocumentIterator) throws Exception {
-          final SolrClient solrServer = getSolrServer(zkHost);
+          final SolrClient solrServer = getSolrServer(zkHost,collection);
           List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>();
           Date indexedAt = new Date();
           while (solrInputDocumentIterator.hasNext()) {
@@ -169,6 +172,7 @@ public class SolrSupport implements Serializable {
           }
           if (!batch.isEmpty())
             sendBatchToSolr(solrServer, collection, batch);
+          solrServer.commit();
         }
       }
     );
