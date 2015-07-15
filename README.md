@@ -21,20 +21,14 @@ This will build 2 jars in the `/target` directory: spark-solr-1.0-SNAPSHOT.jar a
 The first is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to 
 submit one of the included example apps to Spark.
 
-To run the Twitter examples, you'll need to configure your Twitter API credentials in:
+Now, let's populate a SolrCloud index with tweets (be sure to update the command shown below with your Twitter API credentials):
 
 ```
-src/main/resources/twitter4j.properties
-```
-
-and then re-build the package (mvn package).
-
-Now, let's populate a SolrCloud index with tweets:
-
-```
-./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
-  <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT-shaded.jar \
-  twitter-to-solr -zkHost localhost:9983 -collection collection1
+$SPARK_HOME/bin/spark-submit --master local[2] \
+  --conf "spark.executor.extraJavaOptions=-Dtwitter4j.oauth.consumerKey=? -Dtwitter4j.oauth.consumerSecret=? -Dtwitter4j.oauth.accessToken=? -Dtwitter4j.oauth.accessTokenSecret=?" \
+  --class com.lucidworks.spark.SparkApp \
+  ./target/spark-solr-1.0-SNAPSHOT-shaded.jar \
+  twitter-to-solr -zkHost localhost:9983 -collection gettingstarted
 ```
 
 After populating your collection with tweets, you can see an example of how to transform the results from a Solr
@@ -43,7 +37,7 @@ query into a Spark RDD:
 ```
 ./spark-submit --master local[2] --class com.lucidworks.spark.SparkApp \
   <PROJECT_PATH>/target/spark-solr-1.0-SNAPSHOT-shaded.jar \
-  query-solr -zkHost=localhost:9983 -collection=collection1 -query="*:*"
+  query-solr -zkHost=localhost:9983 -collection=gettingstarted -query="*:*"
 ```
 
 Reading data from Solr as a Spark RDD
@@ -147,3 +141,36 @@ sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'").show();
 Notice that SolrRDD figured out the schema for you by retrieving metadata from Solr using the Schema API. In other words, the query does not specify the `type_s` field but it is still available as part of the temp table definition because field metadata for your Solr query are retrieved dynamically if not supplied.
 
 To see the schema created from Solr metadata, simply do: `tweets.printSchema();`
+
+Authenticating with Kerberized Solr
+========
+
+For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security
+
+The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the -solrJaasAuthConfig option.
+
+For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file that sets the location of your Kerberos keytab file, such as:
+
+```
+Client {
+  com.sun.security.auth.module.Krb5LoginModule required
+  useKeyTab=true
+  keyTab="/opt/lucidworks-hdpsearch/job/solr.keytab"
+  storeKey=true
+  useTicketCache=true
+  debug=true
+  principal="solr";
+};
+```
+
+To use this configuration to authenticate to Solr, you simply need to pass the path using the -solrJaasAuthConfig option, such as:
+
+```
+spark-submit --master yarn-server \
+  --class com.lucidworks.spark.SparkApp \
+  $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
+  hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
+  -hdfsPath /user/spark/testdata/syn_sample_50k \
+  -solrJaasAuthConfig=/opt/lucidworks-hdpsearch/job/jaas-client.conf
+```
+

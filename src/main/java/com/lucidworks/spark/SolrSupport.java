@@ -29,10 +29,7 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.client.solrj.impl.BinaryRequestWriter;
-import org.apache.solr.client.solrj.impl.BinaryResponseParser;
-import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrClient;
+import org.apache.solr.client.solrj.impl.*;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -46,6 +43,8 @@ import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import scala.Tuple2;
 
+import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
+
 /**
  * A stateless utility class that provides static method for working with the SolrJ API.
  */
@@ -56,11 +55,28 @@ public class SolrSupport implements Serializable {
   private static Map<String,CloudSolrClient> solrServers = new HashMap<String, CloudSolrClient>();
   private static Map<String,ConcurrentUpdateSolrClient> leaderServers = new HashMap<String,ConcurrentUpdateSolrClient>();
 
+  public static HttpSolrClient getHttpSolrClient(String shardUrl) {
+    setupKerberosIfNeeded();
+    return new HttpSolrClient(shardUrl);
+  }
+
+  public static synchronized void setupKerberosIfNeeded() {
+    String solrJaasAuthConfig = System.getProperty(LOGIN_CONFIG_PROP);
+    if (solrJaasAuthConfig != null) {
+      HttpClientConfigurer configurer = HttpClientUtil.getConfigurer();
+      if (configurer == null || !(configurer instanceof Krb5HttpClientConfigurer)) {
+        HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer());
+        log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig);
+      }
+    }
+  }
+
   public static CloudSolrClient getSolrServer(String key) {
     CloudSolrClient solr = null;
     synchronized (solrServers) {
       solr = solrServers.get(key);
       if (solr == null) {
+        setupKerberosIfNeeded();
         solr = new CloudSolrClient(key);
         solr.connect();
         solrServers.put(key, solr);
