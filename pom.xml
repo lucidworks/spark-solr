@@ -122,6 +122,10 @@
                                     <pattern>javax.ws.rs</pattern>
                                     <shadedPattern>shaded.javax.ws.rs</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>org.apache.solr</pattern>
+                                    <shadedPattern>shaded.apache.solr</shadedPattern>
+                                </relocation>
                             </relocations>
                         </configuration>
                     </execution>

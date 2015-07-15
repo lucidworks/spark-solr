@@ -28,15 +28,17 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
-import org.apache.spark.serializer.KryoSerializer;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
 
 /**
  * Command-line utility for implementing Spark applications; reduces
  * boilerplate code for implementing multiple Spark applications.
  */
 public class SparkApp implements Serializable {
+
+  private static final String sparkExecutorExtraJavaOptionsParam = "spark.executor.extraJavaOptions";
 
   /**
    * Defines the interface to a Spark RDD processing implementation that can be run from this command-line app.
@@ -125,14 +127,15 @@ public class SparkApp implements Serializable {
     // process command-line args to configure this application
     CommandLine cli =
         processCommandLineArgs(
-                joinCommonAndProcessorOptions(procImpl.getOptions()), procImplArgs);
+          joinCommonAndProcessorOptions(procImpl.getOptions()), procImplArgs);
 
     SparkConf sparkConf = new SparkConf().setAppName(procImpl.getName());
-
 
     //sparkConf.set("spark.serializer", KryoSerializer.class.getName());
     //sparkConf.set("spark.kryo.registrator", LWKryoRegistrator.class.getName());
     sparkConf.set("spark.task.maxFailures", "10");
+
+    setupSolrAuthenticationProps(cli, sparkConf);
 
     String masterUrl = cli.getOptionValue("master");
     if (masterUrl != null)
@@ -143,6 +146,29 @@ public class SparkApp implements Serializable {
     int exitCode = procImpl.run(sparkConf, cli);
 
     System.exit(exitCode);
+  }
+
+  protected static void setupSolrAuthenticationProps(CommandLine cli, SparkConf sparkConf) {
+    String solrJaasAuthConfig = cli.getOptionValue("solrJaasAuthConfig");
+    if (solrJaasAuthConfig == null || solrJaasAuthConfig.isEmpty())
+      return; // no jaas auth config provided
+
+    String solrJaasAppName = cli.getOptionValue("solrJaasAppName", "Client");
+    String solrJaasOpts = String.format(Locale.ROOT, "-D%s=%s -Dsolr.kerberos.jaas.appname=%s",
+        LOGIN_CONFIG_PROP, solrJaasAuthConfig, solrJaasAppName);
+    String sparkExecutorExtraJavaOptions =
+      sparkConf.contains(sparkExecutorExtraJavaOptionsParam) ? sparkConf.get(sparkExecutorExtraJavaOptionsParam) : null;
+    if (sparkExecutorExtraJavaOptions == null) {
+      sparkExecutorExtraJavaOptions = solrJaasOpts;
+    } else {
+      if (!sparkExecutorExtraJavaOptions.contains(LOGIN_CONFIG_PROP)) {
+        sparkExecutorExtraJavaOptions += " " + solrJaasOpts;
+      }
+    }
+    sparkConf.set(sparkExecutorExtraJavaOptionsParam, sparkExecutorExtraJavaOptions);
+    System.setProperty(LOGIN_CONFIG_PROP, solrJaasAuthConfig);
+    System.setProperty("solr.kerberos.jaas.appname", solrJaasAppName);
+    log.info("Added " + solrJaasOpts + " to " + sparkExecutorExtraJavaOptionsParam + " for authenticating to Solr.");
   }
 
   /**
@@ -179,12 +205,27 @@ public class SparkApp implements Serializable {
               .hasArg()
               .isRequired(false)
               .withDescription("Number of docs to queue up on the client before sending to Solr; default is 10")
-              .create("batchSize")
+              .create("batchSize"),
+      OptionBuilder
+        .withArgName("PATH")
+              .hasArg()
+              .isRequired(false)
+        .withDescription("For authenticating to Solr using JAAS, sets the '" + LOGIN_CONFIG_PROP + "' system property.")
+        .create("solrJaasAuthConfig"),
+      OptionBuilder
+        .withArgName("NAME")
+              .hasArg()
+              .isRequired(false)
+        .withDescription("For authenticating to Solr using JAAS, sets the 'solr.kerberos.jaas.appname' system property; default is Client")
+        .create("solrJaasAppName")
     };
   }
 
   // Creates an instance of the requested tool, using classpath scanning if necessary
   private static RDDProcessor newProcessor(String streamProcType) throws Exception {
+
+    streamProcType = streamProcType.trim();
+
     if ("twitter-to-solr".equals(streamProcType))
       return new TwitterToSolrStreamProcessor();
     else if ("query-solr".equals(streamProcType))

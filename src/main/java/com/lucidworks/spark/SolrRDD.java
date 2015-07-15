@@ -160,20 +160,8 @@ public class SolrRDD implements Serializable {
     }
   }
 
-  // can't serialize CloudSolrServers so we cache them in a static context to reuse by the zkHost
-  private static final Map<String, CloudSolrClient> cachedServers = new HashMap<String, CloudSolrClient>();
-
   public static CloudSolrClient getSolrClient(String zkHost) {
-    CloudSolrClient cloudSolrServer = null;
-    synchronized (cachedServers) {
-      cloudSolrServer = cachedServers.get(zkHost);
-      if (cloudSolrServer == null) {
-        cloudSolrServer = new CloudSolrClient(zkHost);
-        cloudSolrServer.connect();
-        cachedServers.put(zkHost, cloudSolrServer);
-      }
-    }
-    return cloudSolrServer;
+    return SolrSupport.getSolrServer(zkHost);
   }
 
   protected String zkHost;
@@ -252,7 +240,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrDocument> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, SolrDocument>() {
         public Iterable<SolrDocument> call(String shardUrl) throws Exception {
-          return new StreamingResultsIterator(new HttpSolrClient(shardUrl), query, "*");
+          return new StreamingResultsIterator(SolrSupport.getHttpSolrClient(shardUrl), query, "*");
         }
       }
     );
@@ -311,7 +299,7 @@ public class SolrRDD implements Serializable {
         statsQuery.set("stats", true);
         statsQuery.set("stats.field", splitFieldName);
 
-        HttpSolrClient solrClient = new HttpSolrClient(shardUrl);
+        HttpSolrClient solrClient = SolrSupport.getHttpSolrClient(shardUrl);
         QueryResponse qr = solrClient.query(statsQuery);
         Map<String, FieldStatsInfo> statsInfoMap = qr.getFieldStatsInfo();
         FieldStatsInfo stats = (statsInfoMap != null) ? statsInfoMap.get(splitFieldName) : null;
@@ -347,7 +335,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrDocument> docs = jsc.parallelize(splits, splits.size()).flatMap(
       new FlatMapFunction<ShardSplit, SolrDocument>() {
         public Iterable<SolrDocument> call(ShardSplit split) throws Exception {
-          return new StreamingResultsIterator(new HttpSolrClient(split.shardUrl), split.getSplitQuery(), "*");
+          return new StreamingResultsIterator(SolrSupport.getHttpSolrClient(split.shardUrl), split.getSplitQuery(), "*");
         }
       }
     );
@@ -378,7 +366,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<Vector> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, Vector>() {
         public Iterable<Vector> call(String shardUrl) throws Exception {
-          return new TermVectorIterator(new HttpSolrClient(shardUrl), query, "*", field, numFeatures);
+          return new TermVectorIterator(SolrSupport.getHttpSolrClient(shardUrl), query, "*", field, numFeatures);
         }
       }
     );

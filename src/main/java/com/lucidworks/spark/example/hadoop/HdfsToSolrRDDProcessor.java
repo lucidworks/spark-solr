@@ -79,7 +79,8 @@ public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {
     int queueSize = Integer.parseInt(cli.getOptionValue("queueSize", "1000"));
     int numRunners = Integer.parseInt(cli.getOptionValue("numRunners", "2"));
     int pollQueueTime = Integer.parseInt(cli.getOptionValue("pollQueueTime", "20"));
-    SolrSupport.streamDocsIntoSolr(zkHost, collection, "id", pairs, queueSize, numRunners, pollQueueTime);
+    //SolrSupport.streamDocsIntoSolr(zkHost, collection, "id", pairs, queueSize, numRunners, pollQueueTime);
+    SolrSupport.indexDocs(zkHost, collection, 100, pairs.values());
 
     // send a final commit in case soft auto-commits are not enabled
     CloudSolrClient cloudSolrClient = SolrSupport.getSolrServer(zkHost);
