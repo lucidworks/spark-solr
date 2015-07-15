@@ -5,7 +5,7 @@
     <groupId>com.lucidworks.spark</groupId>
     <artifactId>spark-solr_spark1.3</artifactId>
     <packaging>jar</packaging>
-    <version>1.0</version>
+    <version>1.1-SNAPSHOT</version>
     <name>spark-solr</name>
     <url>http://maven.apache.org</url>
     <properties>
