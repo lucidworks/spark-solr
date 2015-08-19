@@ -1,15 +1,16 @@
 package com.lucidworks.spark;
 
 import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.types.*;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Tests for the SolrRelation implementation.
@@ -24,10 +25,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     SQLContext sqlContext = new SQLContext(jsc);
 
     String[] testData = new String[] {
-      "1,a,x,1000",
-      "2,b,y,2000",
-      "3,c,z,3000",
-      "4,a,x,4000"
+      "1,a,x,1000,[a;x],[1000]",
+      "2,b,y,2000,[b;y],[2000]",
+      "3,c,z,3000,[c;z],[3000]",
+      "4,a,x,4000,[a;x],[4000]"
     };
 
     String zkHost = cluster.getZkServer().getZkAddress();
@@ -40,10 +41,25 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     DataFrame df = sqlContext.read().format("solr").options(options).load();
 
-    df.show();
+    validateSchema(df);
+    //df.show();
 
     long count = df.count();
     assertCount(testData.length, count, "*:*");
+
+    Row[] rows = df.collect();
+    for (int r=0; r < rows.length; r++) {
+      Row row = rows[r];
+      List val = row.getList(row.fieldIndex("field4_ss"));
+      assertNotNull(val);
+
+      List list = new ArrayList();
+      list.addAll(val); // clone since we need to sort the entries for testing only
+      Collections.sort(list);
+      assertTrue(list.size() == 2);
+      assertEquals(list.get(0), row.getString(row.fieldIndex("field1_s")));
+      assertEquals(list.get(1), row.getString(row.fieldIndex("field2_s")));
+    }
 
     count = df.filter(df.col("field1_s").equalTo("a")).count();
     assertCount(2, count, "field1_s == a");
@@ -94,5 +110,37 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
   protected void assertCount(long expected, long actual, String expr) {
     assertTrue("expected count == "+expected+" but got "+actual+" for "+expr, expected == actual);
+  }
+
+  protected void validateSchema(DataFrame df) {
+    df.printSchema();
+    StructType schema = df.schema();
+    assertNotNull(schema);
+    String[] expectedSchemaFields = new String[]{"id","field1_s","field2_s","field3_i","field4_ss","field5_ii"};
+    Map<String,StructField> schemaFields = new HashMap<String, StructField>();
+    for (StructField sf : schema.fields())
+      schemaFields.put(sf.name(), sf);
+
+    for (String fieldName : expectedSchemaFields) {
+      StructField field = schemaFields.get(fieldName);
+      if (field == null)
+        fail("Expected schema field '" + fieldName + "' not found! Schema is: " + schema.prettyJson());
+      DataType type = field.dataType();
+      if (fieldName.equals("id") || fieldName.endsWith("_s")) {
+        assertEquals("Field '" + fieldName + "' should be a string but has type '" + type + "' instead!", "string", type.typeName());
+      } else if (fieldName.endsWith("_i")) {
+        assertEquals("Field '" + fieldName + "' should be an integer but has type '" + type + "' instead!", "integer", type.typeName());
+      } else if (fieldName.endsWith("_ss")) {
+        assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
+        ArrayType arrayType = (ArrayType)type;
+        assertEquals("Field '"+fieldName+"' should have a string element type but has '"+arrayType.elementType()+
+          "' instead!", "string", arrayType.elementType().typeName());
+      } else if (fieldName.endsWith("_ii")) {
+        assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
+        ArrayType arrayType = (ArrayType)type;
+        assertEquals("Field '"+fieldName+"' should have an integer element type but has '"+arrayType.elementType()+
+          "' instead!", "integer", arrayType.elementType().typeName());
+      }
+    }
   }
 }

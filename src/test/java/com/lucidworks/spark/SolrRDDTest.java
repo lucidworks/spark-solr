@@ -85,7 +85,6 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     assertTrue("expected "+numDocs+" from queryDeep but only found "+docList.size(), docList.size() == numDocs);
     assertTrue("expected last doc with field3_i==" +(numDocs-1)+" but got "+docList.get(0),
       numDocs-1 == (Integer)(docList.get(0)).getFirstValue("field3_i"));
-
     deleteCollection(testCollection);
   }
 }

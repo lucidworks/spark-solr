@@ -11,7 +11,6 @@ import scala.collection.immutable.Map;
 
 import java.io.Serializable;
 
-// TODO: Implement CreatableRelationProvider to support writing to Solr
 public class DefaultSource implements RelationProvider, CreatableRelationProvider, Serializable {
 
   public BaseRelation createRelation(SQLContext sqlContext, Map<String, String> config) {

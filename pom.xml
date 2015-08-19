@@ -11,7 +11,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.7</java.version>
-        <spark.version>1.4.0</spark.version>
+        <spark.version>1.4.1</spark.version>
         <solr.version>5.2.1</solr.version>
     </properties>
     <build>

@@ -5,15 +5,7 @@ import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 import com.lucidworks.spark.query.PagedResultsIterator;
 import com.lucidworks.spark.query.SolrTermVector;
@@ -47,11 +39,8 @@ import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.DataFrame;
 
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.types.StructType;
 
 public class SolrRDD implements Serializable {
 
@@ -488,7 +477,6 @@ public class SolrRDD implements Serializable {
 
   private static final Map<String,DataType> solrDataTypes = new HashMap<String, DataType>();
   static {
-    // TODO: handle multi-valued somehow?
     solrDataTypes.put("solr.StrField", DataTypes.StringType);
     solrDataTypes.put("solr.TextField", DataTypes.StringType);
     solrDataTypes.put("solr.BoolField", DataTypes.BooleanType);
@@ -511,11 +499,7 @@ public class SolrRDD implements Serializable {
     return applySchema(sqlContext, solrQuery, query(sqlContext.sparkContext(), solrQuery));
   }
 
-  public DataFrame applySchema(SQLContext sqlContext,
-                                   SolrQuery query,
-                                   JavaRDD<SolrDocument> docs)
-    throws Exception
-  {
+  public DataFrame applySchema(SQLContext sqlContext, SolrQuery query, JavaRDD<SolrDocument> docs) throws Exception {
     // now convert each SolrDocument to a Row object
     StructType schema = getQuerySchema(query);
     JavaRDD<Row> rows = toRows(schema, docs);
@@ -526,11 +510,18 @@ public class SolrRDD implements Serializable {
     final String[] queryFields = schema.fieldNames();
     JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
       public Row call(SolrDocument doc) throws Exception {
-        List<Object> vals = new ArrayList<Object>(queryFields.length);
-        for (String field : queryFields) {
-          vals.add(doc.getFirstValue(field));
+        Object[] vals = new Object[queryFields.length];
+        for (int f = 0; f < queryFields.length; f++) {
+          Object fieldValue = doc.getFieldValue(queryFields[f]);
+          if (fieldValue != null) {
+            if (fieldValue instanceof Collection) {
+              vals[f] = ((Collection) fieldValue).toArray();
+            } else {
+              vals[f] = fieldValue;
+            }
+          }
         }
-        return RowFactory.create(vals.toArray());
+        return RowFactory.create(vals);
       }
     });
     return rows;
@@ -569,22 +560,35 @@ public class SolrRDD implements Serializable {
     if (!solrBaseUrl.endsWith("?"))
       solrBaseUrl += "/";
 
-    Map<String,String> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
+    Map<String,SolrFieldMeta> fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (String field : fields) {
-      String fieldType = fieldTypeMap.get(field);
-      DataType dataType = (fieldType != null) ? solrDataTypes.get(fieldType) : null;
+      SolrFieldMeta fieldMeta = fieldTypeMap.get(field);
+      DataType dataType = (fieldMeta != null) ? solrDataTypes.get(fieldMeta.fieldTypeClass) : null;
       if (dataType == null) dataType = DataTypes.StringType;
-      listOfFields.add(DataTypes.createStructField(field, dataType, true));
+
+      if (fieldMeta.isMultiValued) {
+        dataType = new ArrayType(dataType, true);
+      }
+
+      boolean nullable = !"id".equals(field);
+
+      listOfFields.add(DataTypes.createStructField(field, dataType, nullable));
     }
 
     return DataTypes.createStructType(listOfFields);
   }
 
-  private static Map<String,String> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+  private static class SolrFieldMeta {
+    String fieldType;
+    boolean isMultiValued;
+    String fieldTypeClass;
+  }
+
+  private static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
 
     // collect mapping of Solr field to type
-    Map<String,String> fieldTypeMap = new HashMap<String,String>();
+    Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();
     for (String field : fields) {
 
       if (fieldTypeMap.containsKey(field))
@@ -593,11 +597,13 @@ public class SolrRDD implements Serializable {
       // Hit Solr Schema API to get field type for field
       String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field;
       try {
-        String fieldType = null;
+        SolrFieldMeta tvc = null;
         try {
           Map<String, Object> fieldMeta =
             SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldUrl, 2);
-          fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
+          tvc = new SolrFieldMeta();
+          tvc.fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
+          tvc.isMultiValued = SolrJsonSupport.asBool("/field/multiValued", fieldMeta);
         } catch (SolrException solrExc) {
           int errCode = solrExc.code();
           if (errCode == 404) {
@@ -606,17 +612,20 @@ public class SolrRDD implements Serializable {
               // see if the field is a dynamic field
               String dynField = "*"+field.substring(lio);
 
-              fieldType = fieldTypeMap.get(dynField);
-              if (fieldType == null) {
+              tvc = fieldTypeMap.get(dynField);
+              if (tvc == null) {
                 String dynamicFieldsUrl = solrBaseUrl+collection+"/schema/dynamicfields/"+dynField;
                 try {
                   Map<String, Object> dynFieldMeta =
                     SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), dynamicFieldsUrl, 2);
-                  fieldType = SolrJsonSupport.asString("/dynamicField/type", dynFieldMeta);
-                  fieldTypeMap.put(dynField, fieldType);
+                  tvc = new SolrFieldMeta();
+                  tvc.fieldType = SolrJsonSupport.asString("/dynamicField/type", dynFieldMeta);
+                  tvc.isMultiValued = SolrJsonSupport.asBool("/dynamicField/multiValued", dynFieldMeta);
+
+                  fieldTypeMap.put(dynField, tvc);
                 } catch (Exception exc) {
                   // just ignore this and throw the outer exc
-                  exc.printStackTrace();
+                  log.error("Failed to get dynamic field information for "+dynField+" due to: "+exc);
                   throw solrExc;
                 }
               }
@@ -624,22 +633,18 @@ public class SolrRDD implements Serializable {
           }
         }
 
-        if (fieldType == null) {
+        if (tvc == null || tvc.fieldType == null) {
           log.warn("Can't figure out field type for field: " + field);
           continue;
         }
 
-        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+fieldType;
+        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
         Map<String, Object> fieldTypeMeta =
           SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
-        String fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
 
-        // map all the other fields for this type to speed up the schema analysis
-        List<String> otherFields = SolrJsonSupport.asList("/fieldType/fields", fieldTypeMeta);
-        for (String other : otherFields)
-          fieldTypeMap.put(other, fieldTypeClass);
+        tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
 
-        fieldTypeMap.put(field, fieldTypeClass);
+        fieldTypeMap.put(field, tvc);
 
       } catch (Exception exc) {
         log.warn("Can't get field type for field " + field+" due to: "+exc);

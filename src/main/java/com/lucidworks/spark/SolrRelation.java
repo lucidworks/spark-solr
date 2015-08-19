@@ -31,12 +31,15 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   public static String SOLR_QUERY_PARAM = "query";
   public static String SOLR_SPLIT_FIELD_PARAM = "split_field";
   public static String SOLR_SPLITS_PER_SHARD_PARAM = "splits_per_shard";
+  public static String SOLR_PARALLEL_SHARDS = "parallel_shards";
+
 
   protected String splitFieldName;
   protected int splitsPerShard = 1;
   protected SolrQuery solrQuery;
   protected SolrRDD solrRDD;
   protected StructType schema;
+  protected boolean parallelShards = true;
   protected transient SQLContext sqlContext;
 
   public SolrRelation() {}
@@ -55,6 +58,9 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     String zkHost = requiredParam(config, SOLR_ZK_HOST_PARAM);
     String collection = requiredParam(config, SOLR_COLLECTION_PARAM);
     String query = optionalParam(config, SOLR_QUERY_PARAM, "*:*");
+
+    parallelShards = Boolean.parseBoolean(optionalParam(config, SOLR_PARALLEL_SHARDS, "true"));
+
     splitFieldName = optionalParam(config, SOLR_SPLIT_FIELD_PARAM, null);
     if (splitFieldName != null)
       splitsPerShard = Integer.parseInt(optionalParam(config, SOLR_SPLITS_PER_SHARD_PARAM, "10"));
@@ -121,8 +127,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       StructType querySchema =
         (fields != null && fields.length > 0) ? deriveQuerySchema(fields) : schema;
       JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
-      JavaRDD<SolrDocument> docs =
-        solrRDD.queryShards(jsc, solrQuery, splitFieldName, splitsPerShard);
+      JavaRDD<SolrDocument> docs = parallelShards ?
+        solrRDD.queryShards(jsc, solrQuery, splitFieldName, splitsPerShard) : solrRDD.queryDeep(jsc, solrQuery);
       rows = solrRDD.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
       if (e instanceof RuntimeException) {
@@ -234,8 +240,21 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
           int fieldIndex = row.fieldIndex(fname);
           Object val = row.isNullAt(fieldIndex) ? null : row.get(fieldIndex);
-          if (val != null)
-            doc.setField(fname, val);
+          if (val != null) {
+            if (val instanceof Collection) {
+              Collection c = (Collection) val;
+              Iterator i = c.iterator();
+              while (i.hasNext())
+                doc.addField(fname, i.next());
+            } else if (val instanceof scala.collection.mutable.ArrayBuffer) {
+              scala.collection.Iterator iter =
+                ((scala.collection.mutable.ArrayBuffer)val).iterator();
+              while (iter.hasNext())
+                doc.addField(fname, iter.next());
+            } else {
+              doc.setField(fname, val);
+            }
+          }
         }
         return doc;
       }

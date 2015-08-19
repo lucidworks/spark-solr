@@ -11,6 +11,8 @@
   <dynamicField indexed="true" name="*_f" stored="true" type="float"/>
   <dynamicField indexed="true" name="*_d" stored="true" type="double"/>
   <dynamicField indexed="true" name="*_tdt" stored="true" type="tdate"/>
+  <dynamicField indexed="true" name="*_ss" stored="true" type="string" multiValued="true"/>
+  <dynamicField indexed="true" name="*_ii" stored="true" type="int" multiValued="true"/>
   <uniqueKey>id</uniqueKey>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true"/>
   <fieldType name="long" class="solr.TrieLongField" precisionStep="6"/>
