@@ -858,7 +858,6 @@ public class SolrRDD implements Serializable {
           SolrQuery q1 = new SolrQuery("id:" + id);
           QueryResponse rsp1 = null;
           try {
-            rsp1 =
             rsp1 = solr.query(q1);
           } catch (Exception E) {
             recurse = false;
@@ -997,6 +996,7 @@ public class SolrRDD implements Serializable {
       try {
         results[i] = Integer.parseInt(s[i]);
       } catch (NumberFormatException nfe) {
+        log.error("Unable to convert String array to integer array");
       };
     }
     return results;
@@ -1009,6 +1009,7 @@ public class SolrRDD implements Serializable {
         results[i] = Double.parseDouble(s[i]);
       } catch (NumberFormatException nfe)
       {
+        log.error("Unable to convert String array to double array");
       };
     }
     return results;
@@ -1021,6 +1022,7 @@ public class SolrRDD implements Serializable {
         results[i] = Float.parseFloat(s[i]);
       } catch (NumberFormatException nfe)
       {
+        log.error("Unable to convert String array to float array");
       };
     }
     return results;
@@ -1033,6 +1035,7 @@ public class SolrRDD implements Serializable {
         results[i] = Short.parseShort(s[i]);
       } catch (NumberFormatException nfe)
       {
+        log.error("Unable to convert String array to short array");
       };
     }
     return results;
@@ -1045,6 +1048,7 @@ public class SolrRDD implements Serializable {
         results[i] = Long.parseLong(s[i]);
       } catch (NumberFormatException nfe)
       {
+        log.error("Unable to convert string array to long array");
       };
     }
     return results;
@@ -1057,6 +1061,7 @@ public class SolrRDD implements Serializable {
         results[i] = Boolean.parseBoolean(s[i]);
       } catch (NumberFormatException nfe)
       {
+        log.error("Unable to convert string array to boolean array");
       };
     }
     return results;
