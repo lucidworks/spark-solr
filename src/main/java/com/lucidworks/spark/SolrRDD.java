@@ -42,16 +42,14 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.mllib.feature.HashingTF;
-import org.apache.spark.mllib.linalg.Vector;
+import org.apache.spark.mllib.linalg.*;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.DataFrame;
 
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.types.StructType;
+import scala.collection.mutable.ArrayBuffer;
 
 public class SolrRDD implements Serializable {
 
@@ -709,4 +707,412 @@ public class SolrRDD implements Serializable {
 
     return resp;
   }
+
+
+  public DataFrame readDataFrame(JavaSparkContext sc, SQLContext sqlCtx, final String solrConnectString, HashMap<String, Object> queryInput) {
+    String schemaQueryString = "__lwcategory_s:schema";
+    String dataQueryString = "__lwcategory_s:data";
+    String qry = "";
+    Iterator it = queryInput.entrySet().iterator();
+    while (it.hasNext()) {
+      java.util.Map.Entry pair = (java.util.Map.Entry)it.next();
+      qry = qry + " AND " + pair.getKey().toString() + ":" + pair.getValue();
+    }
+    schemaQueryString = schemaQueryString + qry;
+    dataQueryString = dataQueryString + qry;
+    SolrQuery schemaQuery = new SolrQuery(schemaQueryString);
+    schemaQuery.addSort("id",SolrQuery.ORDER.asc);
+    SolrQuery dataQuery = new SolrQuery(dataQueryString);
+    dataQuery.addSort("id",SolrQuery.ORDER.asc);
+    try {
+      JavaRDD<SolrDocument> rdd1 = queryShards(sc, schemaQuery);
+      HttpSolrClient Solr = new HttpSolrClient(solrConnectString);
+      final StructType rschema = readSchema(rdd1.collect().get(0), Solr, queryInput);
+      JavaRDD<SolrDocument> rdd2 = queryShards(sc, dataQuery);
+      JavaRDD<Row> rows = rdd2.map(new Function<SolrDocument, Row>() {
+        @Override
+        public Row call(SolrDocument solrDocument) throws Exception {
+          return readData(solrDocument,  new HttpSolrClient(solrConnectString),  rschema);
+        }
+      });
+      return sqlCtx.applySchema(rows, rschema);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }catch (SolrServerException e) {
+        e.printStackTrace();
+      }
+    return null;
+  }
+
+  public static StructType readSchema(SolrDocument doc, HttpSolrClient Solr, HashMap<String, Object> uniqueIdMap) throws IOException, SolrServerException {
+    List<StructField> fields = new ArrayList<StructField>();
+    StructType st= (StructType) recurseReadSchema(doc, Solr, fields, uniqueIdMap).dataType();
+    return st;
+  }
+
+  public static Row readData(SolrDocument doc, HttpSolrClient solr, StructType st) throws IOException, SolrServerException {
+    ArrayList<Object> str = new ArrayList<Object>();
+    return recurseDataRead(doc, solr, str, st);
+  }
+
+  public static StructField recurseReadSchema(SolrDocument doc, HttpSolrClient solr, List<StructField> fldr, HashMap<String, Object> uniqueIdMap) throws IOException, SolrServerException {
+    Boolean recurse = true;
+    String finalName = null;
+    for (Map.Entry<String, Object> field : doc.entrySet()) {
+      String name = field.getKey();
+      Object value = field.getValue();
+      if (name.startsWith("links")) {
+        String id = doc.get(name).toString();
+        if (id != null) {
+          SolrQuery q1 = new SolrQuery("id:" + id);
+          QueryResponse rsp1 = null;
+          try {
+            rsp1 = solr.query(q1);
+          } catch (Exception E) {
+            recurse = false;
+          }
+          if (recurse) {
+            SolrDocumentList docs1 = rsp1.getResults();
+            List<StructField> fld1 = new ArrayList<StructField>();
+            fldr.add(recurseReadSchema(docs1.get(0), solr, fld1, uniqueIdMap));
+          }
+
+        }
+      }
+      if (name.substring(name.length()-2,name.length()).equals("_s")  && !name.equals("__lwroot_s") && !name.startsWith("links") && !uniqueIdMap.containsKey(name) && !name.equals("__lwcategory_s")) {
+        if (name.substring(0, name.length() - 2).equals("__lwchilddocname")) {
+          finalName = field.getValue().toString();
+        } else
+        {
+          fldr.add(new StructField(name.substring(0, name.length() - 2), getsqlDataType(field.getValue().toString()), true, Metadata.empty()));
+        }
+      }
+
+    }
+    StructField[] farr = new StructField[fldr.size()];
+    farr = fldr.toArray(farr);
+    StructType st2 = new StructType(farr);
+    if (finalName == null) {
+      finalName = "root";
+    }
+    return new StructField(finalName, st2, true,  Metadata.empty());
+  }
+
+  public static DataType getsqlDataType(String s) {
+    if (s.toLowerCase().equals("double")) {
+      return DataTypes.DoubleType;
+    }
+    if (s.toLowerCase().equals("byte")) {
+      return DataTypes.ByteType;
+    }
+    if (s.toLowerCase().equals("short")) {
+      return DataTypes.ShortType;
+    }
+    if (((s.toLowerCase().equals("int")) || (s.toLowerCase().equals("integer")))) {
+      return DataTypes.IntegerType;
+    }
+    if (s.toLowerCase().equals("long")) {
+      return DataTypes.LongType;
+    }
+    if (s.toLowerCase().equals("String")) {
+      return DataTypes.StringType;
+    }
+    if (s.toLowerCase().equals("boolean")) {
+      return DataTypes.BooleanType;
+    }
+    if (s.toLowerCase().equals("timestamp")) {
+      return DataTypes.TimestampType;
+    }
+    if (s.toLowerCase().equals("date")) {
+      return DataTypes.DateType;
+    }
+    if (s.toLowerCase().equals("vector")) {
+      return new VectorUDT();
+    }
+    if (s.toLowerCase().equals("matrix")) {
+      return new MatrixUDT();
+    }
+    if (s.contains(":") && s.split(":")[0].toLowerCase().equals("array")) {
+      return getArrayTypeRecurse(s,0);
+    }
+    return DataTypes.StringType;
+  }
+
+  public static DataType getArrayTypeRecurse(String s, int fromIdx) {
+    if (s.contains(":") && s.split(":")[1].toLowerCase().equals("array")) {
+      fromIdx = s.indexOf(":", fromIdx);
+      s = s.substring(fromIdx+1, s.length());
+      return DataTypes.createArrayType(getArrayTypeRecurse(s,fromIdx));
+    }
+    return DataTypes.createArrayType(getsqlDataType(s.split(":")[1]));
+  }
+
+  public static Row recurseDataRead(SolrDocument doc, HttpSolrClient solr, ArrayList<Object> x, StructType st) {
+    Boolean recurse = true;
+    Map<String, Object> x1 = doc.getFieldValueMap();
+    Object[] x2 = x1.keySet().toArray();
+    for (int i = 0; i < x2.length; i++) {
+      if (x2[i].toString().startsWith("links")) {
+        String id = doc.get(x2[i].toString()).toString();
+        if (id != null) {
+          SolrQuery q1 = new SolrQuery("id:" + id);
+          QueryResponse rsp1 = null;
+          try {
+            rsp1 =
+            rsp1 = solr.query(q1);
+          } catch (Exception E) {
+            recurse = false;
+          }
+          if (recurse) {
+            //l = l + 1;
+            SolrDocumentList docs1 = rsp1.getResults();
+            ArrayList<Object> str1 = new ArrayList<Object>();
+            x.add(recurseDataRead(docs1.get(0), solr, str1, st));
+          }
+        }
+      }
+      if (x2[i].toString().substring(x2[i].toString().length() - 2, x2[i].toString().length()).equals("_s") && !x2[i].toString().startsWith("__lw") && !x2[i].toString().startsWith("links")) {
+        String type = getFieldTypeMapping(st,x2[i].toString().substring(0,x2[i].toString().length()-2));
+        if (!type.equals("")) {
+          //GK FieldTypeMappingbyte:short:integer:long:float:double:decimal:string:binary:boolean:timestamp:date:array:map:struct:string
+          if (type.equals("integer")) {
+            x.add(convertToInteger(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("double")) {
+            x.add(convertToDouble(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("float")) {
+            x.add(convertToFloat(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("short")) {
+            x.add(convertToShort(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("long")) {
+            x.add(convertToLong(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("decimal")) {
+            x.add(convertToDecimal(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("boolean")) {
+            x.add(convertToBoolean(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("timestamp")) {
+          }
+          else if (type.equals("date")) {
+          }
+          else if (type.equals("vector")) {
+            x.add(convertToVector(x1.get(x2[i]).toString()));
+          }
+          else if (type.equals("matrix")) {
+            x.add(convertToMatrix(x1.get(x2[i]).toString()));
+          }
+          else if (type.contains(":")) {
+            //List<Object> debug = Arrays.asList(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
+            x.add(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
+          }
+          else {
+            x.add(x1.get(x2[i]));
+          }
+        }
+        else {
+          x.add(x1.get(x2[i]));
+        }
+      }
+    }
+    if (x.size()>0) {
+      Object[] array = new Object[x.size()];
+      x.toArray(array);
+      return RowFactory.create(array);
+    }
+    return null;
+  }
+
+  public static String getFieldTypeMapping(StructType s, String fieldName) {
+    scala.collection.Iterator x = s.iterator();
+    while (x.hasNext()) {
+      StructField f = (StructField) x.next();
+      if (f.name().equals(fieldName) && !f.dataType().typeName().toString().toLowerCase().equals("struct")) {
+        if(f.dataType().typeName().toLowerCase().equals("array")) {
+          if (((ArrayType) f.dataType()).elementType().typeName().toLowerCase().equals("array")) {
+            return (f.dataType().typeName() + ":" + (getFieldTypeMapping((ArrayType) (((ArrayType) f.dataType()).elementType()), fieldName)));
+          }
+          else {
+            return (f.dataType().typeName() + ":" + ((ArrayType) f.dataType()).elementType().typeName());
+          }
+        }
+        else {
+          return f.dataType().typeName();
+        }
+      }
+      else {
+        if (f.dataType().typeName().toString().toLowerCase().equals("struct")) {
+          String fieldType = getFieldTypeMapping((StructType) f.dataType(), fieldName);
+          if (!fieldType.equals("")) {
+            return fieldType;
+          }
+        }
+
+      }
+    }
+    return "";
+  }
+
+  public static String getFieldTypeMapping(ArrayType d, String fieldName) {
+    if (d.elementType().typeName().toLowerCase().equals("array")) {
+      getFieldTypeMapping((ArrayType) d.elementType(), fieldName);
+    }
+    return (d.typeName() + ":" + d.elementType().typeName());
+  }
+  public static Integer convertToInteger(String s) {
+    return Integer.parseInt(s);
+  }
+
+  public static Double convertToDouble(String s) {
+    return Double.parseDouble(s);
+  }
+
+  public static Float convertToFloat(String s) {
+    return Float.parseFloat(s);
+  }
+
+  public static Short convertToShort(String s) {
+    return Short.parseShort(s);
+  }
+
+  public static Long convertToLong(String s) {
+    return Long.parseLong(s);
+  }
+
+  public static Decimal convertToDecimal(String s) {
+    return Decimal.apply(s);
+  }
+
+  public static Boolean convertToBoolean(String s) {
+    return Boolean.parseBoolean(s);
+  }
+
+  public static Integer[] convertToIntegerArray(String[] s) {
+    Integer[] results = new Integer[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Integer.parseInt(s[i]);
+      } catch (NumberFormatException nfe) {
+      };
+    }
+    return results;
+  }
+
+  public static Double[] convertToDoubleArray(String[] s) {
+    Double[] results = new Double[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Double.parseDouble(s[i]);
+      } catch (NumberFormatException nfe)
+      {
+      };
+    }
+    return results;
+  }
+
+  public static Float[] convertToFloatArray(String[] s) {
+    Float[] results = new Float[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Float.parseFloat(s[i]);
+      } catch (NumberFormatException nfe)
+      {
+      };
+    }
+    return results;
+  }
+
+  public static Short[] convertToShortArray(String[] s) {
+    Short[] results = new Short[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Short.parseShort(s[i]);
+      } catch (NumberFormatException nfe)
+      {
+      };
+    }
+    return results;
+  }
+
+  public static Long[] convertToLongArray(String[] s) {
+    Long[] results = new Long[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Long.parseLong(s[i]);
+      } catch (NumberFormatException nfe)
+      {
+      };
+    }
+    return results;
+  }
+
+  public static Boolean[] convertToBooleanArray(String[] s) {
+    Boolean[] results = new Boolean[s.length];
+    for (int i = 0; i < s.length; i++) {
+      try {
+        results[i] = Boolean.parseBoolean(s[i]);
+      } catch (NumberFormatException nfe)
+      {
+      };
+    }
+    return results;
+  }
+
+  public static org.apache.spark.mllib.linalg.Vector convertToVector(String s) {
+    return Vectors.parse(s);
+  }
+
+  public static org.apache.spark.mllib.linalg.Matrix convertToMatrix(String s) {
+    String[] data = s.split(":");
+    String dataArray = data[2];
+    String[] items = dataArray.replaceFirst("\\[", "").substring(0,dataArray.replaceFirst("\\[", "").lastIndexOf("]")).split(",");
+    double[] doubleArray = new double[items.length];
+    for (int i = 0; i<items.length; i++) {
+      doubleArray[i] = Double.parseDouble(items[i]);
+    }
+    return Matrices.dense(Integer.parseInt(data[0]), Integer.parseInt(data[1]), doubleArray);
+  }
+
+  public static Object[] getArrayFromString(String type, String s, int fromIdx, ArrayList<Object[]> ret) {
+    if(type.contains(":") && type.split(":")[1].equals("array")) {
+      fromIdx = type.indexOf(":", fromIdx);
+      type = type.substring(fromIdx+1, type.length());
+      String[] items = s.replaceFirst("\\[", "").substring(0,s.replaceFirst("\\[", "").lastIndexOf("]")).split("\\],");
+      ArrayList<Object[]> ret1 = new ArrayList<Object[]>();
+      for (int i=0; i<items.length; i++) {
+        if (i == items.length -1 ) {
+          ret1.add(getArrayFromString(type, items[i], fromIdx, ret1));
+        }
+        else {
+          ret1.add(getArrayFromString(type, items[i] + "]", fromIdx, ret1));
+        }
+      }
+      ret.add(ret1.toArray());
+      return ret1.toArray();
+    }
+    String[] items = s.replaceFirst("\\[", "").substring(0,s.replaceFirst("\\[", "").lastIndexOf("]")).split(",");
+    if (type.split(":")[1].equals("integer")) {
+      return convertToIntegerArray(items);
+    }
+    else if(type.split(":")[1].equals("double")) {
+      return convertToDoubleArray(items);
+    }
+    else if(type.split(":")[1].equals("float")) {
+      return convertToFloatArray(items);
+    }
+    else if(type.split(":")[1].equals("short")) {
+      return convertToShortArray(items);
+    }
+    else if(type.split(":")[1].equals("long")) {
+      return convertToLongArray(items);
+    }
+    else {
+      return items;
+    }
+  }
+
 }
