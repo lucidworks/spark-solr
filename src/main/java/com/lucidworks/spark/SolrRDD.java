@@ -709,7 +709,8 @@ public class SolrRDD implements Serializable {
   }
 
 
-  public DataFrame readDataFrame(JavaSparkContext sc, SQLContext sqlCtx, final String solrConnectString, HashMap<String, Object> queryInput) {
+  public DataFrame readDataFrame(JavaSparkContext sc, SQLContext sqlCtx, HashMap<String, Object> queryInput) {
+
     String schemaQueryString = "__lwcategory_s:schema";
     String dataQueryString = "__lwcategory_s:data";
     String qry = "";
@@ -726,13 +727,13 @@ public class SolrRDD implements Serializable {
     dataQuery.addSort("id",SolrQuery.ORDER.asc);
     try {
       JavaRDD<SolrDocument> rdd1 = queryShards(sc, schemaQuery);
-      HttpSolrClient Solr = new HttpSolrClient(solrConnectString);
-      final StructType rschema = readSchema(rdd1.collect().get(0), Solr, queryInput);
+      final StructType rschema = readSchema(rdd1.collect().get(0), getSolrClient(zkHost) , queryInput, collection);
       JavaRDD<SolrDocument> rdd2 = queryShards(sc, dataQuery);
       JavaRDD<Row> rows = rdd2.map(new Function<SolrDocument, Row>() {
         @Override
         public Row call(SolrDocument solrDocument) throws Exception {
-          return readData(solrDocument,  new HttpSolrClient(solrConnectString),  rschema);
+          Row ret =  readData(solrDocument, getSolrClient(zkHost) ,  rschema, collection);
+          return ret;
         }
       });
       return sqlCtx.applySchema(rows, rschema);
@@ -741,21 +742,22 @@ public class SolrRDD implements Serializable {
       }catch (SolrServerException e) {
         e.printStackTrace();
       }
+
     return null;
   }
 
-  public static StructType readSchema(SolrDocument doc, HttpSolrClient Solr, HashMap<String, Object> uniqueIdMap) throws IOException, SolrServerException {
+  public static StructType readSchema(SolrDocument doc, SolrClient Solr, HashMap<String, Object> uniqueIdMap, String collection) throws IOException, SolrServerException {
     List<StructField> fields = new ArrayList<StructField>();
-    StructType st= (StructType) recurseReadSchema(doc, Solr, fields, uniqueIdMap).dataType();
+    StructType st= (StructType) recurseReadSchema(doc, Solr, fields, uniqueIdMap, collection).dataType();
     return st;
   }
 
-  public static Row readData(SolrDocument doc, HttpSolrClient solr, StructType st) throws IOException, SolrServerException {
+  public static Row readData(SolrDocument doc, SolrClient solr, StructType st, String collection) throws IOException, SolrServerException {
     ArrayList<Object> str = new ArrayList<Object>();
-    return recurseDataRead(doc, solr, str, st);
+    return recurseDataRead(doc, solr, str, st, collection);
   }
 
-  public static StructField recurseReadSchema(SolrDocument doc, HttpSolrClient solr, List<StructField> fldr, HashMap<String, Object> uniqueIdMap) throws IOException, SolrServerException {
+  public static StructField recurseReadSchema(SolrDocument doc, SolrClient solr, List<StructField> fldr, HashMap<String, Object> uniqueIdMap, String collection) throws IOException, SolrServerException {
     Boolean recurse = true;
     String finalName = null;
     for (Map.Entry<String, Object> field : doc.entrySet()) {
@@ -767,14 +769,15 @@ public class SolrRDD implements Serializable {
           SolrQuery q1 = new SolrQuery("id:" + id);
           QueryResponse rsp1 = null;
           try {
-            rsp1 = solr.query(q1);
+            rsp1 = solr.query(collection,q1);
           } catch (Exception E) {
+            log.error(E.toString());
             recurse = false;
           }
           if (recurse) {
             SolrDocumentList docs1 = rsp1.getResults();
             List<StructField> fld1 = new ArrayList<StructField>();
-            fldr.add(recurseReadSchema(docs1.get(0), solr, fld1, uniqueIdMap));
+            fldr.add(recurseReadSchema(docs1.get(0), solr, fld1, uniqueIdMap, collection));
           }
 
         }
@@ -847,7 +850,7 @@ public class SolrRDD implements Serializable {
     return DataTypes.createArrayType(getsqlDataType(s.split(":")[1]));
   }
 
-  public static Row recurseDataRead(SolrDocument doc, HttpSolrClient solr, ArrayList<Object> x, StructType st) {
+  public static Row recurseDataRead(SolrDocument doc, SolrClient solr, ArrayList<Object> x, StructType st, String collection) {
     Boolean recurse = true;
     Map<String, Object> x1 = doc.getFieldValueMap();
     Object[] x2 = x1.keySet().toArray();
@@ -858,7 +861,7 @@ public class SolrRDD implements Serializable {
           SolrQuery q1 = new SolrQuery("id:" + id);
           QueryResponse rsp1 = null;
           try {
-            rsp1 = solr.query(q1);
+            rsp1 = solr.query(collection, q1);
           } catch (Exception E) {
             recurse = false;
           }
@@ -866,7 +869,7 @@ public class SolrRDD implements Serializable {
             //l = l + 1;
             SolrDocumentList docs1 = rsp1.getResults();
             ArrayList<Object> str1 = new ArrayList<Object>();
-            x.add(recurseDataRead(docs1.get(0), solr, str1, st));
+            x.add(recurseDataRead(docs1.get(0), solr, str1, st, collection));
           }
         }
       }
