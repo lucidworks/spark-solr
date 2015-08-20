@@ -124,7 +124,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Row dm = RowFactory.create("7", RowFactory.create("test1", "test2", RowFactory.create("test11", "test12")));
     List<Row> list = new ArrayList<Row>();
     list.add(dm);
-    //JavaSparkContext sc = new JavaSparkContext(sqlContext.sparkContext().conf());
     JavaRDD<Row> rdd = jsc.parallelize(list);
     DataFrame df = sqlContext.createDataFrame(rdd, schema);
     java.util.Map<String,String> config = new HashMap<String,String>();
@@ -133,23 +132,23 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     config.put("collection", "testNestedDataFrames");
     scala.collection.immutable.Map<String,String> config1 = JavaConverters.mapAsScalaMapConverter(config).asScala().toMap(Predef.<Tuple2<String, String>>conforms());
     try {
-          SolrRelation sr = new SolrRelation(sqlContext, config1, df);
-          df.show();
-          df.printSchema();
-          java.util.HashMap<String,Object> uniqueID = new HashMap<String,Object>();
-          uniqueID.put("__lwcontenttype_s", "metadata");
-          sr.sendToSolr(sr.convertToSolrDocuments(df, uniqueID));
-          Thread.sleep(1000);
-          SolrRDD srd = new SolrRDD(zkHost,"testNestedDataFrames");
-          java.util.HashMap<String,Object> queryInput = new HashMap<String,Object>();
-          queryInput.put("__lwroot_s", "root");
-          queryInput.put("__lwcontenttype_s", "metadata");
-          DataFrame reconstructed = srd.readDataFrame(jsc, sqlContext, queryInput);
-          reconstructed.show();
-          reconstructed.printSchema();
-          deleteCollection("testNestedDataFrames");
+      SolrRelation sr = new SolrRelation(sqlContext, config1, df);
+      df.show();
+      df.printSchema();
+      java.util.HashMap<String,Object> uniqueID = new HashMap<String,Object>();
+      uniqueID.put("__lwcontenttype_s", "metadata");
+      sr.sendToSolr(sr.convertToSolrDocuments(df, uniqueID));
+      Thread.sleep(1000);
+      SolrRDD srd = new SolrRDD(zkHost,"testNestedDataFrames");
+      java.util.HashMap<String,Object> queryInput = new HashMap<String,Object>();
+      queryInput.put("__lwroot_s", "root");
+      queryInput.put("__lwcontenttype_s", "metadata");
+      DataFrame reconstructed = srd.readDataFrame(jsc, sqlContext, queryInput);
+      reconstructed.show();
+      reconstructed.printSchema();
+      deleteCollection("testNestedDataFrames");
     } catch (Exception e) {
-          e.printStackTrace();
+      e.printStackTrace();
     }
   }
 
