@@ -40,6 +40,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "testFilterSupport";
+    deleteCollection(testCollection);
+    deleteCollection("testFilterSupport2");
     buildCollection(zkHost, testCollection, testData, 2);
 
     Map<String, String> options = new HashMap<String, String>();
@@ -90,6 +92,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
     options.put("collection", "testFilterSupport2");
+
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
 
@@ -100,16 +103,15 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection("testFilterSupport2");
   }
 
-
   @Test
-  public void testNestedDataFrames() throws Exception {
+  public void testNested() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
     int numShards = 2;
     int replicationFactor = 1;
-    deleteCollection("testNestedDataFrames");
-    createCollection("testNestedDataFrames", numShards, replicationFactor, 2, confName, confDir);
+    deleteCollection("testNested");
+    createCollection("testNested", numShards, replicationFactor, 2, confName, confDir);
     List<StructField> fields = new ArrayList<StructField>();
     List<StructField> fields1 = new ArrayList<StructField>();
     List<StructField> fields2 = new ArrayList<StructField>();
@@ -126,30 +128,19 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     list.add(dm);
     JavaRDD<Row> rdd = jsc.parallelize(list);
     DataFrame df = sqlContext.createDataFrame(rdd, schema);
-    java.util.Map<String,String> config = new HashMap<String,String>();
+    Map<String, String> options = new HashMap<String, String>();
     String zkHost = cluster.getZkServer().getZkAddress();
-    config.put("zkhost", zkHost);
-    config.put("collection", "testNestedDataFrames");
-    scala.collection.immutable.Map<String,String> config1 = JavaConverters.mapAsScalaMapConverter(config).asScala().toMap(Predef.<Tuple2<String, String>>conforms());
-    try {
-      SolrRelation sr = new SolrRelation(sqlContext, config1, df);
-      df.show();
-      df.printSchema();
-      java.util.HashMap<String,Object> uniqueID = new HashMap<String,Object>();
-      uniqueID.put("__lwcontenttype_s", "metadata");
-      sr.sendToSolr(sr.convertToSolrDocuments(df, uniqueID));
-      Thread.sleep(1000);
-      SolrRDD srd = new SolrRDD(zkHost,"testNestedDataFrames");
-      java.util.HashMap<String,Object> queryInput = new HashMap<String,Object>();
-      queryInput.put("__lwroot_s", "root");
-      queryInput.put("__lwcontenttype_s", "metadata");
-      DataFrame reconstructed = srd.readDataFrame(jsc, sqlContext, queryInput);
-      reconstructed.show();
-      reconstructed.printSchema();
-      deleteCollection("testNestedDataFrames");
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
+    options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", "testNested");
+    options.put("preserveschema", "Y");
+    df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    Thread.sleep(1000);
+    DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+    df.show();
+    df2.show();
+    deleteCollection("testNested");
+
   }
 
   protected void assertCount(long expected, long actual, String expr) {
