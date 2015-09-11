@@ -104,7 +104,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
   @Test
-  public void testNested() throws Exception {
+  public void testNestedDataFrames() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
