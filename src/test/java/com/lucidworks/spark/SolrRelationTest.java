@@ -15,9 +15,12 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
 import static org.junit.Assert.assertTrue;
+import java.util.Map;
+import java.util.HashMap;
+import scala.Predef;
+import scala.Tuple2;
+import scala.collection.JavaConverters;
 
 /**
  * Tests for the SolrRelation implementation.
@@ -116,19 +119,21 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     List<StructField> fields1 = new ArrayList<StructField>();
     List<StructField> fields2 = new ArrayList<StructField>();
     fields.add(DataTypes.createStructField("id", DataTypes.StringType, true));
+    fields.add(DataTypes.createStructField("testing_s", DataTypes.StringType, true));
     fields1.add(DataTypes.createStructField("test1_s", DataTypes.StringType, true));
     fields1.add(DataTypes.createStructField("test2_s", DataTypes.StringType, true));
     fields2.add(DataTypes.createStructField("test11_s", DataTypes.StringType, true));
     fields2.add(DataTypes.createStructField("test12_s", DataTypes.StringType, true));
+    fields2.add(DataTypes.createStructField("test13_s", DataTypes.StringType, true));
     fields1.add(DataTypes.createStructField("testtype_s", DataTypes.createStructType(fields2) , true));
     fields.add(DataTypes.createStructField("test_s", DataTypes.createStructType(fields1), true));
     StructType schema = DataTypes.createStructType(fields);
-    Row dm = RowFactory.create("7", RowFactory.create("test1", "test2", RowFactory.create("test11", "test12")));
+    Row dm = RowFactory.create("7", "test", RowFactory.create("test1", "test2", RowFactory.create("test11", "test12", "test13")));
     List<Row> list = new ArrayList<Row>();
     list.add(dm);
     JavaRDD<Row> rdd = jsc.parallelize(list);
     DataFrame df = sqlContext.createDataFrame(rdd, schema);
-    Map<String, String> options = new HashMap<String, String>();
+    HashMap<String, String> options = new HashMap<String, String>();
     String zkHost = cluster.getZkServer().getZkAddress();
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
@@ -137,8 +142,11 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
     DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+    df2 = sqlContext.createDataFrame(df2.javaRDD(),df2.schema());
     df.show();
     df2.show();
+    df2.registerTempTable("DFTEST");
+    sqlContext.sql("SELECT test_s.testtype_s FROM DFTEST").show();
     deleteCollection("testNested");
 
   }

@@ -397,7 +397,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
             if (df.get(counter) != null) {
               solrDocument.addField(sf.name() + "_s", df.get(counter).toString());
             } else {
-              solrDocument.addField(sf.name() + "_s", "0");
+              solrDocument.addField(sf.name() + "_s", null);
             }
           }
         }
@@ -453,8 +453,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
           return ret;
         }
       });
-      //return rows;
-      return sqlCtx.applySchema(rows, schema).rdd().toJavaRDD();
+      return rows;
+      //return sqlCtx.applySchema(rows, schema).rdd().toJavaRDD();
     } catch (SolrServerException e) {
       e.printStackTrace();
     }
@@ -467,7 +467,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     return st;
   }
 
-  public static Row readData(SolrDocument doc, SolrClient solr, StructType st, String collection) throws IOException, SolrServerException {
+  public Row readData(SolrDocument doc, SolrClient solr, StructType st, String collection) throws IOException, SolrServerException {
     ArrayList<Object> str = new ArrayList<Object>();
     return recurseDataRead(doc, solr, str, st, collection);
   }
@@ -563,9 +563,10 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     return DataTypes.createArrayType(getsqlDataType(s.split(":")[1]));
   }
 
-  public static Row recurseDataRead(SolrDocument doc, SolrClient solr, ArrayList<Object> x, StructType st, String collection) {
+  public Row recurseDataRead(SolrDocument doc, SolrClient solr, ArrayList<Object> x, StructType st, String collection) {
     Boolean recurse = true;
     java.util.Map<String, Object> x1 = doc.getFieldValueMap();
+    String[] x3 = st.fieldNames();
     Object[] x2 = x1.keySet().toArray();
     for (int i = 0; i < x2.length; i++) {
       if (x2[i].toString().startsWith("links")) {
@@ -582,49 +583,40 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
             //l = l + 1;
             SolrDocumentList docs1 = rsp1.getResults();
             ArrayList<Object> str1 = new ArrayList<Object>();
-            x.add(recurseDataRead(docs1.get(0), solr, str1, st, collection));
+            x.add(recurseDataRead(docs1.get(0), solr, str1, (StructType) st.fields()[x.size()].dataType(), collection));
           }
         }
       }
-      if (x2[i].toString().substring(x2[i].toString().length() - 2, x2[i].toString().length()).equals("_s") && !x2[i].toString().startsWith("__lw") && !x2[i].toString().startsWith("links")) {
+      if(x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
+        x.add(null);
+      }
+      if ((x2[i].toString().substring(x2[i].toString().length() - 2, x2[i].toString().length()).equals("_s") && !x2[i].toString().startsWith("__lw") && !x2[i].toString().startsWith("links"))) {
         String type = getFieldTypeMapping(st,x2[i].toString().substring(0,x2[i].toString().length()-2));
         if (!type.equals("")) {
           if (type.equals("integer")) {
             x.add(convertToInteger(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("double")) {
+          } else if (type.equals("double")) {
             x.add(convertToDouble(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("float")) {
+          } else if (type.equals("float")) {
             x.add(convertToFloat(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("short")) {
+          } else if (type.equals("short")) {
             x.add(convertToShort(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("long")) {
+          } else if (type.equals("long")) {
             x.add(convertToLong(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("decimal")) {
+          } else if (type.equals("decimal")) {
             x.add(convertToDecimal(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("boolean")) {
+          } else if (type.equals("boolean")) {
             x.add(convertToBoolean(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("timestamp")) {
-          }
-          else if (type.equals("date")) {
-          }
-          else if (type.equals("vector")) {
+          } else if (type.equals("timestamp")) {
+          } else if (type.equals("date")) {
+          } else if (type.equals("vector")) {
             x.add(convertToVector(x1.get(x2[i]).toString()));
-          }
-          else if (type.equals("matrix")) {
+          } else if (type.equals("matrix")) {
             x.add(convertToMatrix(x1.get(x2[i]).toString()));
-          }
-          else if (type.contains(":")) {
+          } else if (type.contains(":")) {
             //List<Object> debug = Arrays.asList(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
             x.add(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
-          }
-          else {
+          } else {
             x.add(x1.get(x2[i]));
           }
         }
@@ -632,11 +624,15 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
           x.add(x1.get(x2[i]));
         }
       }
+      if(x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
+        x.add(null);
+      }
     }
+
     if (x.size()>0) {
-      Object[] array = new Object[x.size()];
-      x.toArray(array);
-      return RowFactory.create(array);
+    Object[] array = new Object[x.size()];
+    x.toArray(array);
+    return RowFactory.create(array);
     }
   return null;
   }
@@ -665,7 +661,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
             return fieldType;
           }
         }
-
       }
     }
     return "";
