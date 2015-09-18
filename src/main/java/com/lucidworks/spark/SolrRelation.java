@@ -140,8 +140,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       try {
         // build the schema based on the desired fields
         StructType querySchema = (fields != null && fields.length > 0) ? deriveQuerySchema(fields) : schema;
-        JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
-        JavaRDD<SolrDocument> docs = solrRDD.queryShards(jsc, solrQuery, splitFieldName, splitsPerShard);
+        JavaRDD<SolrDocument> docs = solrRDD.queryShards(sc, solrQuery, splitFieldName, splitsPerShard);
         rows = solrRDD.toRows(querySchema, docs).rdd();
       } catch (Exception e) {
         if (e instanceof RuntimeException) {
@@ -314,7 +313,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     s.addField("__lwcategory_s", "schema");
     recurseWriteSchema(styp, s, level);
     ArrayList<SolrInputDocument> a = new ArrayList<SolrInputDocument>();
-    JavaSparkContext sc = new JavaSparkContext(sqlContext.sparkContext());
     a.add(s);
     JavaRDD<SolrInputDocument> rdd1 = sc.parallelize(a);
     JavaRDD<SolrInputDocument> a1 = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
