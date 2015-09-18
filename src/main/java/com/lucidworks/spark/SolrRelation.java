@@ -40,7 +40,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   public static String SOLR_SPLIT_FIELD_PARAM = "split_field";
   public static String SOLR_SPLITS_PER_SHARD_PARAM = "splits_per_shard";
   public static String PRESERVE_SCHEMA = "preserveschema";
-  protected String preserveSchema;
+  protected Boolean preserveSchema = false;
   protected String splitFieldName;
   protected int splitsPerShard = 1;
   protected SolrQuery solrQuery;
@@ -62,7 +62,9 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     this.sqlContext = sqlContext;
     this.sc =  new JavaSparkContext(sqlContext.sparkContext());
-    preserveSchema = optionalParam(config, PRESERVE_SCHEMA, "N");
+    if (optionalParam(config, PRESERVE_SCHEMA, "N").equals("Y")) {
+      preserveSchema = true;
+    };
     String zkHost = requiredParam(config, SOLR_ZK_HOST_PARAM);
     String collection = requiredParam(config, SOLR_COLLECTION_PARAM);
     String query = optionalParam(config, SOLR_QUERY_PARAM, "*:*");
@@ -74,12 +76,10 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     solrQuery.set("collection", collection);
     if (dataFrame != null) {
       schema = dataFrame.schema();
-    }
-    else {
-      if(!preserveSchema.equals("Y")) {
+    } else {
+      if(!preserveSchema) {
         schema = solrRDD.getQuerySchema(solrQuery);
-      }
-      else{
+      } else{
         SolrQuery schemaQuery = solrQuery.getCopy();
         schemaQuery.addFilterQuery("__lwcategory_s:schema AND __lwroot_s:root");
         JavaRDD<SolrDocument> rdd1 = solrRDD.queryShards(sc, schemaQuery);
@@ -119,7 +119,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public synchronized RDD<Row> buildScan(String[] fields, Filter[] filters) {
-    if(!preserveSchema.equals("Y")) {
+    if(!preserveSchema) {
       if (fields != null && fields.length > 0)
         solrQuery.setFields(fields);
       else
@@ -266,7 +266,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   public void insert(final DataFrame df, boolean overwrite) {
     JavaRDD<SolrInputDocument> docs = null;
-    if(!preserveSchema.equals("Y")) {
+    if(!preserveSchema) {
       docs = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
         public SolrInputDocument call(Row row) throws Exception {
           StructType schema = row.schema();
