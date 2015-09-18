@@ -292,9 +292,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
 
-  public void sendToSolr(JavaRDD<SolrInputDocument> dfrdd){
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, 100, dfrdd);
-  }
   public JavaRDD<SolrInputDocument> convertToSolrDocuments(DataFrame df, final HashMap<String,Object> uniqueIdentifier) {
 
     SolrInputDocument s = new SolrInputDocument();
