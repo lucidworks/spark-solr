@@ -14,7 +14,10 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.*;
-import org.apache.spark.sql.types.*;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -175,16 +178,15 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public synchronized RDD<Row> buildScan(String[] fields, Filter[] filters) {
-
     // SchemaPreserviing dataframes returns all fields by default
     if (!preserveSchema) {
       log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
 
       if (fields != null && fields.length > 0) {
-        solrQuery.setFields(fields);
+        applyFields(fields);
       } else {
         if (this.fieldList != null) {
-          solrQuery.setFields(this.fieldList);
+          applyFields(this.fieldList);
         } else {
           solrQuery.remove("fl");
         }
@@ -235,6 +237,30 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     return DataTypes.createStructType(listOfFields);
   }
 
+  protected void applyFields(String[] fields) {
+      java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+      for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
+      String[] fieldList = new String[fields.length];
+      for (int f = 0; f < fields.length; f++) {
+          StructField field = fieldMap.get(fields[f]);
+          if (field != null) {
+              Metadata meta = field.metadata();
+              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+              if (!isMultiValued && isDocValues && !isStored) {
+                  fieldList[f] = field.name() + ":field("+fieldName+")";
+              } else {
+                  fieldList[f] = field.name() + ":" + fieldName;
+              }
+          } else {
+              fieldList[f] = fields[f];
+          }
+      }
+      solrQuery.setFields(fieldList);
+  }
+  
   protected void applyFilter(Filter filter) {
     if (filter instanceof And) {
       And and = (And)filter;
