@@ -739,6 +739,14 @@ public class SolrRDD implements Serializable {
         solrQuery.setStart(startIndex);
       }
 
+      Integer rows = solrQuery.getRows();
+      if (rows == null)
+          solrQuery.setRows(DEFAULT_PAGE_SIZE);
+      
+      List<SolrQuery.SortClause> sorts = solrQuery.getSorts();
+      if (sorts == null || sorts.isEmpty())
+          solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey));
+      
       if (callback != null) {
         resp = solrServer.queryAndStreamResponse(solrQuery, callback);
       } else {
