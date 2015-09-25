@@ -41,6 +41,10 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
       throw new IllegalStateException("Invalid min/max values for "+splitFieldName+
           " in shard "+shardUrl+"! stats: "+fsi);
 
+    // work-around for dealing with rounding error in E notation?
+    min -= 1;
+    max += 1;
+
     // start by creating splits based on max-min/num splits and then refine to balance out split sizes
     appendSplits(solrClient, splits, query, shardUrl, splitFieldName, splitsPerShard, min, max);
 
@@ -236,8 +240,8 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
 
     private String buildSplitFq() {
       StringBuilder sb = new StringBuilder();
-      String lowerClause = (min == lowerInc) ? "[*" : "["+lowerInc;
-      String upperClause = (max == upper) ? "*]" : upper+"}";
+      String lowerClause = (min == lowerInc) ? "["+min : "["+lowerInc;
+      String upperClause = (max == upper) ? upper+"]" : upper+"}";
       sb.append(rangeField).append(":").append(lowerClause).append(" TO ").append(upperClause);
       return sb.toString();
     }
