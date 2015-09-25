@@ -62,16 +62,17 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
     int replicationFactor = 1;
     createCollection(collection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
 
-    // index some docs into both collections
-    int numDocsIndexed = indexDocs(zkHost, collection, inputDocs);
-    Thread.sleep(1000L);
-
-    // verify docs got indexed ... relies on soft auto-commits firing frequently
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-    JavaRDD<SolrDocument> resultsRDD = solrRDD.query(jsc.sc(), "*:*");
-    long numFound = resultsRDD.count();
-    assertTrue("expected "+numDocsIndexed+" docs in query results from "+collection+", but got "+numFound,
-      numFound == (long)numDocsIndexed);
+    // index some docs into the new collection
+    if (inputDocs != null) {
+      int numDocsIndexed = indexDocs(zkHost, collection, inputDocs);
+      Thread.sleep(1000L);
+      // verify docs got indexed ... relies on soft auto-commits firing frequently
+      SolrRDD solrRDD = new SolrRDD(zkHost, collection);
+      JavaRDD<SolrDocument> resultsRDD = solrRDD.query(jsc.sc(), "*:*");
+      long numFound = resultsRDD.count();
+      assertTrue("expected " + numDocsIndexed + " docs in query results from " + collection + ", but got " + numFound,
+          numFound == (long) numDocsIndexed);
+    }
   }
 
   protected int indexDocs(String zkHost, String collection, String[] inputDocs) {

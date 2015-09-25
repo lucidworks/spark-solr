@@ -26,7 +26,9 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
   protected int iterPos = 0;
   protected long totalDocs = -1;
   protected long numDocs = 0;
-  protected String cursorMark = null;
+  protected boolean usingCursors = false;
+  protected String nextCursorMark = null;
+  protected String cursorMarkOfCurrentPage = null;
   protected boolean closeAfterIterating = false;
   protected LinkedBlockingDeque<SolrDocument> queue;
 
@@ -41,25 +43,33 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     this.solrServer = solrServer;
     this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
     this.solrQuery = solrQuery;
-    this.cursorMark = cursorMark;
+    this.usingCursors = (cursorMark != null);
+    this.nextCursorMark = cursorMark;
+    this.cursorMarkOfCurrentPage = cursorMark;
     if (solrQuery.getRows() == null)
       solrQuery.setRows(PagedResultsIterator.DEFAULT_PAGE_SIZE); // default page size
   }
 
   public boolean hasNext() {
-    if (totalDocs == 0 || totalDocs == numDocs)
+    if (totalDocs == 0 || (totalDocs != -1 && numDocs >= totalDocs))
       return false; // done iterating!
 
+    boolean hasNext = false;
     if (totalDocs == -1 || iterPos == currentPageSize) {
       // call out to Solr to get next page
       try {
-        fetchNextPage();
+        hasNext = fetchNextPage();
       } catch (Exception e) {
-        throw new RuntimeException(e);
+        if (e instanceof RuntimeException) {
+          throw (RuntimeException)e;
+        } else {
+          throw new RuntimeException(e);
+        }
       }
+    } else {
+      hasNext = (totalDocs > 0 && iterPos < currentPageSize);
     }
 
-    boolean hasNext = (totalDocs > 0 && iterPos < currentPageSize);
     if (!hasNext && closeAfterIterating) {
       try {
         solrServer.shutdown();
@@ -74,13 +84,28 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     return (currentStart != null) ? currentStart + solrQuery.getRows() : 0;
   }
 
-  protected void fetchNextPage() throws SolrServerException, InterruptedException {
-    int start = (cursorMark != null) ? 0 : getStartForNextPage();
+  protected boolean fetchNextPage() throws SolrServerException, InterruptedException {
+    int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
-    QueryResponse resp = SolrRDD.querySolr(solrServer, solrQuery, start, cursorMark, this);
-    if (cursorMark != null) cursorMark = resp.getNextCursorMark();
+    this.cursorMarkOfCurrentPage = nextCursorMark;
+    QueryResponse resp = SolrRDD.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
+
+    if (usingCursors) {
+      nextCursorMark = resp.getNextCursorMark();
+    }
+
     iterPos = 0;
-    docListInfoLatch.await();
+    if (usingCursors) {
+      if (nextCursorMark != null) {
+        docListInfoLatch.await(); // wait until the callback receives notification from Solr in streamDocListInfo
+        return totalDocs > 0;
+      } else {
+        return false;
+      }
+    } else {
+      docListInfoLatch.await();
+      return totalDocs > 0;
+    }
   }
 
   public SolrDocument next() {
@@ -94,6 +119,14 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
       Thread.interrupted();
       throw new RuntimeException(e);
     }
+
+    if (next == null) {
+      throw new RuntimeException("No SolrDocument in queue (waited 60 seconds) while processing cursorMark="+
+              cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+
+          " so far. Most likely this means your query's sort criteria is not generating stable results for computing deep-paging cursors, has the index changed? " +
+          "If so, try using a filter criteria the bounds the results to non-changing data.");
+    }
+
     ++numDocs;
     ++iterPos;
 
@@ -109,7 +142,12 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
   }
 
   public void streamSolrDocument(SolrDocument doc) {
-    queue.offer(doc);
+    if (doc != null) {
+      queue.offer(doc);
+    } else {
+      SolrRDD.log.warn("Received null SolrDocument from streamSolrDocument callback while processing cursorMark="+
+              cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+" so far.");
+    }
   }
 
   public void streamDocListInfo(long numFound, long start, Float maxScore) {
