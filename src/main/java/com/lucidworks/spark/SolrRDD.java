@@ -164,6 +164,14 @@ public class SolrRDD implements Serializable {
 
   protected String zkHost;
   protected String collection;
+  protected transient JavaSparkContext sc;
+
+  public void setSc(JavaSparkContext jsc){
+    sc = jsc;
+  }
+  public JavaSparkContext getSc() {
+    return sc;
+  }
 
   public SolrRDD(String collection) {
     this("localhost:9983", collection); // assume local embedded ZK if not supplied
