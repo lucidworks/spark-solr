@@ -49,11 +49,6 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
       try {
         currentPage = fetchNextPage();
         currentPageSize = currentPage.size();
-
-        if (currentPageSize == 0) {
-          System.out.println("\n\n>> no more results found, we've read "+numDocs+" of "+totalDocs+"!!! \n\n");
-        }
-
         iterPos = 0;
       } catch (SolrServerException sse) {
         throw new RuntimeException(sse);

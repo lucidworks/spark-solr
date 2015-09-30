@@ -94,8 +94,6 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
       } catch (Exception exc) {}
     }
 
-    System.out.println(">> found "+numDocsFound);
-
     try {
       sendDocsThread.interrupt();
     } catch (Exception ignore) {}
