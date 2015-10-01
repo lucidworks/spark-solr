@@ -1,13 +1,10 @@
 package com.lucidworks.spark;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.classification.LogisticRegressionModel;
 import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS;
 import org.apache.spark.mllib.classification.NaiveBayes;
 import org.apache.spark.mllib.classification.NaiveBayesModel;
-import org.apache.spark.mllib.tree.DecisionTree;
-import org.apache.spark.mllib.tree.model.DecisionTreeModel;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
@@ -23,10 +20,6 @@ import java.util.Map;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.commons.io.FileUtils;
-import java.util.HashMap;
-import scala.Predef;
-import scala.Tuple2;
-import scala.collection.JavaConverters;
 
 /**
  * Tests for the SolrRelation implementation.
@@ -191,31 +184,31 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     File confDir = new File("src/test/resources/conf");
     int numShards = 2;
     int replicationFactor = 1;
-    deleteCollection("testNestedLR");
+    deleteCollection("TestLR");
     Thread.sleep(1000);
-    deleteCollection("testNestedNB");
-    createCollection("testNestedLR", numShards, replicationFactor, 2, confName, confDir);
-    createCollection("testNestedNB", numShards, replicationFactor, 2, confName, confDir);
+    deleteCollection("TestNB");
+    createCollection("TestLR", numShards, replicationFactor, 2, confName, confDir);
+    createCollection("TestNB", numShards, replicationFactor, 2, confName, confDir);
     String zkHost = cluster.getZkServer().getZkAddress();
     DataFrame dfLR = sqlContext.load("LRParquet/data/");
     DataFrame dfNB = sqlContext.load("NBParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
-    options.put("collection", "testNestedLR");
+    options.put("collection", "TestLR");
     options.put("preserveschema", "Y");
     dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfLR.show();
-    options.put("collection", "testNestedNB");
+    options.put("collection", "TestNB");
     dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfNB.show();
     Thread.sleep(5000);
-    options.put("collection", "testNestedLR");
+    options.put("collection", "TestLR");
     DataFrame dfLR2 = sqlContext.read().format("solr").options(options).load();
     dfLR2.show();
     dfLR.printSchema();
     dfLR2.printSchema();
-    options.put("collection", "testNestedNB");
+    options.put("collection", "TestNB");
     DataFrame dfNB2 = sqlContext.read().format("solr").options(options).load();
     dfNB2.show();
     dfNB.printSchema();
@@ -223,9 +216,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
     assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
       Thread.sleep(1000);
-    deleteCollection("testNestedLR");
+    deleteCollection("TestLR");
       Thread.sleep(1000);
-    deleteCollection("testNestedNB");
+    deleteCollection("TestNB");
     FileUtils.forceDelete(new File("LRParquet"));
       Thread.sleep(1000);
     FileUtils.forceDelete(new File("NBParquet"));
