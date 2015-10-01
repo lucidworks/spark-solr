@@ -4,6 +4,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.classification.LogisticRegressionModel;
 import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS;
+import org.apache.spark.mllib.classification.NaiveBayes;
+import org.apache.spark.mllib.classification.NaiveBayesModel;
+import org.apache.spark.mllib.tree.DecisionTree;
+import org.apache.spark.mllib.tree.model.DecisionTreeModel;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
@@ -154,8 +158,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
   @Test
-  public void testMLModelSolr() throws Exception {
-    SQLContext sqlContext = new SQLContext(jsc);
+  public void createMLModelLRParquet() throws Exception {
     List<LabeledPoint> list = new ArrayList<LabeledPoint>();
     LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
     LabeledPoint one = new LabeledPoint(1.0, Vectors.dense(8.0,7.0,6.0,4.0,5.0,6.0,1.0,2.0,3.0));
@@ -165,10 +168,67 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     final LogisticRegressionModel model = new LogisticRegressionWithLBFGS()
               .setNumClasses(2)
               .run(data.rdd());
-    model.save(jsc.sc(), "myTestpath");
-    DataFrame df = sqlContext.load("myTestpath/data/");
-    FileUtils.forceDelete(new File("myTestpath"));
-    df.show();
+    model.save(jsc.sc(), "LRParquet");
+  }
+
+  @Test
+  public void createMLModelNBParquet() throws Exception {
+    List<LabeledPoint> list = new ArrayList<LabeledPoint>();
+    LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
+    LabeledPoint one = new LabeledPoint(1.0, Vectors.dense(8.0,7.0,6.0,4.0,5.0,6.0,1.0,2.0,3.0));
+    list.add(zero);
+    list.add(one);
+    JavaRDD<LabeledPoint> data = jsc.parallelize(list);
+    final NaiveBayesModel model = NaiveBayes.train(data.rdd(), 1.0);
+    model.save(jsc.sc(), "NBParquet");
+  }
+
+  @Test
+  public void loadParquetsIntoSolr() throws Exception
+  {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 2;
+    int replicationFactor = 1;
+    deleteCollection("testNestedLR");
+    Thread.sleep(1000);
+    deleteCollection("testNestedNB");
+    createCollection("testNestedLR", numShards, replicationFactor, 2, confName, confDir);
+    createCollection("testNestedNB", numShards, replicationFactor, 2, confName, confDir);
+    String zkHost = cluster.getZkServer().getZkAddress();
+    DataFrame dfLR = sqlContext.load("LRParquet/data/");
+    DataFrame dfNB = sqlContext.load("NBParquet/data/");
+    HashMap<String, String> options = new HashMap<String, String>();
+    options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", "testNestedLR");
+    options.put("preserveschema", "Y");
+    dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    dfLR.show();
+    options.put("collection", "testNestedNB");
+    dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    dfNB.show();
+    Thread.sleep(5000);
+    options.put("collection", "testNestedLR");
+    DataFrame dfLR2 = sqlContext.read().format("solr").options(options).load();
+    dfLR2.show();
+    dfLR.printSchema();
+    dfLR2.printSchema();
+    options.put("collection", "testNestedNB");
+    DataFrame dfNB2 = sqlContext.read().format("solr").options(options).load();
+    dfNB2.show();
+    dfNB.printSchema();
+    dfNB2.printSchema();
+    assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
+    assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
+      Thread.sleep(1000);
+    deleteCollection("testNestedLR");
+      Thread.sleep(1000);
+    deleteCollection("testNestedNB");
+    FileUtils.forceDelete(new File("LRParquet"));
+      Thread.sleep(1000);
+    FileUtils.forceDelete(new File("NBParquet"));
   }
 
   protected void assertCount(long expected, long actual, String expr) {
