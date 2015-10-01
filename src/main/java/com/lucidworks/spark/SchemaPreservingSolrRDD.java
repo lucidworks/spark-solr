@@ -1,8 +1,7 @@
 package com.lucidworks.spark;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -11,18 +10,21 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.mllib.linalg.*;
+import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.RowFactory;
 
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
+import scala.Tuple2;
 
-/**
- * Created by ganeshkumar on 9/29/15.
- */
+
 public class SchemaPreservingSolrRDD extends SolrRDD {
   public static Logger log = Logger.getLogger(SolrRDD.class);
 
@@ -34,6 +36,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     super(zkHost, collection);
   }
 
+  @Override
   public StructType getQuerySchema(SolrQuery query) throws Exception {
     query.addFilterQuery("__lwcategory_s:schema AND __lwroot_s:root");
     JavaRDD<SolrDocument> rdd1 = queryShards(sc, query);
@@ -88,101 +91,74 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     return new StructField(finalName, st2, true,  Metadata.empty());
   }
 
-  public static DataType getsqlDataType(String s) {
-    if (s.toLowerCase().equals("double")) {
-      return DataTypes.DoubleType;
-    }
-    if (s.toLowerCase().equals("byte")) {
-      return DataTypes.ByteType;
-    }
-    if (s.toLowerCase().equals("short")) {
-      return DataTypes.ShortType;
-    }
-    if (((s.toLowerCase().equals("int")) || (s.toLowerCase().equals("integer")))) {
-      return DataTypes.IntegerType;
-    }
-    if (s.toLowerCase().equals("long")) {
-      return DataTypes.LongType;
-    }
-    if (s.toLowerCase().equals("String")) {
-      return DataTypes.StringType;
-    }
-    if (s.toLowerCase().equals("boolean")) {
-      return DataTypes.BooleanType;
-    }
-    if (s.toLowerCase().equals("timestamp")) {
-      return DataTypes.TimestampType;
-    }
-    if (s.toLowerCase().equals("date")) {
-      return DataTypes.DateType;
-    }
-    if (s.toLowerCase().equals("vector")) {
-      return new VectorUDT();
-    }
-    if (s.toLowerCase().equals("matrix")) {
-      return new MatrixUDT();
-    }
-    if (s.contains(":") && s.split(":")[0].toLowerCase().equals("array")) {
-      return getArrayTypeRecurse(s,0);
-    }
-    return DataTypes.StringType;
-  }
-
-  public static DataType getArrayTypeRecurse(String s, int fromIdx) {
-    if (s.contains(":") && s.split(":")[1].toLowerCase().equals("array")) {
-      fromIdx = s.indexOf(":", fromIdx);
-      s = s.substring(fromIdx+1, s.length());
-      return DataTypes.createArrayType(getArrayTypeRecurse(s,fromIdx));
-    }
-    return DataTypes.createArrayType(getsqlDataType(s.split(":")[1]));
-  }
-
+  @Override
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery, final String splitFieldName, final int splitsPerShard) throws SolrServerException {
-    origQuery.addFilterQuery("__lwcategory_s:data AND __lwroot_s:root");
+    origQuery.addFilterQuery("__lwcategory_s:data");
     return super.queryShards(jsc, origQuery, splitFieldName, splitsPerShard);
   }
 
+  @Override
   public JavaRDD<Row> toRows(final StructType schema, JavaRDD<SolrDocument> docs) {
-    JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
+    JavaRDD<SolrDocument> rootdocs = docs.filter(new Function<SolrDocument, Boolean>() {
+        @Override
+        public Boolean call(SolrDocument solrDocument) throws Exception {
+            if (solrDocument.containsKey("__lwroot_s")) {
+                return true;
+            }
+            return false;
+        }
+    });
+    JavaPairRDD<String, SolrDocument> childdocs = docs.filter(new Function<SolrDocument, Boolean>() {
+      @Override
+      public Boolean call(SolrDocument solrDocument) throws Exception {
+        if (solrDocument.containsKey("__lwroot_s")) {
+          return false;
+        }
+        return true;
+      }
+    }).mapToPair(new PairFunction<SolrDocument, String, SolrDocument>() {
+      @Override
+      public Tuple2<String, SolrDocument> call(SolrDocument solrDocument){
+        return new Tuple2<String, SolrDocument>(solrDocument.get("id").toString(), solrDocument);
+      }
+    });
+    final Map<String, SolrDocument> childMap = childdocs.collectAsMap();
+    JavaRDD<Row> rows = rootdocs.map(new Function<SolrDocument, Row>() {
       @Override
       public Row call(SolrDocument solrDocument) throws Exception {
-        Row ret =  readData(solrDocument, getSolrClient(zkHost) ,  schema, collection);
+        Row ret =  readData(solrDocument,  schema, collection, childMap);
         return ret;
       }
     });
     return rows;
   }
 
-  public Row readData(SolrDocument doc, SolrClient solr, StructType st, String collection) throws IOException, SolrServerException {
+  public Row readData(SolrDocument doc, StructType st, String collection, Map<String, SolrDocument> childMap) throws IOException, SolrServerException {
     ArrayList<Object> str = new ArrayList<Object>();
-    return recurseDataRead(doc, solr, str, st, collection);
+    return recurseDataRead(doc , str, st, collection, childMap);
   }
 
-  public Row recurseDataRead(SolrDocument doc, SolrClient solr, ArrayList<Object> x, StructType st, String collection) {
+  public Row recurseDataRead(SolrDocument doc, ArrayList<Object> x, StructType st, String collection, Map<String, SolrDocument> childMap) {
     Boolean recurse = true;
     java.util.Map<String, Object> x1 = doc.getFieldValueMap();
     String[] x3 = st.fieldNames();
     Object[] x2 = x1.keySet().toArray();
     for (int i = 0; i < x2.length; i++) {
       if (x2[i].toString().startsWith("links")) {
-        String id = doc.get(x2[i].toString()).toString();
+        final String id = doc.get(x2[i].toString()).toString();
         if (id != null) {
-          SolrQuery q1 = new SolrQuery("id:" + id);
-          QueryResponse rsp1 = null;
-          try {
-            rsp1 = solr.query(collection, q1);
-          } catch (Exception E) {
+          SolrDocument childDoc = childMap.get(id);
+          if (childDoc == null){
             recurse = false;
           }
           if (recurse) {
             //l = l + 1;
-            SolrDocumentList docs1 = rsp1.getResults();
             ArrayList<Object> str1 = new ArrayList<Object>();
-            x.add(recurseDataRead(docs1.get(0), solr, str1, (StructType) st.fields()[x.size()].dataType(), collection));
+            x.add(recurseDataRead(childDoc, str1, (StructType) st.fields()[x.size()].dataType(), collection, childMap));
           }
         }
       }
-      if(x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
+      if (x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
         x.add(null);
       }
       if ((x2[i].toString().substring(x2[i].toString().length() - 2, x2[i].toString().length()).equals("_s") && !x2[i].toString().startsWith("__lw") && !x2[i].toString().startsWith("links"))) {
@@ -219,7 +195,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
           x.add(x1.get(x2[i]));
         }
       }
-      if(x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
+      if (x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
         x.add(null);
       }
     }
@@ -236,7 +212,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     while (x.hasNext()) {
       StructField f = (StructField) x.next();
       if (f.name().equals(fieldName) && !f.dataType().typeName().toString().toLowerCase().equals("struct")) {
-        if(f.dataType().typeName().toLowerCase().equals("array")) {
+        if (f.dataType().typeName().toLowerCase().equals("array")) {
           if (((ArrayType) f.dataType()).elementType().typeName().toLowerCase().equals("array")) {
             return (f.dataType().typeName() + ":" + (getFieldTypeMapping((ArrayType) (((ArrayType) f.dataType()).elementType()), fieldName)));
           }
@@ -311,7 +287,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
   }
 
   public static Object[] getArrayFromString(String type, String s, int fromIdx, ArrayList<Object[]> ret) {
-    if(type.contains(":") && type.split(":")[1].equals("array")) {
+    if (type.contains(":") && type.split(":")[1].equals("array")) {
       fromIdx = type.indexOf(":", fromIdx);
       type = type.substring(fromIdx+1, type.length());
       String[] items = s.replaceFirst("\\[", "").substring(0,s.replaceFirst("\\[", "").lastIndexOf("]")).split("\\],");
@@ -331,16 +307,16 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     if (type.split(":")[1].equals("integer")) {
       return convertToIntegerArray(items);
     }
-    else if(type.split(":")[1].equals("double")) {
+    else if (type.split(":")[1].equals("double")) {
       return convertToDoubleArray(items);
     }
-    else if(type.split(":")[1].equals("float")) {
+    else if (type.split(":")[1].equals("float")) {
       return convertToFloatArray(items);
     }
-    else if(type.split(":")[1].equals("short")) {
+    else if (type.split(":")[1].equals("short")) {
       return convertToShortArray(items);
     }
-    else if(type.split(":")[1].equals("long")) {
+    else if (type.split(":")[1].equals("long")) {
       return convertToLongArray(items);
     }
     else {
@@ -419,6 +395,143 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
       };
     }
     return results;
+  }
+
+  public JavaRDD<SolrInputDocument> convertToSolrDocuments(DataFrame df, final HashMap<String,Object> uniqueIdentifier) {
+
+    SolrInputDocument s = new SolrInputDocument();
+    final StructType styp = df.schema();
+    int level = 0;
+    Iterator it = uniqueIdentifier.entrySet().iterator();
+    while (it.hasNext()) {
+      java.util.Map.Entry pair = (java.util.Map.Entry)it.next();
+      s.addField(pair.getKey().toString(), pair.getValue());
+    }
+    if (!s.containsKey("id")){
+      String id = java.util.UUID.randomUUID().toString();
+      s.addField("id",id);
+    }
+    s.addField("__lwroot_s", "root");
+    s.addField("__lwcategory_s", "schema");
+    recurseWriteSchema(styp, s, level);
+    ArrayList<SolrInputDocument> a = new ArrayList<SolrInputDocument>();
+    a.add(s);
+    JavaRDD<SolrInputDocument> rdd1 = sc.parallelize(a);
+    JavaRDD<SolrInputDocument> a1 = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
+      public SolrInputDocument call(Row r) throws Exception {
+        SolrInputDocument solrDocument = new SolrInputDocument();
+        Iterator it = uniqueIdentifier.entrySet().iterator();
+        while (it.hasNext()) {
+          java.util.Map.Entry pair = (java.util.Map.Entry)it.next();
+          solrDocument.addField(pair.getKey().toString(), pair.getValue());
+        }
+        if (!solrDocument.containsKey("id")) {
+          String idData = java.util.UUID.randomUUID().toString();
+          solrDocument.addField("id", idData);
+        }
+        solrDocument.addField("__lwroot_s", "root");
+        solrDocument.addField("__lwcategory_s", "data");
+        List<org.apache.spark.sql.Row> r1 = new ArrayList<Row>();
+        r1.add(r);
+        return recurseWriteData(styp, solrDocument, r, 0);
+      }
+    });
+    JavaRDD<SolrInputDocument> finalrdd = rdd1.union(a1);
+    return finalrdd;
+  }
+
+  public static void recurseWriteSchema(StructType st, SolrInputDocument s, int l){
+    scala.collection.Iterator x = st.iterator();
+    int linkCount = 0;
+    while (x.hasNext()) {
+      StructField sf = (StructField) x.next();
+      if (sf.dataType().typeName().toString().toLowerCase().equals("struct")){
+        linkCount = linkCount + 1;
+        SolrInputDocument sc = new SolrInputDocument();
+        String id = java.util.UUID.randomUUID().toString();
+        sc.addField("id",id);
+        s.addField("links"+linkCount +"_s", id);
+        l = l + 1;
+        sc.addField("__lwchilddocname_s",sf.name());
+        sc.addField("__lwcategory_s","schema");
+        recurseWriteSchema((StructType) sf.dataType(), sc, l);
+        s.addChildDocument(sc);
+      } else {
+        if (!sf.dataType().typeName().toLowerCase().equals("array")) {
+          s.addField(sf.name() + "_s", sf.dataType().typeName());
+        } else {
+          s.addField(sf.name() + "_s", getArraySchema(sf.dataType()));
+        }
+      }
+    }
+  }
+
+  public SolrInputDocument recurseWriteData(StructType st,SolrInputDocument solrDocument, org.apache.spark.sql.Row df, int counter) {
+    scala.collection.Iterator x = st.iterator();
+    int linkCount = 0;
+    while (x.hasNext()) {
+      StructField sf = (StructField) x.next();
+      if (sf.dataType().typeName().toString().toLowerCase().equals("struct")) {
+        linkCount = linkCount + 1;
+        SolrInputDocument solrDocument1 = new SolrInputDocument();
+        String idChild = java.util.UUID.randomUUID().toString();
+        solrDocument1.addField("id", idChild);
+        solrDocument.addField("links" + linkCount + "_s", idChild);
+        solrDocument1.addField("__lwchilddocname_s", sf.name());
+        solrDocument1.addField("__lwcategory_s", "data");
+        org.apache.spark.sql.Row df1 = (org.apache.spark.sql.Row) df.get(counter);
+        solrDocument.addChildDocument(recurseWriteData((StructType) sf.dataType(), solrDocument1, df1, 0));
+      } else {
+          if (df != null) {
+            if (sf.dataType().typeName().equals("array")) {
+              solrDocument.addField(sf.name() + "_s", getArrayToString(sf.dataType(), df.get(counter)));
+            } else if (sf.dataType().typeName().equals("matrix")) {
+                org.apache.spark.mllib.linalg.Matrix m = (org.apache.spark.mllib.linalg.Matrix) df.get(counter);
+                solrDocument.addField(sf.name() + "_s", m.numRows() + ":" + m.numCols() + ":" + Arrays.toString(m.toArray()));
+              } else {
+                if (df.get(counter) != null) {
+                  solrDocument.addField(sf.name() + "_s", df.get(counter).toString());
+                } else {
+                  solrDocument.addField(sf.name() + "_s", null);
+                }
+              }
+          }
+
+      }
+      counter = counter + 1;
+    }
+    return solrDocument;
+  }
+
+  public static Object getArrayToString(org.apache.spark.sql.types.DataType dataType, Object value) {
+    if (dataType.typeName().equals("array")) {
+      org.apache.spark.sql.types.ArrayType a = (org.apache.spark.sql.types.ArrayType) dataType;
+      org.apache.spark.sql.types.DataType e = a.elementType();
+      scala.collection.mutable.ArrayBuffer ab = (scala.collection.mutable.ArrayBuffer) value;
+      Object[] d ;
+      if (ab.size() > 0) {
+        d = new Object[ab.size()];
+        for (int i = 0; i < ab.array().length; i++) {
+          if (e.typeName().equals("array")) {
+            d[i] = getArrayToString(e, ab.array()[i]);
+          } else {
+            d[i] = (Double) ab.array()[i];
+          }
+        }
+      } else {
+        d = new Double[]{};
+      }
+      return Arrays.toString(d);
+    }
+    return "";
+  }
+
+  public static String getArraySchema(org.apache.spark.sql.types.DataType dType) {
+    if (((org.apache.spark.sql.types.ArrayType) dType).elementType().typeName().equals("array")) {
+      return dType.typeName() + ":" + getArraySchema(((org.apache.spark.sql.types.ArrayType) dType).elementType());
+    } else {
+      return dType.typeName() + ":" + ((org.apache.spark.sql.types.ArrayType) dType).elementType().typeName();
+    }
   }
 
 }

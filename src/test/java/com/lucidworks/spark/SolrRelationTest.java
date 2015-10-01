@@ -2,14 +2,13 @@ package com.lucidworks.spark;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.mllib.classification.LogisticRegressionModel;
+import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Test;
-import scala.Predef;
-import scala.Tuple2;
-import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -17,6 +16,9 @@ import java.util.HashMap;
 import java.util.List;
 import static org.junit.Assert.assertTrue;
 import java.util.Map;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.linalg.Vectors;
+import org.apache.commons.io.FileUtils;
 import java.util.HashMap;
 import scala.Predef;
 import scala.Tuple2;
@@ -149,6 +151,24 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     sqlContext.sql("SELECT test_s.testtype_s FROM DFTEST").show();
     deleteCollection("testNested");
 
+  }
+
+  @Test
+  public void testMLModelSolr() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    List<LabeledPoint> list = new ArrayList<LabeledPoint>();
+    LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
+    LabeledPoint one = new LabeledPoint(1.0, Vectors.dense(8.0,7.0,6.0,4.0,5.0,6.0,1.0,2.0,3.0));
+    list.add(zero);
+    list.add(one);
+    JavaRDD<LabeledPoint> data = jsc.parallelize(list);
+    final LogisticRegressionModel model = new LogisticRegressionWithLBFGS()
+              .setNumClasses(2)
+              .run(data.rdd());
+    model.save(jsc.sc(), "myTestpath");
+    DataFrame df = sqlContext.load("myTestpath/data/");
+    FileUtils.forceDelete(new File("myTestpath"));
+    df.show();
   }
 
   protected void assertCount(long expected, long actual, String expr) {
