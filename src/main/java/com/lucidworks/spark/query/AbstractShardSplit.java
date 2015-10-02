@@ -1,16 +1,11 @@
 package com.lucidworks.spark.query;
 
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.response.QueryResponse;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 public abstract class AbstractShardSplit<T> implements ShardSplit<T>, Serializable {
+
   protected SolrQuery query;
   protected String shardUrl;
   protected String rangeField;
@@ -42,8 +37,12 @@ public abstract class AbstractShardSplit<T> implements ShardSplit<T>, Serializab
   protected String buildSplitFq() {
     StringBuilder sb = new StringBuilder();
     if (lowerInc != null) {
-      String exc = max.equals(upper) ? "]" : "}";
-      sb.append(rangeField).append(":[").append(lowerInc).append(" TO ").append(upper).append(exc);
+      if (lowerInc.equals(upper)) {
+        sb.append(rangeField).append(":").append(lowerInc);
+      } else {
+        String exc = max.equals(upper) ? "]" : "}";
+        sb.append(rangeField).append(":[").append(lowerInc).append(" TO ").append(upper).append(exc);
+      }
     } else {
       sb.append("-").append(rangeField).append(":[* TO *]");
     }
@@ -88,25 +87,8 @@ public abstract class AbstractShardSplit<T> implements ShardSplit<T>, Serializab
     this.numHits = numHits;
   }
 
-  public List<ShardSplit> reSplit(SolrClient solrClient, long docsPerSplit) throws IOException, SolrServerException {
-    List<ShardSplit> splits = new ArrayList<ShardSplit>();
-    splits.add(this);
-    return splits;
-  }
-
-  public Long fetchNumHits(SolrClient solrClient) throws IOException, SolrServerException {
-    SolrQuery splitQuery = query.getCopy();
-    splitQuery.addFilterQuery(getSplitFilterQuery());
-    splitQuery.setRows(0);
-    splitQuery.setStart(0);
-    QueryResponse qr = solrClient.query(splitQuery);
-    setNumHits(qr.getResults().getNumFound());
-    return getNumHits();
-  }
-
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append(getClass().getSimpleName()).append(": ");
     sb.append(fq).append(" (").append((numHits != null) ? numHits.toString() : "?").append(")");
     return sb.toString();
   }

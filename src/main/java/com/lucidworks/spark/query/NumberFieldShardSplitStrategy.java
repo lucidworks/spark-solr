@@ -11,11 +11,11 @@ import org.apache.solr.common.util.NamedList;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Implements a shard splitting strategy for integral fields (long / integer).
+ * Implements a shard splitting strategy for integral fields (long / integer). Concrete classes mostly serve
+ * to create split objects for a specific type of field and expose field stats (min/max).
+ * All of the split logic, mainly how to balance splits, is implemented in the base class as balancing is not type specific.
  */
 public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrategy<Long> implements Serializable {
 
@@ -25,8 +25,10 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
   protected ShardSplit<Long> createShardSplit(SolrQuery query,
                                               String shardUrl,
                                               String rangeField,
-                                              FieldStatsInfo stats, Long lowerInc, Long upper) {
-
+                                              FieldStatsInfo stats,
+                                              Long lowerInc,
+                                              Long upper)
+  {
     Long min = (Long)stats.getMin();
     Long max = (Long)stats.getMax();
 
@@ -80,31 +82,16 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
       super(query, shardUrl, rangeField, min, max, lowerInc, upper);
     }
 
-    public List<ShardSplit> reSplit(SolrClient solrClient, long docsPerSplit) throws IOException, SolrServerException {
+    @Override
+    public Long nextUpper(Long lower, long increment) {
+      Long nextUpper = lower + increment;
+      // don't go beyond this object's upper
+      return nextUpper < upper ? nextUpper : upper;
+    }
 
-      int numSplits = Math.round(getNumHits() / docsPerSplit);
-      if (numSplits == 1 && getNumHits() > docsPerSplit)
-        numSplits = 2;
-
-      List<ShardSplit> list = new ArrayList<ShardSplit>();
-      long range = (upper - lowerInc);
-      if (range <= 0) {
-        list.add(this); // nothing to split
-        return list;
-      }
-
-      long bucketSize = Math.round(range / numSplits);
-      long lowerBound = this.lowerInc;
-      for (int b = 0; b < numSplits; b++) {
-        long upperBound = (b < numSplits-1) ? lowerBound + bucketSize : this.upper;
-        NumericShardSplit sub =
-            new NumericShardSplit(this.query, this.shardUrl, this.rangeField, this.min, this.max, lowerBound, upperBound);
-        sub.fetchNumHits(solrClient);
-        list.add(sub);
-        lowerBound = upperBound;
-      }
-
-      return list;
+    @Override
+    public long getRange() {
+      return (upper - lowerInc);
     }
   }
 }

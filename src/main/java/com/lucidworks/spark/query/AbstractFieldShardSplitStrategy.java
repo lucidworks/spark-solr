@@ -17,6 +17,21 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
 
   public static Logger log = Logger.getLogger(AbstractFieldShardSplitStrategy.class);
 
+  // these are magic number used in the split calculations below,
+  // they were determined heuristically to generate relatively balanced split sizes
+  protected static final double thresholdFactor = 1.18d;
+
+  // any splits that are above this threshold will generate a warning to the user so they know they aren't getting optimal performance for this split
+  // and that they might want to increase the number of splits per shard
+  protected static final double splitSizeWarnThreshold = 1.40d;
+
+  // as this value approaches 1.0, the variance between the splits gets smaller with fewer/smaller outliers but it takes longer to calculate them
+  // as it approaches 2.0, the variance grows and the outliers get bigger, but splits can be calculated with fewer refinement queries into Solr
+  protected static final double resplitThreshold = 1.6d;
+
+  // should be around 2.0, used when trying to join non-adjacent splits that are nearly half the size of the docsPerSplit threshold
+  protected static final double smallDocsFactor = 1.8d;
+
   public List<ShardSplit> getSplits(String shardUrl,
                                     SolrQuery query,
                                     String splitFieldName,
@@ -34,7 +49,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
       long docsPerSplit = Math.round(fsi.getCount() / splitsPerShard);
 
       // magic number to allow split sizes to be a little larger than the desired # of docs per split
-      long threshold = Math.round(1.18 * docsPerSplit);
+      long threshold = Math.round(thresholdFactor * docsPerSplit);
 
       // balance the splits best we can in three passes over the list
       for (int b = 0; b < 3; b++) {
@@ -75,9 +90,9 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
 
     long avg = Math.round((double) total / splits.size());
     log.info("Took " + _diffMs + " ms to find " + splits.size() + " splits for " +
-        splitFieldName + " with avg size: " + avg + ", total: "+total);
+        splitFieldName + " with avg size: " + avg + ", total: " + total);
     // warn the user about any large outliers
-    long high = Math.round(avg * 1.40d);
+    long high = Math.round(avg * splitSizeWarnThreshold);
     for (int s=0; s < splits.size(); s++) {
       ShardSplit ss = splits.get(s);
       long numHits = ss.getNumHits();
@@ -103,6 +118,16 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     return qr.getFieldStatsInfo().get(splitFieldName);
   }
 
+  public Long fetchNumHits(SolrClient solrClient, ShardSplit split) throws IOException, SolrServerException {
+    SolrQuery splitQuery = split.getQuery().getCopy();
+    splitQuery.addFilterQuery(split.getSplitFilterQuery());
+    splitQuery.setRows(0);
+    splitQuery.setStart(0);
+    QueryResponse qr = solrClient.query(splitQuery);
+    split.setNumHits(qr.getResults().getNumFound());
+    return split.getNumHits();
+  }
+
   /**
    * Finds min/max of the split field and then builds splits that span the range.
    */
@@ -122,7 +147,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
         createShardSplit(query, shardUrl, splitFieldName, fsi, null, null);
     long numHits = fsi.getCount();
     firstSplit.setNumHits(numHits);
-    splits.addAll(firstSplit.reSplit(solrClient, Math.round(numHits / splitsPerShard)));
+    splits.addAll(reSplit(solrClient, firstSplit, Math.round(numHits / splitsPerShard), fsi));
 
     return fsi;
   }
@@ -159,9 +184,9 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
         finalSplits.add(split);
 
         s = j;
-      } else if (hits > docsPerSplit*1.8) {
+      } else if (hits > docsPerSplit*resplitThreshold) {
         // note, recursion here
-        List<ShardSplit> reSplitList = split.reSplit(solrClient, docsPerSplit);
+        List<ShardSplit> reSplitList = reSplit(solrClient, split, docsPerSplit, fsi);
         if (reSplitList.size() > 1) {
           reSplitList = balanceSplits(reSplitList, threshold, docsPerSplit, solrClient, fsi);
         }
@@ -174,9 +199,53 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     return finalSplits;
   }
 
+  public List<ShardSplit> reSplit(SolrClient solrClient, ShardSplit<T> toBeSplit, long docsPerSplit, FieldStatsInfo fsi) throws IOException, SolrServerException {
+
+    List<ShardSplit> list = new ArrayList<ShardSplit>();
+    long range = toBeSplit.getRange();
+    if (range <= 0) {
+      list.add(toBeSplit); // nothing to split
+      return list;
+    }
+
+    long _startMs = System.currentTimeMillis();
+
+    int numSplits = Math.round(toBeSplit.getNumHits() / docsPerSplit);
+    if (numSplits == 1 && toBeSplit.getNumHits() > docsPerSplit)
+      numSplits = 2;
+
+    long bucketSize = Math.round(range / numSplits);
+    if (bucketSize < 1) {
+      list.add(toBeSplit); // bucket size is too small ... nothing to split
+      return list;
+    }
+
+    T lowerBound = toBeSplit.getLowerInc();
+    for (int b = 0; b < numSplits; b++) {
+      T upperBound = (b < numSplits-1) ? toBeSplit.nextUpper(lowerBound, bucketSize) : toBeSplit.getUpper();
+      ShardSplit<T> sub =
+          createShardSplit(toBeSplit.getQuery(), toBeSplit.getShardUrl(), toBeSplit.getSplitFieldName(), fsi, lowerBound, upperBound);
+      fetchNumHits(solrClient, sub);
+      list.add(sub);
+
+      if (b < numSplits-1 && upperBound.equals(toBeSplit.getUpper())) {
+        // we hit the max too soon, break out of this loop
+        break;
+      }
+
+      lowerBound = upperBound;
+    }
+
+    long _diffMs = (System.currentTimeMillis() - _startMs);
+    log.info("Took "+_diffMs+" ms to re-split "+toBeSplit.toString()+" into "+
+        list.size()+" sub-splits to achieve "+docsPerSplit+" docs per split");
+
+    return list;
+  }
+
   protected void joinNonAdjacentSmallSplits(FieldStatsInfo stats, List<ShardSplit> splits, long threshold) {
     // join any small splits, if they aren't adjacent, then just OR the fq's together
-    long halfDocsPerSplit = Math.round(threshold/1.8);
+    long halfDocsPerSplit = Math.round(threshold/smallDocsFactor);
     for (int b=0; b < splits.size(); b++) {
       ShardSplit ss = splits.get(b);
       if (ss.getNumHits() < halfDocsPerSplit) {
@@ -216,9 +285,21 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     return joined;
   }
 
+  // used internally for splits that just have an explicit FQ,
+  // such as one created by OR'ing together two non-adjacent splits
   class FqSplit extends AbstractShardSplit<String> {
     FqSplit(SolrQuery query, String shardUrl, String rangeField, String fq) {
       super(query, shardUrl, rangeField, fq);
+    }
+
+    @Override
+    public String nextUpper(String lower, long increment) {
+      return null;
+    }
+
+    @Override
+    public long getRange() {
+      return 0;
     }
   }
 
