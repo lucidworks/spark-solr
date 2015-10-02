@@ -150,6 +150,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
   }
 
+
   @Test
   public void createMLModelLRParquet() throws Exception {
     List<LabeledPoint> list = new ArrayList<LabeledPoint>();
@@ -215,12 +216,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     dfNB2.printSchema();
     assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
     assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
-      Thread.sleep(1000);
+    Thread.sleep(1000);
     deleteCollection("TestLR");
-      Thread.sleep(1000);
+    Thread.sleep(1000);
     deleteCollection("TestNB");
     FileUtils.forceDelete(new File("LRParquet"));
-      Thread.sleep(1000);
+    Thread.sleep(1000);
     FileUtils.forceDelete(new File("NBParquet"));
   }
 

@@ -52,7 +52,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     this.sqlContext = sqlContext;
     this.sc =  new JavaSparkContext(sqlContext.sparkContext());
-    if (optionalParam(config, PRESERVE_SCHEMA, "N").equals("Y") || Boolean.parseBoolean(optionalParam(config, PRESERVE_SCHEMA, "False"))) {
+    String preserveSch = optionalParam(config, PRESERVE_SCHEMA, "N");
+    if ("Y".equals(preserveSch) || Boolean.parseBoolean(preserveSch)) {
       preserveSchema = true;
     };
     String zkHost = requiredParam(config, SOLR_ZK_HOST_PARAM);
