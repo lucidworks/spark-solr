@@ -1,6 +1,9 @@
 package com.lucidworks.spark;
 
 import java.io.IOException;
+import java.sql.Timestamp;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 import org.apache.log4j.Logger;
@@ -144,8 +147,9 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     String[] x3 = st.fieldNames();
     Object[] x2 = x1.keySet().toArray();
     for (int i = 0; i < x2.length; i++) {
-      if (x2[i].toString().startsWith("links")) {
-        final String id = doc.get(x2[i].toString()).toString();
+      String x2Key = x2[i].toString();
+      if (x2Key.startsWith("links")) {
+        final String id = doc.get(x2Key).toString();
         if (id != null) {
           SolrDocument childDoc = childMap.get(id);
           if (childDoc == null){
@@ -161,32 +165,35 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
       if (x3.length > x.size() && x1.get(x3[x.size()]+"_s") == null && !st.fields()[x.size()].dataType().typeName().equals("struct")){
         x.add(null);
       }
-      if ((x2[i].toString().substring(x2[i].toString().length() - 2, x2[i].toString().length()).equals("_s") && !x2[i].toString().startsWith("__lw") && !x2[i].toString().startsWith("links"))) {
-        String type = getFieldTypeMapping(st,x2[i].toString().substring(0,x2[i].toString().length()-2));
+      if ((x2Key.substring(x2Key.length() - 2, x2Key.length()).equals("_s") && !x2Key.startsWith("__lw") && !x2Key.startsWith("links"))) {
+        String type = getFieldTypeMapping(st,x2Key.substring(0, x2Key.length() - 2));
         if (!type.equals("")) {
+          String x2Val = x1.get(x2[i]).toString();
           if (type.equals("integer")) {
-            x.add(convertToInteger(x1.get(x2[i]).toString()));
+            x.add(convertToInteger(x2Val));
           } else if (type.equals("double")) {
-            x.add(convertToDouble(x1.get(x2[i]).toString()));
+            x.add(convertToDouble(x2Val));
           } else if (type.equals("float")) {
-            x.add(convertToFloat(x1.get(x2[i]).toString()));
+            x.add(convertToFloat(x2Val));
           } else if (type.equals("short")) {
-            x.add(convertToShort(x1.get(x2[i]).toString()));
+            x.add(convertToShort(x2Val));
           } else if (type.equals("long")) {
-            x.add(convertToLong(x1.get(x2[i]).toString()));
+            x.add(convertToLong(x2Val));
           } else if (type.equals("decimal")) {
-            x.add(convertToDecimal(x1.get(x2[i]).toString()));
+            x.add(convertToDecimal(x2Val));
           } else if (type.equals("boolean")) {
-            x.add(convertToBoolean(x1.get(x2[i]).toString()));
+            x.add(convertToBoolean(x2Val));
           } else if (type.equals("timestamp")) {
+            x.add(convertToTimestamp(x2Val));
           } else if (type.equals("date")) {
+            x.add(convertToDate(x2Val));
           } else if (type.equals("vector")) {
-            x.add(convertToVector(x1.get(x2[i]).toString()));
+            x.add(convertToVector(x2Val));
           } else if (type.equals("matrix")) {
-            x.add(convertToMatrix(x1.get(x2[i]).toString()));
+            x.add(convertToMatrix(x2Val));
           } else if (type.contains(":")) {
             //List<Object> debug = Arrays.asList(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
-            x.add(getArrayFromString(type, x1.get(x2[i]).toString(), 0, new ArrayList<Object[]>()));
+            x.add(getArrayFromString(type, x2Val, 0, new ArrayList<Object[]>()));
           } else {
             x.add(x1.get(x2[i]));
           }
@@ -269,6 +276,28 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
 
   public static Boolean convertToBoolean(String s) {
     return Boolean.parseBoolean(s);
+  }
+
+  public static Timestamp convertToTimestamp(String s){
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
+    Timestamp timestamp = null;
+    try {
+      timestamp = new Timestamp(dateFormat.parse(s).getTime());
+    } catch (ParseException e) {
+      e.printStackTrace();
+    }
+    return timestamp;
+  }
+
+  public static Date convertToDate(String s){
+    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss.SSS");
+    Date date = null;
+    try {
+      date = dateFormat.parse(s);
+    } catch (ParseException e) {
+      e.printStackTrace();
+    }
+    return date;
   }
 
   public static org.apache.spark.mllib.linalg.Vector convertToVector(String s) {
