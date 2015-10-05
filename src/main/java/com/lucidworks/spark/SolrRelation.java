@@ -14,9 +14,7 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.*;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.*;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -42,9 +40,12 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   public static String SOLR_ROWS_PARAM = "rows";
   public static String SOLR_SPLIT_FIELD_PARAM = "split_field";
   public static String SOLR_SPLITS_PER_SHARD_PARAM = "splits_per_shard";
+
   public static String SOLR_PARALLEL_SHARDS = "parallel_shards";
 
   protected String[] fieldList;
+  public static String PRESERVE_SCHEMA = "preserveschema";
+  protected Boolean preserveSchema = false;
   protected String splitFieldName;
   protected int splitsPerShard = 1;
   protected SolrQuery solrQuery;
@@ -53,7 +54,11 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   protected ModifiableSolrParams addlSolrParams;
   protected boolean parallelShards = true;
   protected transient SQLContext sqlContext;
+
   protected Integer rows = null;
+
+  protected transient JavaSparkContext sc;
+
 
   public SolrRelation() {}
 
@@ -67,7 +72,11 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       throw new IllegalArgumentException("SQLContext cannot be null!");
 
     this.sqlContext = sqlContext;
-
+    this.sc =  new JavaSparkContext(sqlContext.sparkContext());
+    String preserveSch = optionalParam(config, PRESERVE_SCHEMA, "N");
+    if ("Y".equals(preserveSch) || Boolean.parseBoolean(preserveSch)) {
+      preserveSchema = true;
+    };
     String zkHost = requiredParam(config, SOLR_ZK_HOST_PARAM);
     String collection = requiredParam(config, SOLR_COLLECTION_PARAM);
     String query = optionalParam(config, SOLR_QUERY_PARAM, "*:*");
@@ -87,7 +96,15 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     splitFieldName = optionalParam(config, SOLR_SPLIT_FIELD_PARAM, null);
     if (splitFieldName != null)
       splitsPerShard = Integer.parseInt(optionalParam(config, SOLR_SPLITS_PER_SHARD_PARAM, "20"));
-    solrRDD = new SolrRDD(zkHost, collection);
+
+    if (!preserveSchema) {
+      solrRDD = new SolrRDD(zkHost, collection);
+    }
+    else {
+      solrRDD = new SchemaPreservingSolrRDD(zkHost, collection);
+      solrRDD.setSc(sc);
+    }
+
     solrQuery = SolrRDD.toQuery(query);
 
     if (fieldList != null) {
@@ -159,44 +176,50 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   public synchronized RDD<Row> buildScan(String[] fields, Filter[] filters) {
 
-    log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
+    // SchemaPreserviing dataframes returns all fields by default
+    if (!preserveSchema) {
+      log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
 
-    if (fields != null && fields.length > 0) {
-      solrQuery.setFields(fields);
-    } else {
-      if (this.fieldList != null) {
-        solrQuery.setFields(this.fieldList);
+      if (fields != null && fields.length > 0) {
+        solrQuery.setFields(fields);
       } else {
-        solrQuery.remove("fl");
+        if (this.fieldList != null) {
+          solrQuery.setFields(this.fieldList);
+        } else {
+          solrQuery.remove("fl");
+        }
       }
+    }
+    else {
+      solrQuery.remove("fl");
     }
 
     // clear all existing filters
     solrQuery.remove("fq");
     if (filters != null && filters.length > 0) {
-      log.info("Building SolrQuery using filters: "+Arrays.asList(filters));
-      for (Filter filter : filters)
-        applyFilter(filter);
+    log.info("Building SolrQuery using filters: " + Arrays.asList(filters));
+    for (Filter filter : filters)
+      applyFilter(filter);
     }
 
     solrQuery.add(addlSolrParams);
 
     if (log.isInfoEnabled())
-      log.info("Constructed SolrQuery: "+solrQuery);
+      log.info("Constructed SolrQuery: " + solrQuery);
 
     RDD<Row> rows = null;
     try {
-      // build the schema based on the desired fields
-      StructType querySchema =
-        (fields != null && fields.length > 0) ? deriveQuerySchema(fields) : schema;
-      JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
+
+      // build the schema based on the desired fields - applicable only for non-schemapreserving dataframes in solr
+      StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? deriveQuerySchema(fields) : schema;
       JavaRDD<SolrDocument> docs = parallelShards ?
-        solrRDD.queryShards(jsc, solrQuery, splitFieldName, splitsPerShard) : solrRDD.queryDeep(jsc, solrQuery);
+              solrRDD.queryShards(sc, solrQuery, splitFieldName, splitsPerShard) : solrRDD.queryDeep(sc, solrQuery);
       rows = solrRDD.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
       if (e instanceof RuntimeException) {
-        throw (RuntimeException)e;
-      } else {
+        throw (RuntimeException) e;
+      }
+      else {
         throw new RuntimeException(e);
       }
     }
@@ -292,36 +315,46 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public void insert(final DataFrame df, boolean overwrite) {
-    JavaRDD<SolrInputDocument> docs = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
-      public SolrInputDocument call(Row row) throws Exception {
-        StructType schema = row.schema();
-        SolrInputDocument doc = new SolrInputDocument();
-        for (StructField f : schema.fields()) {
-          String fname = f.name();
-          if (fname.equals("_version_"))
-            continue;
 
-          int fieldIndex = row.fieldIndex(fname);
-          Object val = row.isNullAt(fieldIndex) ? null : row.get(fieldIndex);
-          if (val != null) {
-            if (val instanceof Collection) {
-              Collection c = (Collection) val;
-              Iterator i = c.iterator();
-              while (i.hasNext())
-                doc.addField(fname, i.next());
-            } else if (val instanceof scala.collection.mutable.ArrayBuffer) {
-              scala.collection.Iterator iter =
-                ((scala.collection.mutable.ArrayBuffer)val).iterator();
-              while (iter.hasNext())
-                doc.addField(fname, iter.next());
-            } else {
-              doc.setField(fname, val);
+    JavaRDD<SolrInputDocument> docs = null;
+    if (!preserveSchema) {
+      docs = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
+        public SolrInputDocument call(Row row) throws Exception {
+          StructType schema = row.schema();
+          SolrInputDocument doc = new SolrInputDocument();
+          for (StructField f : schema.fields()) {
+            String fname = f.name();
+            if (fname.equals("_version_"))
+              continue;
+
+            int fieldIndex = row.fieldIndex(fname);
+            Object val = row.isNullAt(fieldIndex) ? null : row.get(fieldIndex);
+            if (val != null) {
+              if (val instanceof Collection) {
+                Collection c = (Collection) val;
+                Iterator i = c.iterator();
+                while (i.hasNext())
+                  doc.addField(fname, i.next());
+              } else if (val instanceof scala.collection.mutable.ArrayBuffer) {
+                scala.collection.Iterator iter =
+                            ((scala.collection.mutable.ArrayBuffer)val).iterator();
+                while (iter.hasNext())
+                  doc.addField(fname, iter.next());
+              } else {
+                doc.setField(fname, val);
+              }
             }
           }
+          return doc;
         }
-        return doc;
-      }
-    });
+      });
+    }
+    else{
+      docs = ((SchemaPreservingSolrRDD) solrRDD).convertToSolrDocuments(df, new HashMap<String, Object>());
+    }
+
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, 100, docs);
   }
+
 }
+

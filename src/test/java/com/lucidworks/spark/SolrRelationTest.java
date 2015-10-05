@@ -1,16 +1,27 @@
 package com.lucidworks.spark;
 
+
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.*;
 import org.junit.Test;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.mllib.classification.LogisticRegressionModel;
+import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS;
+import org.apache.spark.mllib.classification.NaiveBayes;
+import org.apache.spark.mllib.classification.NaiveBayesModel;
+import org.apache.spark.sql.*;
+import org.apache.spark.mllib.regression.LabeledPoint;
+import org.apache.spark.mllib.linalg.Vectors;
+import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.util.*;
 
 import static org.junit.Assert.*;
+
 
 /**
  * Tests for the SolrRelation implementation.
@@ -33,6 +44,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "testFilterSupport";
+    deleteCollection(testCollection);
+    deleteCollection("testFilterSupport2");
     buildCollection(zkHost, testCollection, testData, 2);
 
     Map<String, String> options = new HashMap<String, String>();
@@ -98,6 +111,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
     options.put("collection", "testFilterSupport2");
+
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
 
@@ -106,6 +120,125 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     deleteCollection(testCollection);
     deleteCollection("testFilterSupport2");
+  }
+
+  @Test
+  public void testNestedDataFrames() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 2;
+    int replicationFactor = 1;
+    deleteCollection("testNested");
+    createCollection("testNested", numShards, replicationFactor, 2, confName, confDir);
+    List<StructField> fields = new ArrayList<StructField>();
+    List<StructField> fields1 = new ArrayList<StructField>();
+    List<StructField> fields2 = new ArrayList<StructField>();
+    fields.add(DataTypes.createStructField("id", DataTypes.StringType, true));
+    fields.add(DataTypes.createStructField("testing_s", DataTypes.StringType, true));
+    fields1.add(DataTypes.createStructField("test1_s", DataTypes.StringType, true));
+    fields1.add(DataTypes.createStructField("test2_s", DataTypes.StringType, true));
+    fields2.add(DataTypes.createStructField("test11_s", DataTypes.StringType, true));
+    fields2.add(DataTypes.createStructField("test12_s", DataTypes.StringType, true));
+    fields2.add(DataTypes.createStructField("test13_s", DataTypes.StringType, true));
+    fields1.add(DataTypes.createStructField("testtype_s", DataTypes.createStructType(fields2) , true));
+    fields.add(DataTypes.createStructField("test_s", DataTypes.createStructType(fields1), true));
+    StructType schema = DataTypes.createStructType(fields);
+    Row dm = RowFactory.create("7", "test", RowFactory.create("test1", "test2", RowFactory.create("test11", "test12", "test13")));
+    List<Row> list = new ArrayList<Row>();
+    list.add(dm);
+    JavaRDD<Row> rdd = jsc.parallelize(list);
+    DataFrame df = sqlContext.createDataFrame(rdd, schema);
+    HashMap<String, String> options = new HashMap<String, String>();
+    String zkHost = cluster.getZkServer().getZkAddress();
+    options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", "testNested");
+    options.put("preserveschema", "Y");
+    df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    Thread.sleep(1000);
+    DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+    df2 = sqlContext.createDataFrame(df2.javaRDD(),df2.schema());
+    df.show();
+    df2.show();
+    df2.registerTempTable("DFTEST");
+    sqlContext.sql("SELECT test_s.testtype_s FROM DFTEST").show();
+    deleteCollection("testNested");
+
+  }
+
+
+  @Test
+  public void createMLModelLRParquet() throws Exception {
+    List<LabeledPoint> list = new ArrayList<LabeledPoint>();
+    LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
+    LabeledPoint one = new LabeledPoint(1.0, Vectors.dense(8.0,7.0,6.0,4.0,5.0,6.0,1.0,2.0,3.0));
+    list.add(zero);
+    list.add(one);
+    JavaRDD<LabeledPoint> data = jsc.parallelize(list);
+    final LogisticRegressionModel model = new LogisticRegressionWithLBFGS()
+              .setNumClasses(2)
+              .run(data.rdd());
+    model.save(jsc.sc(), "LRParquet");
+  }
+
+  @Test
+  public void createMLModelNBParquet() throws Exception {
+    List<LabeledPoint> list = new ArrayList<LabeledPoint>();
+    LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
+    LabeledPoint one = new LabeledPoint(1.0, Vectors.dense(8.0,7.0,6.0,4.0,5.0,6.0,1.0,2.0,3.0));
+    list.add(zero);
+    list.add(one);
+    JavaRDD<LabeledPoint> data = jsc.parallelize(list);
+    final NaiveBayesModel model = NaiveBayes.train(data.rdd(), 1.0);
+    model.save(jsc.sc(), "NBParquet");
+  }
+
+  @Test
+  public void loadParquetsIntoSolr() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 2;
+    int replicationFactor = 1;
+    deleteCollection("TestLR");
+    Thread.sleep(1000);
+    deleteCollection("TestNB");
+    createCollection("TestLR", numShards, replicationFactor, 2, confName, confDir);
+    createCollection("TestNB", numShards, replicationFactor, 2, confName, confDir);
+    String zkHost = cluster.getZkServer().getZkAddress();
+    DataFrame dfLR = sqlContext.load("LRParquet/data/");
+    DataFrame dfNB = sqlContext.load("NBParquet/data/");
+    HashMap<String, String> options = new HashMap<String, String>();
+    options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", "TestLR");
+    options.put("preserveschema", "Y");
+    dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    dfLR.show();
+    options.put("collection", "TestNB");
+    dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+    dfNB.show();
+    Thread.sleep(5000);
+    options.put("collection", "TestLR");
+    DataFrame dfLR2 = sqlContext.read().format("solr").options(options).load();
+    dfLR2.show();
+    dfLR.printSchema();
+    dfLR2.printSchema();
+    options.put("collection", "TestNB");
+    DataFrame dfNB2 = sqlContext.read().format("solr").options(options).load();
+    dfNB2.show();
+    dfNB.printSchema();
+    dfNB2.printSchema();
+    assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
+    assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
+    Thread.sleep(1000);
+    deleteCollection("TestLR");
+    Thread.sleep(1000);
+    deleteCollection("TestNB");
+    FileUtils.forceDelete(new File("LRParquet"));
+    Thread.sleep(1000);
+    FileUtils.forceDelete(new File("NBParquet"));
   }
 
   protected void assertCount(long expected, long actual, String expr) {
