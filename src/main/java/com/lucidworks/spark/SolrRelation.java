@@ -175,6 +175,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public synchronized RDD<Row> buildScan(String[] fields, Filter[] filters) {
+
     // SchemaPreserviing dataframes returns all fields by default
     if (!preserveSchema) {
       log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
@@ -208,6 +209,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     RDD<Row> rows = null;
     try {
+
       // build the schema based on the desired fields - applicable only for non-schemapreserving dataframes in solr
       StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? deriveQuerySchema(fields) : schema;
       JavaRDD<SolrDocument> docs = parallelShards ?
@@ -313,6 +315,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public void insert(final DataFrame df, boolean overwrite) {
+      
     JavaRDD<SolrInputDocument> docs = null;
     if (!preserveSchema) {
       docs = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
