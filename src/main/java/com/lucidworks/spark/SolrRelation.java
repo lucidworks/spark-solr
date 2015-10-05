@@ -315,7 +315,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
 
   public void insert(final DataFrame df, boolean overwrite) {
-      
+
     JavaRDD<SolrInputDocument> docs = null;
     if (!preserveSchema) {
       docs = df.javaRDD().map(new Function<Row, SolrInputDocument>() {
