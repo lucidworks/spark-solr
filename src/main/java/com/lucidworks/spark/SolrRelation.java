@@ -54,7 +54,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   protected ModifiableSolrParams addlSolrParams;
   protected boolean parallelShards = true;
   protected transient SQLContext sqlContext;
-  protected transient JavaSparkContext sc;
 
   protected Integer rows = null;
 
