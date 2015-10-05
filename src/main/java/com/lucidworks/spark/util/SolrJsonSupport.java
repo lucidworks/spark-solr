@@ -152,7 +152,20 @@ public class SolrJsonSupport {
     }
 
     return json;
-  }  
+  }
+
+
+  /**
+   * Helper function for reading a String value from a JSON Object tree.
+   */
+  public static boolean asBool(String jsonPath, Map<String,Object> json) {
+    boolean b = false;
+    Object obj = atPath(jsonPath, json);
+    if (obj != null) {
+      b = (obj instanceof Boolean) ? ((Boolean)obj).booleanValue() : "true".equals(obj.toString());
+    } // it's ok if it is null
+    return b;
+  }
 
   /**
    * Helper function for reading a String value from a JSON Object tree. 
