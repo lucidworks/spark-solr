@@ -5,13 +5,13 @@
     <groupId>com.lucidworks.spark</groupId>
     <artifactId>spark-solr</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <name>spark-solr</name>
     <url>http://maven.apache.org</url>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.7</java.version>
-        <spark.version>1.4.1</spark.version>
+        <spark.version>1.5.1</spark.version>
         <solr.version>5.2.1</solr.version>
     </properties>
     <build>

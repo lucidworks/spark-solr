@@ -512,6 +512,8 @@ public class SolrRDD implements Serializable {
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
               vals[f] = ((Collection) fieldValue).toArray();
+            } else if (fieldValue instanceof Date) {
+              vals[f] = new java.sql.Timestamp(((Date)fieldValue).getTime());
             } else {
               vals[f] = fieldValue;
             }
