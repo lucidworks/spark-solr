@@ -164,7 +164,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     df2.registerTempTable("DFTEST");
     sqlContext.sql("SELECT test_s.testtype_s FROM DFTEST").show();
     deleteCollection("testNested");
-
   }
 
 
@@ -195,7 +194,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
   @Test
-  public void loadParquetsIntoSolr() throws Exception {
+  public void loadLRParquetIntoSolr() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
@@ -203,12 +202,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     int replicationFactor = 1;
     deleteCollection("TestLR");
     Thread.sleep(1000);
-    deleteCollection("TestNB");
     createCollection("TestLR", numShards, replicationFactor, 2, confName, confDir);
-    createCollection("TestNB", numShards, replicationFactor, 2, confName, confDir);
     String zkHost = cluster.getZkServer().getZkAddress();
     DataFrame dfLR = sqlContext.load("LRParquet/data/");
-    DataFrame dfNB = sqlContext.load("NBParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
@@ -216,27 +212,43 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put("preserveschema", "Y");
     dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfLR.show();
+    dfLR.printSchema();
+    Thread.sleep(5000);
+    DataFrame dfLR2 = sqlContext.read().format("solr").options(options).load();
+    dfLR2.show();
+    dfLR2.printSchema();
+    assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
+    deleteCollection("TestLR");
+    Thread.sleep(1000);
+    FileUtils.forceDelete(new File("LRParquet"));
+  }
+
+  @Test
+  public void loadNBParquetIntoSolr() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 2;
+    int replicationFactor = 1;
+    deleteCollection("TestNB");
+    Thread.sleep(1000);
+    createCollection("TestNB", numShards, replicationFactor, 2, confName, confDir);
+    String zkHost = cluster.getZkServer().getZkAddress();
+    DataFrame dfNB = sqlContext.load("NBParquet/data/");
+    HashMap<String, String> options = new HashMap<String, String>();
+    options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("preserveschema", "Y");
     options.put("collection", "TestNB");
     dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfNB.show();
     Thread.sleep(5000);
-    options.put("collection", "TestLR");
-    DataFrame dfLR2 = sqlContext.read().format("solr").options(options).load();
-    dfLR2.show();
-    dfLR.printSchema();
-    dfLR2.printSchema();
-    options.put("collection", "TestNB");
     DataFrame dfNB2 = sqlContext.read().format("solr").options(options).load();
     dfNB2.show();
     dfNB.printSchema();
     dfNB2.printSchema();
-    assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
     assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
-    Thread.sleep(1000);
-    deleteCollection("TestLR");
-    Thread.sleep(1000);
     deleteCollection("TestNB");
-    FileUtils.forceDelete(new File("LRParquet"));
     Thread.sleep(1000);
     FileUtils.forceDelete(new File("NBParquet"));
   }

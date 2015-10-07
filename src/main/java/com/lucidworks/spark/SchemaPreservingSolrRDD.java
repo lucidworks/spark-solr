@@ -536,19 +536,21 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     if (dataType.typeName().equals("array")) {
       org.apache.spark.sql.types.ArrayType a = (org.apache.spark.sql.types.ArrayType) dataType;
       org.apache.spark.sql.types.DataType e = a.elementType();
-      scala.collection.mutable.ArrayBuffer ab = (scala.collection.mutable.ArrayBuffer) value;
-      Object[] d ;
+      scala.collection.mutable.WrappedArray ab = (scala.collection.mutable.WrappedArray) value;
+      Object[] d;
       if (ab.size() > 0) {
         d = new Object[ab.size()];
-        for (int i = 0; i < ab.array().length; i++) {
+        Object[] ab1 = new Object[ab.size()];
+        ab.deep().copyToArray(ab1);
+        for (int i = 0; i < ab1.length; i++) {
           if (e.typeName().equals("array")) {
-            d[i] = getArrayToString(e, ab.array()[i]);
+            d[i] = getArrayToString(e, ab1[i]);
           } else {
-            d[i] = (Double) ab.array()[i];
+            d[i] = ab1[i];
           }
         }
       } else {
-        d = new Double[]{};
+        d = new String[]{};
       }
       return Arrays.toString(d);
     }
