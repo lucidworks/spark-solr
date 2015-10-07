@@ -31,7 +31,7 @@ The first is what you'd want to use if you were using spark-solr in your own pro
 
 == Example Applications
 
-Now, let's populate a SolrCloud index with tweets (be sure to update the command shown below with your Twitter API credentials):
+After the jars are built, let's populate a SolrCloud index with tweets (be sure to update the command shown below with your Twitter API credentials):
 
 Start Solr running in Cloud mode and create a collection named “socialdata” partitioned into two shards:
 
@@ -85,7 +85,7 @@ ADD_JARS=$PROJECT_HOME/target/spark-solr-1.0-SNAPSHOT-shaded.jar bin/spark-shell
 
 Let’s load the socialdata collection into Spark by executing the following Scala code in the shell:
 
-[source,linenums]
+[source]
 ----
 val tweets = sqlContext.load("solr",
  Map("zkHost" -> "localhost:9983", "collection" -> "socialdata")
