@@ -1,6 +1,4 @@
 = Lucidworks Spark/Solr Integration
-:source-highlighter: coderay
-:coderay-linenums-mode: inline
 
 This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
 
@@ -9,6 +7,8 @@ This project includes tools for reading data from Solr as a Spark RDD and indexi
 * Send objects from a Spark Streaming application into Solr
 * Read the results from a Solr query as a Spark RDD
 * Read a large results set from Solr using distributed deep paging as a Spark RDD
+
+// tag::spark-build[]
 
 == Build the Jars
 First, build the Jar for this project:
@@ -21,6 +21,11 @@ This will build 2 jars in the `/target` directory:
 * `spark-solr-1.0-SNAPSHOT-shaded.jar`
 
 The first is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
+
+// end::spark-build[]
+
+// tag::spark-devdocs[]
+// tag::spark-example[]
 
 == Example Applications
 
@@ -59,6 +64,9 @@ Tweets will start flowing into Solr; be sure to let the streaming job run for a 
 
 NOTE: If you don't have Twitter API credentials, please see:
 https://databricks-training.s3.amazonaws.com/realtime-processing-with-spark-streaming.html#twitter-credential-setup
+
+// end::spark-example[]
+// tag::spark-shell[]
 
 == Working at the Spark Shell
 
@@ -165,6 +173,9 @@ tweets.filter("type_s='post'").groupBy("author_s").count().orderBy(desc("count")
 
 Another subtle aspect of working with DataFrames is that you as a developer need to decide when to cache the DataFrame based on how expensive it was to create it. For instance, if you load 10’s of millions of rows from Solr and then perform some costly transformation that trims your DataFrame down to 10,000 rows, then it would be wise to cache the smaller DataFrame so that you won’t have to re-read millions of rows from Solr again. On the other hand, caching the original millions of rows pulled from Solr is probably not very useful, as that will consume too much memory. The general advice I follow is to cache DataFrames when you need to reuse them for additional computation and they require some computation to generate.
 
+// end::spark-shell[]
+// tag::tuning[]
+
 == Tuning the Solr SparkSQL DataSource
 
 The Solr DataSource supports a number of optional parameters to allow you to optimize performance when reading data from Solr. Let's start with the most basic definition of the Solr DataSource and build up the options as we progress through this section:
@@ -222,6 +233,8 @@ By default, each shard in your collection is read independently in different Spa
 
 You can set the "parallel_shards" option to "false" to disable this feature to support top N style queries, however, that will reduce read performance in your Spark job, so use it wisely.
 
+// end::tuning[]
+// tag::solr-read[]
 
 == Reading data from Solr as a Spark RDD
 
@@ -243,6 +256,9 @@ JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, St
   }
 });
 
+// end::solr-read[]
+// tag::solr-write[]
+
 == Writing data to Solr from Spark Streaming
 
 The `com.lucidworks.spark.SolrSupport` class provides static helper functions for send data to Solr from a Spark streaming application. The `TwitterToSolrStreamProcessor` class provides a good example of how to use the SolrSupport API. For sending documents directly to Solr, you need to build-up a `SolrInputDocument` in your Spark streaming application code.
@@ -252,7 +268,9 @@ The `com.lucidworks.spark.SolrSupport` class provides static helper functions fo
     String collection = cli.getOptionValue("collection", "collection1");
     int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
-```
+
+// end::solr-write[]
+// tag::spark-app[]
 
 == Developing a Spark Application
 
@@ -270,6 +288,8 @@ Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to bui
 
 See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` or `com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor` for examples of how to write a StreamProcessor.
 
+// end::spark-app[]
+// tag::spark-auth[]
 
 == Authenticating with Kerberized Solr
 
@@ -299,3 +319,6 @@ spark-submit --master yarn-server \
   hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
   -hdfsPath /user/spark/testdata/syn_sample_50k \
   -solrJaasAuthConfig=/opt/lucidworks-hdpsearch/job/jaas-client.conf
+
+// end::spark-auth[]
+// end::spark-devdocs[]
