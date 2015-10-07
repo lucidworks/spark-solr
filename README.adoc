@@ -2,12 +2,14 @@
 
 This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
 
+// tag::features[]
 == Features
 
 * Send objects from a Spark Streaming application into Solr
 * Read the results from a Solr query as a Spark RDD
 * Read a large results set from Solr using distributed deep paging as a Spark RDD
 
+// end::features[]
 // tag::spark-build[]
 
 == Build the Jars
