@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.lucidworks.spark.filter.DocFilterContext;
+import com.lucidworks.spark.fusion.FusionPipelineClient;
 import com.lucidworks.spark.util.EmbeddedSolrServerFactory;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -162,6 +163,41 @@ public class SolrSupport implements Serializable {
           return null;
         }
       }
+    );
+  }
+  
+  public static void sendDStreamOfDocsToFusion(final String fusionUrl, final String fusionCredentials, JavaDStream docs, final int batchSize) {
+    docs.foreachRDD(
+        new Function<JavaRDD<Object>, Void>() {
+          public Void call(JavaRDD<Object> rdd) throws Exception {
+            rdd.foreachPartition(
+                new VoidFunction<Iterator<Object>>() {
+                  public void call(Iterator<Object> docIter) throws Exception {
+                    String[] creds = (fusionCredentials != null) ? fusionCredentials.split(":") : null;
+                    FusionPipelineClient fusionClient = 
+                        (creds != null) ? new FusionPipelineClient(fusionUrl, creds[0], creds[1], creds[2]) 
+                                        : new FusionPipelineClient(fusionUrl);
+                    List batch = new ArrayList();
+                    Date indexedAt = new Date();
+                    while (docIter.hasNext()) {
+                      Object inputDoc = docIter.next();
+                      batch.add(inputDoc);
+                      if (batch.size() >= batchSize) {
+                        fusionClient.postBatchToPipeline(batch);
+                        batch.clear();
+                      }
+                    }
+                    if (!batch.isEmpty()) {
+                      fusionClient.postBatchToPipeline(batch);
+                      batch.clear();
+                    }
+                    fusionClient.shutdown();
+                  }
+                }
+            );
+            return null;
+          }
+        }
     );
   }
 

@@ -37,31 +37,37 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
     JavaReceiverInputDStream<Status> tweets =
       TwitterUtils.createStream(jssc, null, filters);
 
-    // map incoming tweets into PipelineDocument objects for indexing in Solr
-    JavaDStream<SolrInputDocument> docs = tweets.map(
-      new Function<Status,SolrInputDocument>() {
+    String fusionUrl = cli.getOptionValue("fusion");
+    if (fusionUrl != null) {
+      // just send JSON directly to Fusion
+      SolrSupport.sendDStreamOfDocsToFusion(fusionUrl, cli.getOptionValue("fusionCredentials"), tweets, batchSize);
+    } else {
+      // map incoming tweets into PipelineDocument objects for indexing in Solr
+      JavaDStream<SolrInputDocument> docs = tweets.map(
+          new Function<Status,SolrInputDocument>() {
 
-        /**
-         * Convert a twitter4j Status object into a SolrJ SolrInputDocument
-         */
-        public SolrInputDocument call(Status status) {
+            /**
+             * Convert a twitter4j Status object into a SolrJ SolrInputDocument
+             */
+            public SolrInputDocument call(Status status) {
 
-          if (log.isDebugEnabled())
-            log.debug("Received tweet: " + status.getId() + ": " + status.getText().replaceAll("\\s+", " "));
+              if (log.isDebugEnabled())
+                log.debug("Received tweet: " + status.getId() + ": " + status.getText().replaceAll("\\s+", " "));
 
-          // simple mapping from primitives to dynamic Solr fields using reflection
-          SolrInputDocument doc =
-            SolrSupport.autoMapToSolrInputDoc("tweet-"+status.getId(), status, null);
-          doc.setField("provider_s", "twitter");
-          doc.setField("author_s", status.getUser().getScreenName());
-          doc.setField("type_s", status.isRetweet() ? "echo" : "post");
-          return doc;
-        }
-      }
-    );
+              // simple mapping from primitives to dynamic Solr fields using reflection
+              SolrInputDocument doc =
+                  SolrSupport.autoMapToSolrInputDoc("tweet-"+status.getId(), status, null);
+              doc.setField("provider_s", "twitter");
+              doc.setField("author_s", status.getUser().getScreenName());
+              doc.setField("type_s", status.isRetweet() ? "echo" : "post");
+              return doc;
+            }
+          }
+      );
 
-    // when ready, send the docs into a SolrCloud cluster
-    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
+      // when ready, send the docs into a SolrCloud cluster
+      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
+    }
   }
 
   public Option[] getOptions() {
@@ -71,7 +77,19 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
               .hasArg()
               .isRequired(false)
               .withDescription("List of Twitter keywords to filter on, separated by commas")
-              .create("tweetFilters")
+              .create("tweetFilters"),
+        OptionBuilder
+            .withArgName("URL(s)")
+            .hasArg()
+            .isRequired(false)
+            .withDescription("Fusion endpoint")
+            .create("fusion"),
+        OptionBuilder
+            .withArgName("user:password:realm")
+            .hasArg()
+            .isRequired(false)
+            .withDescription("Fusion credentials user:password:realm")
+            .create("fusionCredentials")
     };
   }
 }
