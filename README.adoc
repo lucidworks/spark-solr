@@ -38,7 +38,7 @@ Start Solr running in Cloud mode and create a collection named “socialdata” 
 [source]
 bin/solr -c && bin/solr create -c socialdata -shards 2
 
-NOTE: The remaining sections in this document assume Solr is running in cloud mode on port 8983 with embedded ZooKeeper listening on localhost:9983.
+NOTE: The remaining sections in this document assume Solr is running in cloud mode on port 8983 with embedded ZooKeeper listening on `localhost:9983`.
 
 Also, to ensure you can see tweets as they are indexed in near real-time, you should enable auto soft-commits using Solr’s Config API.
 Specifically, for this exercise, we’ll commit tweets every 2 seconds.
@@ -62,10 +62,18 @@ Replace `$SPARK_MASTER` with the URL of your Spark master server. If you don’t
 --master local[2]
 
 However, when running in local mode, there is no executor, so you’ll need to pass the Twitter credentials in the `spark.driver.extraJavaOptions` parameter instead of `spark.executor.extraJavaOptions`.
+
 Tweets will start flowing into Solr; be sure to let the streaming job run for a few minutes to build up a few thousand tweets in your socialdata collection. You can kill the job using ctrl-C.
 
-NOTE: If you don't have Twitter API credentials, please see:
-https://databricks-training.s3.amazonaws.com/realtime-processing-with-spark-streaming.html#twitter-credential-setup
+[NOTE]
+====
+The sample command above includes properties for Twitter API credentials which need to be provided by you. 
+
+If you don't already have your Twitter API credentials, you will need to set up a Twitter app (https://apps.twitter.com) and get your user and access tokens.
+
+This link is a good Spark-related walkthrough of the process:
+https://databricks-training.s3.amazonaws.com/realtime-processing-with-spark-streaming.html#twitter-credential-setup.
+====
 
 // end::spark-example[]
 // tag::spark-shell[]
