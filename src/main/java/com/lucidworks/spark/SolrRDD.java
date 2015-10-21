@@ -6,7 +6,6 @@ import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.Map.Entry;
 
 import com.lucidworks.spark.query.*;
 import com.lucidworks.spark.util.SolrJsonSupport;
@@ -695,7 +694,7 @@ public class SolrRDD implements Serializable {
       if (tvc != null && (tvc.isStored || tvc.isDocValues)) {
         fieldTypeMap.put(field, tvc);
       } else {
-         log.warn("Can't retrieve an index only field: " + fieldName);
+         log.warn("Can't retrieve an index only field: " + field);
       }
     }
 
