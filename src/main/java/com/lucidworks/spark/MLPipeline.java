@@ -97,7 +97,6 @@ public class MLPipeline implements SparkApp.RDDProcessor {
 
     // Vectorize!
     HashingTF hashingTF = new HashingTF()
-        .setNumFeatures(100000)
         .setInputCol(tokenizer.getOutputCol())
         .setOutputCol("features");
 
