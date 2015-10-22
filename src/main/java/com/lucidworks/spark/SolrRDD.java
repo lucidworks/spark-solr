@@ -569,26 +569,11 @@ public class SolrRDD implements Serializable {
     // Build up a schema based on the fields requested
     String fieldList = query.getFields();
     Map<String,SolrFieldMeta> fieldTypeMap = null;
-    String[] fields = null;
     if (fieldList != null) {
-      fields = query.getFields().split(",");
+      fieldTypeMap = getFieldTypes(query.getFields().split(","), solrBaseUrl, collection);
     } else {
-      // just go out to Solr and get 10 docs and extract a field list from that
-      CloudSolrClient solrServer = getSolrClient(zkHost);
-      SolrQuery probeForFieldsQuery = query.getCopy();
-      probeForFieldsQuery.remove("distrib");
-      probeForFieldsQuery.set("collection", collection);
-      probeForFieldsQuery.set("fl", "*");
-      probeForFieldsQuery.setStart(0);
-      probeForFieldsQuery.setRows(10);
-      QueryResponse probeForFieldsResp = solrServer.query(probeForFieldsQuery);
-      SolrDocumentList hits = probeForFieldsResp.getResults();
-      Set<String> fieldSet = new TreeSet<String>();
-      for (SolrDocument hit : hits)
-        fieldSet.addAll(hit.getFieldNames());
-      fields = fieldSet.toArray(new String[0]);
+      fieldTypeMap = getSchemaFields(solrBaseUrl, collection);
     }
-    fieldTypeMap = getFieldTypes(fields, solrBaseUrl, collection);
     if (fieldTypeMap == null || fieldTypeMap.isEmpty())
       throw new IllegalArgumentException("Query ("+query+") does not specify any fields needed to build a schema!");
 
@@ -626,7 +611,7 @@ public class SolrRDD implements Serializable {
     boolean isStored;
     String fieldTypeClass;
   }
-
+  
   private static Map<String, SolrFieldMeta> getSchemaFields(String solrBaseUrl, String collection) {
       String lukeUrl = solrBaseUrl+collection+"/admin/luke?numTerms=0";
       // collect mapping of Solr field to type
