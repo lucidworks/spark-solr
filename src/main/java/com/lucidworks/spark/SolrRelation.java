@@ -179,10 +179,10 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     if (!preserveSchema) {
       log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
       if (fields != null && fields.length > 0) {
-        applyFields(fields);
+        solrQuery.setFields(fields);
       } else {
         if (this.fieldList != null) {
-          applyFields(this.fieldList);
+          solrQuery.setFields(fields);
         } else {
           applyDefaultFields();
         }
@@ -238,43 +238,16 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       for (int sf = 0; sf < schemaFields.length; sf++) {
           StructField schemaField = schemaFields[sf];
           Metadata meta = schemaField.metadata();
-          String fieldName = meta.contains("name") ? meta.getString("name") : schemaField.name();
           Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
           Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
           Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-          if (!isMultiValued && isDocValues && !isStored) {
-              fieldList.add(schemaField.name() + ":field("+fieldName+")");
-          } else if (!isMultiValued) {
-              fieldList.add(schemaField.name() + ":" + fieldName);
+          if (!isMultiValued && (isDocValues || isStored)) {
+              fieldList.add(schemaField.name());
           }
       }
       String[] fieldArr = new String[fieldList.size()];
       fieldArr = fieldList.toArray(fieldArr);
       solrQuery.setFields(fieldArr);
-  }
-  
-  protected void applyFields(String[] fields) {
-      java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
-      for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
-      String[] fieldList = new String[fields.length];
-      for (int f = 0; f < fields.length; f++) {
-          StructField field = fieldMap.get(fields[f]);
-          if (field != null) {
-              Metadata meta = field.metadata();
-              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
-              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
-              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
-              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-              if (!isMultiValued && isDocValues && !isStored) {
-                  fieldList[f] = field.name() + ":field("+fieldName+")";
-              } else {
-                  fieldList[f] = field.name() + ":" + fieldName;
-              }
-          } else {
-              fieldList[f] = fields[f];
-          }
-      }
-      solrQuery.setFields(fieldList);
   }
   
   protected void applyFilter(Filter filter) {
@@ -292,7 +265,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       solrQuery.addFilterQuery(fq(filter));
     }
   }
-  protected String fieldToAttribute(String attribute) {
+  
+  protected String attributeToFieldName(String attribute) {
       java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
       for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
       StructField field = fieldMap.get(attribute);
@@ -364,7 +338,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     } else {
       throw new IllegalArgumentException("Filters of type '"+f+" ("+f.getClass().getName()+")' not supported!");
     }
-    return negate+fieldToAttribute(attr)+":"+crit;
+    return negate+attributeToFieldName(attr)+":"+crit;
   }
 
   public void insert(final DataFrame df, boolean overwrite) {
