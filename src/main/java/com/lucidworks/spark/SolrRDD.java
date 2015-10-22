@@ -598,6 +598,13 @@ public class SolrRDD implements Serializable {
         Object[] vals = new Object[fields.length];
         for (int f = 0; f < fields.length; f++) {
           StructField field = fields[f];
+          Metadata meta = field.metadata();
+          if (meta != null) {
+              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+          }
           Object fieldValue = doc.getFieldValue(field.name());
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
@@ -630,7 +637,7 @@ public class SolrRDD implements Serializable {
 
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (Map.Entry<String, SolrFieldMeta> field : fieldTypeMap.entrySet()) {
-      String fieldName = field.getKey().replaceAll("\\.","_");
+      String fieldName = field.getKey();
       SolrFieldMeta fieldMeta = field.getValue();
       MetadataBuilder metadata = new MetadataBuilder();
       metadata.putString("name", field.getKey());
@@ -647,7 +654,7 @@ public class SolrRDD implements Serializable {
       if (fieldMeta.fieldType != null) metadata.putString("type", fieldMeta.fieldType);
       if (fieldMeta.dynamicBase != null) metadata.putString("dynamicBase", fieldMeta.dynamicBase);
       if (fieldMeta.fieldTypeClass != null) metadata.putString("class", fieldMeta.fieldTypeClass);
-      listOfFields.add(DataTypes.createStructField(fieldName, dataType, !fieldMeta.isRequired, metadata.build()));
+      listOfFields.add(DataTypes.createStructField(fieldName.replaceAll("\\.","_"), dataType, !fieldMeta.isRequired, metadata.build()));
     }
 
     return DataTypes.createStructType(listOfFields);
