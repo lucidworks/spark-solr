@@ -212,7 +212,7 @@ public class SolrRDD implements Serializable {
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set("collection", collection);
     params.set("qt", "/get");
-    params.set(uniqueKey, docId);
+    params.set("id", docId);
     QueryResponse resp = null;
     try {
       resp = cloudSolrServer.query(params);
