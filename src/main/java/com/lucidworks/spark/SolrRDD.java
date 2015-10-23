@@ -579,7 +579,7 @@ public class SolrRDD implements Serializable {
               Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
               Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
               Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-              if (!isMultiValued && isDocValues && !isStored) {
+              if (isDocValues) {
                   fieldList[f] = field.name() + ":field("+fieldName+")";
               } else {
                   fieldList[f] = field.name() + ":" + fieldName;
@@ -599,13 +599,11 @@ public class SolrRDD implements Serializable {
         for (int f = 0; f < fields.length; f++) {
           StructField field = fields[f];
           Metadata meta = field.metadata();
-          if (meta != null) {
-              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
-              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
-              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
-              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-          }
-          Object fieldValue = doc.getFieldValue(field.name());
+          String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+          Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+          Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+          Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+          Object fieldValue = isMultiValued ? doc.getFieldValues(field.name()) : doc.getFieldValue(field.name());;
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
               vals[f] = ((Collection) fieldValue).toArray();
@@ -723,7 +721,7 @@ public class SolrRDD implements Serializable {
         Map<String, Object> fieldTypeMeta =
           SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
 
-            tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
+        tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
 
       } catch (Exception exc) {
         String errMsg = "Can't get field type for field " + field + " due to: " + exc;

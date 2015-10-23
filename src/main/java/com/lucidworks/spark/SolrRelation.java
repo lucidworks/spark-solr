@@ -241,7 +241,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
           Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
           Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
           Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-          if (!isMultiValued && (isDocValues || isStored)) {
+          if (isStored || (!isMultiValued && isDocValues)) {
               fieldList.add(schemaField.name());
           }
       }
