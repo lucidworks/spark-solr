@@ -22,10 +22,11 @@ import org.apache.spark.api.java.function.PairFunction;
 import org.apache.spark.mllib.linalg.*;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.RowFactory;
-
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
+
 import scala.Tuple2;
+import scala.collection.immutable.Map;
 
 
 public class SchemaPreservingSolrRDD extends SolrRDD {
@@ -36,9 +37,13 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
   }
 
   public SchemaPreservingSolrRDD(String zkHost, String collection) {
-    super(zkHost, collection);
+    super(zkHost, collection, null);
   }
 
+  public SchemaPreservingSolrRDD(String zkHost, String collection, Map<String,String> config) {
+      super(zkHost, collection, config);
+  }
+  
   @Override
   public StructType getQuerySchema(SolrQuery query) throws Exception {
     query.addFilterQuery("__lwcategory_s:schema AND __lwroot_s:root");
@@ -125,23 +130,23 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         return new Tuple2<String, SolrDocument>(solrDocument.get("id").toString(), solrDocument);
       }
     });
-    final Map<String, SolrDocument> childMap = childdocs.collectAsMap();
+    final java.util.Map<String, SolrDocument> childMap = childdocs.collectAsMap();
     JavaRDD<Row> rows = rootdocs.map(new Function<SolrDocument, Row>() {
       @Override
       public Row call(SolrDocument solrDocument) throws Exception {
-        Row ret =  readData(solrDocument,  schema, collection, childMap);
+        Row ret = readData(solrDocument,  schema, collection, childMap);
         return ret;
       }
     });
     return rows;
   }
 
-  public Row readData(SolrDocument doc, StructType st, String collection, Map<String, SolrDocument> childMap) throws IOException, SolrServerException {
+  public Row readData(SolrDocument doc, StructType st, String collection, java.util.Map<String, SolrDocument> childMap) throws IOException, SolrServerException {
     ArrayList<Object> str = new ArrayList<Object>();
     return recurseDataRead(doc , str, st, collection, childMap);
   }
 
-  public Row recurseDataRead(SolrDocument doc, ArrayList<Object> x, StructType st, String collection, Map<String, SolrDocument> childMap) {
+  public Row recurseDataRead(SolrDocument doc, ArrayList<Object> x, StructType st, String collection, java.util.Map<String, SolrDocument> childMap) {
     Boolean recurse = true;
     java.util.Map<String, Object> x1 = doc.getFieldValueMap();
     String[] x3 = st.fieldNames();
