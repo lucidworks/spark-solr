@@ -17,6 +17,7 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
@@ -565,7 +566,7 @@ public class SolrRDD implements Serializable {
       DataType dataType = (fieldMeta != null) ? solrDataTypes.get(fieldMeta.fieldTypeClass) : null;
       if (dataType == null) dataType = DataTypes.StringType;
 
-      if (fieldMeta.isMultiValued) {
+      if (fieldMeta != null && fieldMeta.isMultiValued) {
         dataType = new ArrayType(dataType, true);
       }
 
@@ -652,6 +653,29 @@ public class SolrRDD implements Serializable {
     }
 
     return fieldTypeMap;
+  }
+
+  public Map<String,Double> getLabels(String labelField) throws SolrServerException {
+    SolrQuery solrQuery = new SolrQuery("*:*");
+    solrQuery.setRows(0);
+    solrQuery.set("collection", collection);
+    solrQuery.addFacetField(labelField);
+    solrQuery.setFacetMinCount(1);
+    QueryResponse qr = querySolr(getSolrClient(zkHost), solrQuery, 0, null);
+    List<String> values = new ArrayList<>();
+    for (FacetField.Count f : qr.getFacetField(labelField).getValues()) {
+      values.add(f.getName());
+    }
+
+    Collections.sort(values);
+    final Map<String,Double> labelMap = new HashMap<>();
+    double d = 0d;
+    for (String label : values) {
+      labelMap.put(label, new Double(d));
+      d += 1d;
+    }
+
+    return labelMap;
   }
 
   public static QueryResponse querySolr(SolrClient solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {

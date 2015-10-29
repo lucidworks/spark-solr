@@ -341,9 +341,10 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
                 while (iter.hasNext())
                   doc.addField(fname, iter.next());
               } else if (val instanceof scala.collection.mutable.WrappedArray) {
-                scala.collection.Iterator iter = ((scala.collection.mutable.WrappedArray)val).iterator();
+                scala.collection.Iterator iter =
+                            ((scala.collection.mutable.WrappedArray) val).iterator();
                 while (iter.hasNext())
-                    doc.addField(fname, iter.next());
+                  doc.addField(fname, iter.next());
               } else {
                 doc.setField(fname, val);
               }

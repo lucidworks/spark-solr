@@ -411,17 +411,17 @@ public class SparkApp implements Serializable {
     return classes;
   }
 
-  private static Serializable assertSerializable(Object obj) {
+  public static Serializable assertSerializable(Object obj) {
     Serializable ser = (Serializable)obj;
     try {
-      bytes2ser(ser2bytes(ser));
+      ser = bytes2ser(ser2bytes(ser));
     } catch (Exception exc) {
       throw new IllegalArgumentException("Object of type ["+obj.getClass().getName()+"] is not Serializable due to: "+exc);
     }
     return ser;
   }
 
-  private static Serializable bytes2ser(byte[] objBytes) throws Exception {
+  public static Serializable bytes2ser(byte[] objBytes) throws Exception {
     Serializable ser = null;
     ObjectInputStream ois = null;
     try {
