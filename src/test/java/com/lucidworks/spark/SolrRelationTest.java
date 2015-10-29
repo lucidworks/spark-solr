@@ -176,8 +176,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     list.add(one);
     JavaRDD<LabeledPoint> data = jsc.parallelize(list);
     final LogisticRegressionModel model = new LogisticRegressionWithLBFGS()
-          .setNumClasses(2)
-          .run(data.rdd());
+              .setNumClasses(2)
+              .run(data.rdd());
     model.save(jsc.sc(), "LRParquet");
   }
 
