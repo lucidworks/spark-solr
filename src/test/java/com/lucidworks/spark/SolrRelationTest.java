@@ -36,10 +36,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     SQLContext sqlContext = new SQLContext(jsc);
 
     String[] testData = new String[] {
-          "1,a,x,1000,[a;x],[1000]",
-          "2,b,y,2000,[b;y],[2000]",
-          "3,c,z,3000,[c;z],[3000]",
-          "4,a,x,4000,[a;x],[4000]"
+      "1,a,x,1000,[a;x],[1000]",
+      "2,b,y,2000,[b;y],[2000]",
+      "3,c,z,3000,[c;z],[3000]",
+      "4,a,x,4000,[a;x],[4000]"
     };
 
     String zkHost = cluster.getZkServer().getZkAddress();
