@@ -279,12 +279,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
         assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
         ArrayType arrayType = (ArrayType)type;
         assertEquals("Field '"+fieldName+"' should have a string element type but has '"+arrayType.elementType()+
-                "' instead!", "string", arrayType.elementType().typeName());
+            "' instead!", "string", arrayType.elementType().typeName());
       } else if (fieldName.endsWith("_ii")) {
         assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
         ArrayType arrayType = (ArrayType)type;
         assertEquals("Field '"+fieldName+"' should have an integer element type but has '"+arrayType.elementType()+
-                "' instead!", "integer", arrayType.elementType().typeName());
+            "' instead!", "integer", arrayType.elementType().typeName());
       }
     }
   }
