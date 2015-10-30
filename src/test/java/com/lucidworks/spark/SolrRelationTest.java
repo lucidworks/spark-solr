@@ -141,7 +141,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     fields2.add(DataTypes.createStructField("test11_s", DataTypes.StringType, true));
     fields2.add(DataTypes.createStructField("test12_s", DataTypes.StringType, true));
     fields2.add(DataTypes.createStructField("test13_s", DataTypes.StringType, true));
-    fields1.add(DataTypes.createStructField("testtype_s", DataTypes.createStructType(fields2) , true));
+    fields1.add(DataTypes.createStructField("testtype_s", DataTypes.createStructType(fields2), true));
     fields.add(DataTypes.createStructField("test_s", DataTypes.createStructType(fields1), true));
     StructType schema = DataTypes.createStructType(fields);
     Row dm = RowFactory.create("7", "test", RowFactory.create("test1", "test2", RowFactory.create("test11", "test12", "test13")));
@@ -166,8 +166,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection("testNested");
   }
 
-
-  @Test
   public void createMLModelLRParquet() throws Exception {
     List<LabeledPoint> list = new ArrayList<LabeledPoint>();
     LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
@@ -181,7 +179,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     model.save(jsc.sc(), "LRParquet");
   }
 
-  @Test
   public void createMLModelNBParquet() throws Exception {
     List<LabeledPoint> list = new ArrayList<LabeledPoint>();
     LabeledPoint zero = new LabeledPoint(0.0, Vectors.dense(1.0, 0.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0));
@@ -195,6 +192,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
   @Test
   public void loadLRParquetIntoSolr() throws Exception {
+    createMLModelLRParquet();
     SQLContext sqlContext = new SQLContext(jsc);
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
@@ -220,11 +218,13 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
     deleteCollection("TestLR");
     Thread.sleep(1000);
-    FileUtils.forceDelete(new File("LRParquet"));
+    File lRModel = new File("LRParquet").getAbsoluteFile();
+    FileUtils.forceDelete(lRModel);
   }
 
   @Test
   public void loadNBParquetIntoSolr() throws Exception {
+    createMLModelNBParquet();
     SQLContext sqlContext = new SQLContext(jsc);
     String confName = "testConfig";
     File confDir = new File("src/test/resources/conf");
@@ -250,11 +250,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
     deleteCollection("TestNB");
     Thread.sleep(1000);
-    FileUtils.forceDelete(new File("NBParquet"));
+    File nBModel = new File("NBParquet").getAbsoluteFile();
+    FileUtils.forceDelete(nBModel);
   }
 
   protected void assertCount(long expected, long actual, String expr) {
-    assertTrue("expected count == "+expected+" but got "+actual+" for "+expr, expected == actual);
+    assertTrue("expected count == " + expected + " but got " + actual + " for " + expr, expected == actual);
   }
 
   protected void validateSchema(DataFrame df) {
