@@ -218,7 +218,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertCount(dfLR.count(), dfLR.intersect(dfLR2).count(), "compare dataframe count");
     deleteCollection("TestLR");
     Thread.sleep(1000);
-    FileUtils.forceDelete(new File("LRParquet"));
+    File lRModel = new File("LRParquet").getAbsoluteFile();
+    FileUtils.forceDelete(lRModel);
   }
 
   @Test
@@ -249,7 +250,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertCount(dfNB.count(), dfNB.intersect(dfNB2).count(), "compare dataframe count");
     deleteCollection("TestNB");
     Thread.sleep(1000);
-    FileUtils.forceDelete(new File("NBParquet"));
+    File nBModel = new File("NBParquet").getAbsoluteFile();
+    FileUtils.forceDelete(nBModel);
   }
 
   protected void assertCount(long expected, long actual, String expr) {
