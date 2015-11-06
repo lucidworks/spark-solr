@@ -138,6 +138,7 @@
                                 <excludes>
                                     <exclude>org.apache.spark:spark-core_${scala.binary.version}</exclude>
                                     <exclude>org.apache.spark:spark-streaming_${scala.binary.version}</exclude>
+                                    <exclude>org.apache.spark:spark-hive_${scala.binary.version}</exclude>
                                     <exclude>org.apache.hadoop:*</exclude>
                                     <exclude>com.google.protobuf_spark:*</exclude>
                                     <exclude>com.twitter:chill_${scala.binary.version}</exclude>
@@ -432,6 +433,12 @@
             <artifactId>scalatest_${scala.binary.version}</artifactId>
             <version>2.2.1</version>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hive_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
         </dependency>
     </dependencies>
 </project>

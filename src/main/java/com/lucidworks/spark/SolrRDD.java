@@ -514,7 +514,7 @@ public class SolrRDD implements Serializable {
             if (fieldValue instanceof Collection) {
               vals[f] = ((Collection) fieldValue).toArray();
             } else if (fieldValue instanceof Date) {
-              vals[f] = new java.sql.Timestamp(((Date)fieldValue).getTime());
+              vals[f] = new java.sql.Timestamp(((Date) fieldValue).getTime());
             } else {
               vals[f] = fieldValue;
             }
@@ -788,4 +788,108 @@ public class SolrRDD implements Serializable {
     return DataTypes.createArrayType(getsqlDataType(s.split(":")[1]));
   }
 
+  public static final class PivotField implements Serializable {
+    public final String solrField;
+    public final String prefix;
+    public final String otherSuffix;
+    public final int maxCols;
+
+    public PivotField(String solrField, String prefix) {
+      this(solrField, prefix, 10);
+    }
+
+    public PivotField(String solrField, String prefix, int maxCols) {
+      this(solrField, prefix, maxCols, "other");
+    }
+
+    public PivotField(String solrField, String prefix, int maxCols, String otherSuffix) {
+      this.solrField = solrField;
+      this.prefix = prefix;
+      this.maxCols = maxCols;
+      this.otherSuffix = otherSuffix;
+    }
+  }
+
+  /**
+   * Allows you to pivot a categorical field into multiple columns that can be aggregated into counts, e.g.
+   * a field holding HTTP method (http_verb=GET) can be converted into: http_method_get=1, which is a common
+   * task when creating aggregations.
+   */
+  public DataFrame withPivotFields(final DataFrame solrData, final PivotField[] pivotFields) throws IOException, SolrServerException {
+
+    final StructType schemaWithPivots = toPivotSchema(solrData.schema(), pivotFields);
+
+    JavaRDD<Row> withPivotFields = solrData.javaRDD().map(new Function<Row, Row>() {
+      @Override
+      public Row call(Row row) throws Exception {
+        Object[] fields = new Object[schemaWithPivots.size()];
+        for (int c=0; c < row.length(); c++)
+          fields[c] = row.get(c);
+
+        for (PivotField pf : pivotFields)
+          SolrRDD.fillPivotFieldValues(row.getString(row.fieldIndex(pf.solrField)), fields, schemaWithPivots, pf.prefix);
+
+        return RowFactory.create(fields);
+      }
+    });
+
+    return solrData.sqlContext().createDataFrame(withPivotFields, schemaWithPivots);
+  }
+
+  public StructType toPivotSchema(final StructType baseSchema, final PivotField[] pivotFields) throws IOException, SolrServerException {
+    List<StructField> pivotSchemaFields = new ArrayList<>();
+    pivotSchemaFields.addAll(Arrays.asList(baseSchema.fields()));
+    for (PivotField pf : pivotFields) {
+      for (StructField sf : getPivotSchema(pf.solrField, pf.maxCols, pf.prefix, pf.otherSuffix)) {
+        pivotSchemaFields.add(sf);
+      }
+    }
+    return DataTypes.createStructType(pivotSchemaFields);
+  }
+
+  public List<StructField> getPivotSchema(String fieldName, int maxCols, String fieldPrefix, String otherName) throws IOException, SolrServerException {
+    final List<StructField> listOfFields = new ArrayList<StructField>();
+    SolrQuery q = new SolrQuery("*:*");
+    q.set("collection", collection);
+    q.setFacet(true);
+    q.addFacetField(fieldName);
+    q.setFacetMinCount(1);
+    q.setFacetLimit(maxCols);
+    q.setRows(0);
+    FacetField ff = querySolr(getSolrClient(zkHost), q, 0, null).getFacetField(fieldName);
+    for (FacetField.Count f : ff.getValues()) {
+      listOfFields.add(DataTypes.createStructField(fieldPrefix+f.getName().toLowerCase(), DataTypes.IntegerType, false));
+    }
+    if (otherName != null) {
+      listOfFields.add(DataTypes.createStructField(fieldPrefix+otherName, DataTypes.IntegerType, false));
+    }
+    return listOfFields;
+  }
+
+  public static final int[] getPivotFieldRange(StructType schema, String pivotPrefix) {
+    StructField[] schemaFields = schema.fields();
+    int startAt = -1;
+    int endAt = -1;
+    for (int f=0; f < schemaFields.length; f++) {
+      String name = schemaFields[f].name();
+      if (startAt == -1 && name.startsWith(pivotPrefix)) {
+        startAt = f;
+      }
+      if (startAt != -1 && !name.startsWith(pivotPrefix)) {
+        endAt = f-1; // we saw the last field in the range before this field
+        break;
+      }
+    }
+    return new int[]{startAt,endAt};
+  }
+
+  public static final void fillPivotFieldValues(String rawValue, Object[] row, StructType schema, String pivotPrefix) {
+    int[] range = getPivotFieldRange(schema, pivotPrefix);
+    for (int i=range[0]; i <= range[1]; i++) row[i] = 0;
+    try {
+      row[schema.fieldIndex(pivotPrefix+rawValue.toLowerCase())] = 1;
+    } catch (IllegalArgumentException ia) {
+      row[range[1]] = 1;
+    }
+  }
 }
