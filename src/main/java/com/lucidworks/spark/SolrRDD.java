@@ -34,10 +34,10 @@ import org.apache.spark.mllib.feature.HashingTF;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.VectorUDT;
 import org.apache.spark.mllib.linalg.MatrixUDT;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.DataFrame;
-
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
 
@@ -550,7 +550,7 @@ public class SolrRDD implements Serializable {
     }
 
     if (fields == null || fields.length == 0)
-      throw new IllegalArgumentException("Query ("+query+") does not specify any fields needed to build a schema!");
+      throw new AnalysisException("Query ("+query+") does not specify any fields needed to build a schema!", null, null);
 
     Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
     if (liveNodes.isEmpty())
@@ -594,7 +594,7 @@ public class SolrRDD implements Serializable {
         continue;
 
       // Hit Solr Schema API to get field type for field
-      String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field;
+      String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field+"?showDefaults=true";
       try {
         SolrFieldMeta tvc = null;
         try {
@@ -613,7 +613,7 @@ public class SolrRDD implements Serializable {
 
               tvc = fieldTypeMap.get(dynField);
               if (tvc == null) {
-                String dynamicFieldsUrl = solrBaseUrl+collection+"/schema/dynamicfields/"+dynField;
+                String dynamicFieldsUrl = solrBaseUrl+collection+"/schema/dynamicfields/"+dynField+"?showDefaults=true";
                 try {
                   Map<String, Object> dynFieldMeta =
                     SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), dynamicFieldsUrl, 2);
@@ -635,8 +635,9 @@ public class SolrRDD implements Serializable {
         }
 
         if (tvc == null || tvc.fieldType == null) {
-          log.warn("Can't figure out field type for field: " + field);
-          continue;
+          String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
+          log.error(errMsg);
+          throw new RuntimeException(errMsg);
         }
 
         String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
@@ -648,7 +649,13 @@ public class SolrRDD implements Serializable {
         fieldTypeMap.put(field, tvc);
 
       } catch (Exception exc) {
-        log.warn("Can't get field type for field " + field+" due to: "+exc);
+        String errMsg = "Can't get field type for field " + field + " due to: " + exc;
+        log.error(errMsg);
+        if (exc instanceof RuntimeException) {
+          throw (RuntimeException)exc;
+        } else {
+          throw new RuntimeException(errMsg, exc);
+        }
       }
     }
 

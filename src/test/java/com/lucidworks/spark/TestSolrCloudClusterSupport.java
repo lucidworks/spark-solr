@@ -5,9 +5,12 @@ import java.util.*;
 
 import org.apache.log4j.Logger;
 
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.QueryRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
@@ -154,7 +157,7 @@ public class TestSolrCloudClusterSupport {
         " come up within " + maxWaitMs + " ms! ClusterState: " + printClusterStateInfo(testCollectionName));
 
     long diffMs = (System.currentTimeMillis() - startMs);
-    log.info("Took " + diffMs + " ms to see all replicas become active for "+testCollectionName);
+    log.info("Took " + diffMs + " ms to see all replicas become active for " + testCollectionName);
   }
 
   protected static String printClusterStateInfo(String collection) throws Exception {
@@ -174,4 +177,27 @@ public class TestSolrCloudClusterSupport {
     return cs;
   }
 
+  protected static void dumpSolrCollection(String collection) {
+    dumpSolrCollection(collection, 100);
+  }
+
+  protected static void dumpSolrCollection(String collection, int maxRows) {
+    SolrQuery q = new SolrQuery("*:*");
+    q.setRows(maxRows);
+    dumpSolrCollection(collection, q);
+  }
+
+  protected static void dumpSolrCollection(String collection, SolrQuery solrQuery) {
+    try {
+      QueryResponse qr = cloudSolrServer.query(collection, solrQuery);
+      System.out.println("Found "+qr.getResults().getNumFound()+" docs in "+collection);
+      int i=0;
+      for (SolrDocument doc : qr.getResults()) {
+        System.out.println(i+": "+doc);
+        ++i;
+      }
+    } catch (Exception exc) {
+      log.error("Failed to query Solr collection "+collection+" due to: "+exc);
+    }
+  }
 }
