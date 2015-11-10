@@ -755,7 +755,7 @@ public class SolrRDD implements Serializable {
       SolrFieldMeta tvc = null;
       try {
         try {
-          Map<String, Object> fieldMeta =
+          java.util.Map<String, Object> fieldMeta =
             SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldUrl, 2);
           tvc = new SolrFieldMeta();
           tvc.fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
@@ -769,7 +769,7 @@ public class SolrRDD implements Serializable {
         }
 
         if (tvc == null || tvc.fieldType == null) {
-          String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
+          String errMsg = "Can't figure out field type for field: " + fieldName + ". Check you Solr schema and retry.";
           log.error(errMsg);
           throw new RuntimeException(errMsg);
         }
@@ -780,7 +780,7 @@ public class SolrRDD implements Serializable {
         tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
 
       } catch (Exception exc) {
-        String errMsg = "Can't get field type for field " + field + " due to: " + exc;
+        String errMsg = "Can't get field type for field " + fieldName + " due to: " + exc;
         log.error(errMsg);
         if (exc instanceof RuntimeException) {
           throw (RuntimeException)exc;
@@ -788,7 +788,6 @@ public class SolrRDD implements Serializable {
           throw new RuntimeException(errMsg, exc);
         }
       }
-      disableMultiValued && tvc.isMultiValued && tvc.isDocValues
       if (tvc != null && (tvc.isStored || (tvc.isDocValues && !disableMultiValued && tvc.isMultiValued))) {
         fieldTypeMap.put(field, tvc);
       } else {
@@ -812,14 +811,14 @@ public class SolrRDD implements Serializable {
     }
 
     Collections.sort(values);
-    final Map<String,Double> labelMap = new HashMap<>();
+    final HashMap<String, Double> labelMap = new HashMap<String, Double>();
     double d = 0d;
     for (String label : values) {
       labelMap.put(label, new Double(d));
       d += 1d;
     }
 
-    return labelMap;
+    return (Map<String, Double>) labelMap;
   }
 
   public static QueryResponse querySolr(SolrClient solrServer, SolrQuery solrQuery, int startIndex, String cursorMark) throws SolrServerException {
