@@ -13,6 +13,8 @@ import java.io.Serializable;
 
 public class DefaultSource implements RelationProvider, CreatableRelationProvider, Serializable {
 
+  public static final String SOLR_FORMAT = "solr";
+
   public BaseRelation createRelation(SQLContext sqlContext, Map<String, String> config) {
     SolrRelation solrRelation = null;
     try {

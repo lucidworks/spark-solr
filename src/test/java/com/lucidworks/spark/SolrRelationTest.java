@@ -1,11 +1,12 @@
 package com.lucidworks.spark;
 
-
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.*;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.mllib.classification.LogisticRegressionModel;
@@ -16,6 +17,7 @@ import org.apache.spark.sql.*;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.commons.io.FileUtils;
+import solr.DefaultSource;
 
 import java.io.File;
 import java.util.*;
@@ -30,6 +32,104 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
   protected transient SQLContext sqlContext;
 
+  //@Ignore
+  @Test
+  public void testEventsDataFrame() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+
+    // load test data from json file to index into Solr
+    DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
+    eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
+
+    String testCollection = "testEventsDataFrame";
+    deleteCollection(testCollection);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 1;
+    int replicationFactor = 1;
+    createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+    validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+    deleteCollection(testCollection);
+  }
+
+  @Test
+  public void testAggDataFrame() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+
+    // load test data from json file to index into Solr
+    DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
+    aggDF = aggDF.select("id","aggr_count_l","aggr_id_s","aggr_job_id_s","aggr_type_s",
+        "co_occurring_docIds_counts_ls","co_occurring_docIds_ss","entity_id_s","entity_type_s",
+        "flag_s","grouping_key_s","in_session_ids_counts_ls","in_session_ids_ss","in_user_id_s",
+        "in_user_id_s_counts_ls","in_user_ids_counts_ls","in_user_ids_ss","out_clicks_counts_ls",
+        "out_clicks_ss","out_session_ids_counts_ls","out_session_ids_ss");
+
+    aggDF.printSchema();
+
+    String testCollection = "testAggDataFrame";
+    deleteCollection(testCollection);
+    String confName = "testConfig";
+    File confDir = new File("src/test/resources/conf");
+    int numShards = 1;
+    int replicationFactor = 1;
+    createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+    validateDataFrameStoreLoad(sqlContext, testCollection, aggDF);
+    deleteCollection(testCollection);
+  }
+  
+  protected String array2cdl(String[] arr) {
+    // this is really horrible
+    String str = Arrays.asList(arr).toString();
+    return str.substring(1, str.length() - 1).replaceAll(" ","");
+  }
+  
+  protected Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
+    sourceData = sourceData.sort("id");
+    sourceData.printSchema();
+    Row[] testData = sourceData.collect();
+    String[] cols = sourceData.columns();
+
+    String zkHost = cluster.getZkServer().getZkAddress();
+    Map<String, String> options = new HashMap<String, String>();
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, testCollection);
+    sourceData.write().format(DefaultSource.SOLR_FORMAT).options(options).mode(SaveMode.Overwrite).save();
+    Thread.sleep(1000);
+
+    SolrQuery q = new SolrQuery("*:*");
+    q.setRows(100);
+    q.addSort("id", SolrQuery.ORDER.asc);
+    dumpSolrCollection(testCollection, q);
+
+    // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
+    options.put(SolrRelation.SOLR_FIELD_LIST_PARAM, array2cdl(cols));
+    DataFrame fromSolr = sqlContext.read().format(DefaultSource.SOLR_FORMAT).options(options).load();
+    fromSolr = fromSolr.sort("id");
+    fromSolr.printSchema();
+
+    Row[] docsFromSolr = fromSolr.collect();
+    Set<String> solrCols = new TreeSet<>();
+    solrCols.addAll(Arrays.asList(fromSolr.columns()));
+    for (String col : cols) {
+      assertTrue("expected "+col+" in Solr DataFrame, but only found: "+solrCols, solrCols.contains(col));
+    }
+
+    long actualEvents = docsFromSolr.length;
+    assertTrue("Expected " + testData.length + " docs from Solr, but found: " + actualEvents, actualEvents == testData.length);
+    for (int e=0; e < testData.length; e++) {
+      Row exp = testData[e];
+      Row doc = docsFromSolr[e];
+      for (String col : cols) {
+        Object expVal = exp.get(exp.fieldIndex(col));
+        Object actVal = doc.get(doc.fieldIndex(col));
+        assertEquals("Value mismatch for col "+col+" at row "+e, expVal, actVal);
+      }
+    }
+
+    return docsFromSolr;
+  }
+
+  //@Ignore
   @Test
   public void testFilterSupport() throws Exception {
 
@@ -49,8 +149,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     buildCollection(zkHost, testCollection, testData, 2);
 
     Map<String, String> options = new HashMap<String, String>();
-    options.put("zkhost", zkHost);
-    options.put("collection", testCollection);
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, testCollection);
 
     DataFrame df = sqlContext.read().format("solr").options(options).load();
 
@@ -109,8 +209,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     createCollection("testFilterSupport2", numShards, replicationFactor, 2, confName, confDir);
 
     options = new HashMap<String, String>();
-    options.put("zkhost", zkHost);
-    options.put("collection", "testFilterSupport2");
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, "testFilterSupport2");
 
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
@@ -122,6 +222,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection("testFilterSupport2");
   }
 
+  //@Ignore
   @Test
   public void testNestedDataFrames() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
@@ -152,8 +253,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     HashMap<String, String> options = new HashMap<String, String>();
     String zkHost = cluster.getZkServer().getZkAddress();
     options = new HashMap<String, String>();
-    options.put("zkhost", zkHost);
-    options.put("collection", "testNested");
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, "testNested");
     options.put("preserveschema", "Y");
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
@@ -190,6 +291,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     model.save(jsc.sc(), "NBParquet");
   }
 
+  //@Ignore
   @Test
   public void loadLRParquetIntoSolr() throws Exception {
     createMLModelLRParquet();
@@ -205,8 +307,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     DataFrame dfLR = sqlContext.load("LRParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
-    options.put("zkhost", zkHost);
-    options.put("collection", "TestLR");
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, "TestLR");
     options.put("preserveschema", "Y");
     dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfLR.show();
@@ -222,6 +324,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     FileUtils.forceDelete(lRModel);
   }
 
+  //@Ignore
   @Test
   public void loadNBParquetIntoSolr() throws Exception {
     createMLModelNBParquet();
@@ -237,9 +340,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     DataFrame dfNB = sqlContext.load("NBParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
-    options.put("zkhost", zkHost);
+    options.put(SolrRelation.SOLR_ZK_HOST_PARAM, zkHost);
     options.put("preserveschema", "Y");
-    options.put("collection", "TestNB");
+    options.put(SolrRelation.SOLR_COLLECTION_PARAM, "TestNB");
     dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfNB.show();
     Thread.sleep(5000);
