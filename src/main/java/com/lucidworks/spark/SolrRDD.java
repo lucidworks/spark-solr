@@ -586,6 +586,33 @@ public class SolrRDD implements Serializable {
 
   private static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
 
+    // specific field list
+    StringBuilder sb = new StringBuilder();
+    for (int f=0; f < fields.length; f++) {
+      if (f > 0) sb.append(",");
+      sb.append(fields[f]);
+    }
+    String fl = sb.toString();
+
+    String fieldsUrl = solrBaseUrl+collection+"/schema/fields?showDefaults=true&includeDynamic=true&fl="+fl;
+    List<Map<String, Object>> fieldInfoFromSolr = null;
+    try {
+      Map<String, Object> allFields =
+              SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldsUrl, 2);
+      fieldInfoFromSolr = (List<Map<String, Object>>)allFields.get("fields");
+    } catch (Exception exc) {
+      String errMsg = "Can't get field metadata from Solr using request "+fieldsUrl+" due to: " + exc;
+      log.error(errMsg);
+      if (exc instanceof RuntimeException) {
+        throw (RuntimeException)exc;
+      } else {
+        throw new RuntimeException(errMsg, exc);
+      }
+    }
+
+    // avoid looking up field types more than once
+    Map<String,String> fieldTypeToClassMap = new HashMap<String,String>();
+
     // collect mapping of Solr field to type
     Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();
     for (String field : fields) {
@@ -593,70 +620,50 @@ public class SolrRDD implements Serializable {
       if (fieldTypeMap.containsKey(field))
         continue;
 
-      // Hit Solr Schema API to get field type for field
-      String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field+"?showDefaults=true";
-      try {
-        SolrFieldMeta tvc = null;
-        try {
-          Map<String, Object> fieldMeta =
-            SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldUrl, 2);
+      SolrFieldMeta tvc = null;
+      for (Map<String,Object> map : fieldInfoFromSolr) {
+        String fieldName = (String)map.get("name");
+        if (field.equals(fieldName)) {
           tvc = new SolrFieldMeta();
-          tvc.fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
-          tvc.isMultiValued = SolrJsonSupport.asBool("/field/multiValued", fieldMeta);
-        } catch (SolrException solrExc) {
-          int errCode = solrExc.code();
-          if (errCode == 404) {
-            int lio = field.lastIndexOf('_');
-            if (lio != -1) {
-              // see if the field is a dynamic field
-              String dynField = "*"+field.substring(lio);
+          tvc.fieldType = (String)map.get("type");
 
-              tvc = fieldTypeMap.get(dynField);
-              if (tvc == null) {
-                String dynamicFieldsUrl = solrBaseUrl+collection+"/schema/dynamicfields/"+dynField+"?showDefaults=true";
-                try {
-                  Map<String, Object> dynFieldMeta =
-                    SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), dynamicFieldsUrl, 2);
-                  tvc = new SolrFieldMeta();
-                  tvc.fieldType = SolrJsonSupport.asString("/dynamicField/type", dynFieldMeta);
-                  tvc.isMultiValued = SolrJsonSupport.asBool("/dynamicField/multiValued", dynFieldMeta);
-
-                  fieldTypeMap.put(dynField, tvc);
-                } catch (Exception exc) {
-                  // just ignore this and throw the outer exc
-                  log.error("Failed to get dynamic field information for "+dynField+" due to: "+exc);
-                  throw solrExc;
-                }
-              }
-            }
+          Object multiValued = map.get("multiValued");
+          if (multiValued != null && multiValued instanceof Boolean) {
+            tvc.isMultiValued = ((Boolean)multiValued).booleanValue();
           } else {
-            log.warn("No field metadata from Solr Schema API for "+field+" due to: "+solrExc);
+            tvc.isMultiValued = "true".equals(String.valueOf(multiValued));
           }
         }
+      }
 
-        if (tvc == null || tvc.fieldType == null) {
-          String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
-          log.error(errMsg);
-          throw new RuntimeException(errMsg);
-        }
-
-        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
-        Map<String, Object> fieldTypeMeta =
-          SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
-
-        tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
-
-        fieldTypeMap.put(field, tvc);
-
-      } catch (Exception exc) {
-        String errMsg = "Can't get field type for field " + field + " due to: " + exc;
+      if (tvc == null || tvc.fieldType == null) {
+        String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
         log.error(errMsg);
-        if (exc instanceof RuntimeException) {
-          throw (RuntimeException)exc;
-        } else {
-          throw new RuntimeException(errMsg, exc);
+        throw new RuntimeException(errMsg);
+      }
+
+      String fieldTypeClass = fieldTypeToClassMap.get(tvc.fieldType);
+      if (fieldTypeClass != null) {
+        tvc.fieldTypeClass = fieldTypeClass;
+      } else {
+        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
+        try {
+          Map<String, Object> fieldTypeMeta =
+                  SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
+          tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
+          fieldTypeToClassMap.put(tvc.fieldType, tvc.fieldTypeClass);
+        } catch (Exception exc) {
+          String errMsg = "Can't get field type metadata for "+tvc.fieldType+" from Solr due to: " + exc;
+          log.error(errMsg);
+          if (exc instanceof RuntimeException) {
+            throw (RuntimeException)exc;
+          } else {
+            throw new RuntimeException(errMsg, exc);
+          }
         }
       }
+
+      fieldTypeMap.put(field, tvc);
     }
 
     return fieldTypeMap;
