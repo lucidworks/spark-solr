@@ -736,7 +736,7 @@ public class SolrRDD implements Serializable {
               java.util.Set<String> fieldNamesSet = fieldsMap.keySet();
               schemaFieldMap = getFieldTypes(fieldNamesSet.toArray(new String[fieldNamesSet.size()]), solrBaseUrl, collection);
           } catch (SolrException solrExc) {
-              log.warn("Can't get field type for field " + collection+" due to: "+solrExc);
+              log.warn("Can't get field types for " + collection+" due to: "+solrExc);
           }
       } catch (Exception exc) {
           log.warn("Can't get schema fields for " + collection + " due to: "+exc);
@@ -745,54 +745,109 @@ public class SolrRDD implements Serializable {
   }
 
   private static java.util.Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+
+    // specific field list
+    StringBuilder sb = new StringBuilder();
+    for (int f=0; f < fields.length; f++) {
+      if (f > 0) sb.append(",");
+      sb.append(fields[f]);
+    }
+    String fl = sb.toString();
+
+    String fieldsUrl = solrBaseUrl+collection+"/schema/fields?showDefaults=true&includeDynamic=true&fl="+fl;
+    java.util.List<java.util.Map<String, Object>> fieldInfoFromSolr = null;
+    try {
+      java.util.Map<String, Object> allFields =
+              SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldsUrl, 2);
+      fieldInfoFromSolr = (java.util.List<java.util.Map<String, Object>>)allFields.get("fields");
+    } catch (Exception exc) {
+      String errMsg = "Can't get field metadata from Solr using request "+fieldsUrl+" due to: " + exc;
+      log.error(errMsg);
+      if (exc instanceof RuntimeException) {
+        throw (RuntimeException)exc;
+      } else {
+        throw new RuntimeException(errMsg, exc);
+      }
+    }
+
+    // avoid looking up field types more than once
+    java.util.Map<String,String> fieldTypeToClassMap = new HashMap<String,String>();
+
     // collect mapping of Solr field to type
     java.util.Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();
     for (String field : fields) {
+
       if (fieldTypeMap.containsKey(field))
         continue;
-      // Hit Solr Schema API to get field type for field
-      String fieldUrl = solrBaseUrl+collection+"/schema/fields/"+field+"?showDefaults=true&includeDynamic=true";
+
       SolrFieldMeta tvc = null;
-      try {
-        try {
-          java.util.Map<String, Object> fieldMeta =
-            SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldUrl, 2);
+      for (java.util.Map<String,Object> map : fieldInfoFromSolr) {
+        String fieldName = (String)map.get("name");
+        if (field.equals(fieldName)) {
           tvc = new SolrFieldMeta();
-          tvc.fieldType = SolrJsonSupport.asString("/field/type", fieldMeta);
-          tvc.isRequired = SolrJsonSupport.asBool("/field/required", fieldMeta);
-          tvc.isMultiValued = SolrJsonSupport.asBool("/field/multiValued", fieldMeta);
-          tvc.isDocValues = SolrJsonSupport.asBool("/field/docValues", fieldMeta);
-          tvc.isStored = SolrJsonSupport.asBool("/field/stored", fieldMeta);
-          tvc.dynamicBase = SolrJsonSupport.asString("/field/dynamicBase", fieldMeta);
-        } catch (SolrException solrExc) {
-          log.warn("No field metadata from Solr Schema API for "+field+" due to: "+solrExc);
+          tvc.fieldType = (String)map.get("type");
+          Object required = map.get("required");
+          if (required != null && required instanceof Boolean) {
+            tvc.isRequired = ((Boolean)required).booleanValue();
+          } else {
+            tvc.isRequired = "true".equals(String.valueOf(required));
+          }
+          Object multiValued = map.get("multiValued");
+          if (multiValued != null && multiValued instanceof Boolean) {
+            tvc.isMultiValued = ((Boolean)multiValued).booleanValue();
+          } else {
+            tvc.isMultiValued = "true".equals(String.valueOf(multiValued));
+          }
+          Object docValues = map.get("docValues");
+          if (docValues != null && docValues instanceof Boolean) {
+            tvc.isDocValues = ((Boolean)docValues).booleanValue();
+          } else {
+            tvc.isDocValues = "true".equals(String.valueOf(docValues));
+          }
+          Object stored = map.get("stored");
+          if (stored != null && stored instanceof Boolean) {
+            tvc.isStored = ((Boolean)stored).booleanValue();
+          } else {
+            tvc.isStored = "true".equals(String.valueOf(stored));
+          }
+          Object dynamicBase = map.get("dynamicBase");
+          if (dynamicBase != null && dynamicBase instanceof String) {
+            tvc.dynamicBase = (String)dynamicBase;
+          }
         }
+      }
 
-        if (tvc == null || tvc.fieldType == null) {
-          String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
-          log.error(errMsg);
-          throw new RuntimeException(errMsg);
-        }
-        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
-        java.util.Map<String, Object> fieldTypeMeta =
-          SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
-
-        tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
-
-      } catch (Exception exc) {
-        String errMsg = "Can't get field type for field " + field + " due to: " + exc;
+      if (tvc == null || tvc.fieldType == null) {
+        String errMsg = "Can't figure out field type for field: " + field + ". Check your Solr schema and retry.";
         log.error(errMsg);
-        if (exc instanceof RuntimeException) {
-          throw (RuntimeException)exc;
-        } else {
-          throw new RuntimeException(errMsg, exc);
+        throw new RuntimeException(errMsg);
+      }
+
+      String fieldTypeClass = fieldTypeToClassMap.get(tvc.fieldType);
+      if (fieldTypeClass != null) {
+        tvc.fieldTypeClass = fieldTypeClass;
+      } else {
+        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
+        try {
+          java.util.Map<String, Object> fieldTypeMeta =
+                  SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
+          tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
+          fieldTypeToClassMap.put(tvc.fieldType, tvc.fieldTypeClass);
+        } catch (Exception exc) {
+          String errMsg = "Can't get field type metadata for "+tvc.fieldType+" from Solr due to: " + exc;
+          log.error(errMsg);
+          if (exc instanceof RuntimeException) {
+            throw (RuntimeException)exc;
+          } else {
+            throw new RuntimeException(errMsg, exc);
+          }
         }
       }
       if (!(tvc.isStored || tvc.isDocValues)) {
         log.warn("Can't retrieve an index only field: " + field);
         tvc = null;
       }
-      if (disableMultiValued && tvc.isMultiValued && tvc.isDocValues) {
+      if (tvc != null && disableMultiValued && tvc.isMultiValued && tvc.isDocValues) {
         log.warn("Can't retrieve a multiValued docValues field: " + field);
         tvc = null;
       }
