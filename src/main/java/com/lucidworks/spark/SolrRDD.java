@@ -731,9 +731,9 @@ public class SolrRDD implements Serializable {
       java.util.Map<String,SolrFieldMeta> schemaFieldMap = new HashMap<String,SolrFieldMeta>();
       try {
           try {
-              Map<String, Object> adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), lukeUrl, 2);
-              Map<String, Object> fieldsMap = SolrJsonSupport.asMap("/fields", adminMeta);
-              Set<String> fieldNamesSet = fieldsMap.keySet();
+              java.util.Map<String, Object> adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), lukeUrl, 2);
+              java.util.Map<String, Object> fieldsMap = SolrJsonSupport.asMap("/fields", adminMeta);
+              java.util.Set<String> fieldNamesSet = fieldsMap.keySet();
               schemaFieldMap = getFieldTypes(fieldNamesSet.toArray(new String[fieldNamesSet.size()]), solrBaseUrl, collection);
           } catch (SolrException solrExc) {
               log.warn("Can't get field type for field " + collection+" due to: "+solrExc);
@@ -744,9 +744,9 @@ public class SolrRDD implements Serializable {
       return schemaFieldMap;
   }
 
-  private static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+  private static java.util.Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
     // collect mapping of Solr field to type
-    Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();
+    java.util.Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();
     for (String field : fields) {
       if (fieldTypeMap.containsKey(field))
         continue;
@@ -769,7 +769,7 @@ public class SolrRDD implements Serializable {
         }
 
         if (tvc == null || tvc.fieldType == null) {
-          String errMsg = "Can't figure out field type for field: " + fieldName + ". Check you Solr schema and retry.";
+          String errMsg = "Can't figure out field type for field: " + field + ". Check you Solr schema and retry.";
           log.error(errMsg);
           throw new RuntimeException(errMsg);
         }
@@ -780,7 +780,7 @@ public class SolrRDD implements Serializable {
         tvc.fieldTypeClass = SolrJsonSupport.asString("/fieldType/class", fieldTypeMeta);
 
       } catch (Exception exc) {
-        String errMsg = "Can't get field type for field " + fieldName + " due to: " + exc;
+        String errMsg = "Can't get field type for field " + field + " due to: " + exc;
         log.error(errMsg);
         if (exc instanceof RuntimeException) {
           throw (RuntimeException)exc;
