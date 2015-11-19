@@ -26,7 +26,6 @@ import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
 
 import scala.Tuple2;
-import scala.collection.immutable.Map;
 
 
 public class SchemaPreservingSolrRDD extends SolrRDD {
@@ -40,7 +39,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     super(zkHost, collection, null);
   }
 
-  public SchemaPreservingSolrRDD(String zkHost, String collection, Map<String,String> config) {
+  public SchemaPreservingSolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) {
       super(zkHost, collection, config);
   }
   
@@ -60,7 +59,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
   public static StructField recurseReadSchema(SolrDocument doc, SolrClient solr, List<StructField> fldr, String collection) throws IOException, SolrServerException {
     Boolean recurse = true;
     String finalName = null;
-    for (java.util.Map.Entry<String, Object> field : doc.entrySet()) {
+    for (Map.Entry<String, Object> field : doc.entrySet()) {
       String name = field.getKey();
       Object value = field.getValue();
       if (name.startsWith("links")) {
@@ -130,7 +129,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         return new Tuple2<String, SolrDocument>(solrDocument.get("id").toString(), solrDocument);
       }
     });
-    final java.util.Map<String, SolrDocument> childMap = childdocs.collectAsMap();
+    final Map<String, SolrDocument> childMap = childdocs.collectAsMap();
     JavaRDD<Row> rows = rootdocs.map(new Function<SolrDocument, Row>() {
       @Override
       public Row call(SolrDocument solrDocument) throws Exception {
@@ -141,14 +140,14 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     return rows;
   }
 
-  public Row readData(SolrDocument doc, StructType st, String collection, java.util.Map<String, SolrDocument> childMap) throws IOException, SolrServerException {
+  public Row readData(SolrDocument doc, StructType st, String collection, Map<String, SolrDocument> childMap) throws IOException, SolrServerException {
     ArrayList<Object> str = new ArrayList<Object>();
     return recurseDataRead(doc , str, st, collection, childMap);
   }
 
-  public Row recurseDataRead(SolrDocument doc, ArrayList<Object> x, StructType st, String collection, java.util.Map<String, SolrDocument> childMap) {
+  public Row recurseDataRead(SolrDocument doc, ArrayList<Object> x, StructType st, String collection, Map<String, SolrDocument> childMap) {
     Boolean recurse = true;
-    java.util.Map<String, Object> x1 = doc.getFieldValueMap();
+    Map<String, Object> x1 = doc.getFieldValueMap();
     String[] x3 = st.fieldNames();
     Object[] x2 = x1.keySet().toArray();
     for (int i = 0; i < x2.length; i++) {
@@ -438,11 +437,11 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     int level = 0;
     Iterator it = uniqueIdentifier.entrySet().iterator();
     while (it.hasNext()) {
-      java.util.Map.Entry pair = (java.util.Map.Entry)it.next();
+      Map.Entry pair = (Map.Entry)it.next();
       s.addField(pair.getKey().toString(), pair.getValue());
     }
     if (!s.containsKey("id")){
-      String id = java.util.UUID.randomUUID().toString();
+      String id = UUID.randomUUID().toString();
       s.addField("id",id);
     }
     s.addField("__lwroot_s", "root");
@@ -456,11 +455,11 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         SolrInputDocument solrDocument = new SolrInputDocument();
         Iterator it = uniqueIdentifier.entrySet().iterator();
         while (it.hasNext()) {
-          java.util.Map.Entry pair = (java.util.Map.Entry)it.next();
+          Map.Entry pair = (Map.Entry)it.next();
           solrDocument.addField(pair.getKey().toString(), pair.getValue());
         }
         if (!solrDocument.containsKey("id")) {
-          String idData = java.util.UUID.randomUUID().toString();
+          String idData = UUID.randomUUID().toString();
           solrDocument.addField("id", idData);
         }
         solrDocument.addField("__lwroot_s", "root");
@@ -482,7 +481,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
       if (sf.dataType().typeName().toString().toLowerCase().equals("struct")){
         linkCount = linkCount + 1;
         SolrInputDocument sc = new SolrInputDocument();
-        String id = java.util.UUID.randomUUID().toString();
+        String id = UUID.randomUUID().toString();
         sc.addField("id",id);
         s.addField("links"+linkCount +"_s", id);
         l = l + 1;
@@ -508,7 +507,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
       if (sf.dataType().typeName().toString().toLowerCase().equals("struct")) {
         linkCount = linkCount + 1;
         SolrInputDocument solrDocument1 = new SolrInputDocument();
-        String idChild = java.util.UUID.randomUUID().toString();
+        String idChild = UUID.randomUUID().toString();
         solrDocument1.addField("id", idChild);
         solrDocument.addField("links" + linkCount + "_s", idChild);
         solrDocument1.addField("__lwchilddocname_s", sf.name());

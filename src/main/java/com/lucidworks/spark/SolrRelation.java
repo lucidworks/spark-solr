@@ -21,16 +21,10 @@ import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import scala.Option;
 import scala.collection.JavaConverters;
-import scala.collection.immutable.Map;
 
 public class SolrRelation extends BaseRelation implements Serializable, TableScan, PrunedFilteredScan, InsertableRelation {
 
@@ -50,11 +44,11 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   public SolrRelation() {}
 
-  public SolrRelation(SQLContext sqlContext, Map<String,String> config) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config) throws Exception {
     this(sqlContext, config, null);
   }
 
-  public SolrRelation(SQLContext sqlContext, Map<String,String> config, DataFrame dataFrame) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config, DataFrame dataFrame) throws Exception {
 
     if (sqlContext == null)
       throw new IllegalArgumentException("SQLContext cannot be null!");
@@ -103,7 +97,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     // start with solr. to pass to the query as additional params,
     // but skip the q and fl as they are first-class options for this relation
     addlSolrParams = new ModifiableSolrParams();
-    java.util.Map<String,String> configMap = JavaConverters.asJavaMapConverter(config).asJava();
+    Map<String,String> configMap = JavaConverters.asJavaMapConverter(config).asJava();
     for (String key : configMap.keySet()) {
       if (key.startsWith("solr.")) {
         String param = key.substring(5);
@@ -198,7 +192,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   // derive a schema for a specific query from the full collection schema
   protected StructType deriveQuerySchema(String[] fields) {
-    java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+    Map<String,StructField> fieldMap = new HashMap<String,StructField>();
     for (StructField f : solrRDD.getSchema().fields()) fieldMap.put(f.name(), f);
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (String field : fields) listOfFields.add(fieldMap.get(field));
@@ -240,7 +234,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   }
   
   protected String attributeToFieldName(String attribute) {
-      java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+      Map<String,StructField> fieldMap = new HashMap<String,StructField>();
       for (StructField f : solrRDD.getSchema().fields()) fieldMap.put(f.name(), f);
       StructField field = fieldMap.get(attribute.replaceAll("`",""));
       if (field != null) {
