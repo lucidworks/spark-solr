@@ -57,7 +57,6 @@ public class SolrRDD implements Serializable {
   public static String SOLR_PARALLEL_SHARDS = "parallel_shards";
   public static String PRESERVE_SCHEMA = "preserveschema";
   public static String ESCAPE_FIELDNAMES = "escape_fieldnames";
-  public static String DISABLE_MULTIVALUED = "disable_multivalued";
   public static SolrQuery ALL_DOCS = toQuery(null);
 
   public static SolrQuery toQuery(String queryString) {
@@ -167,7 +166,6 @@ public class SolrRDD implements Serializable {
   protected String collection;
   protected static scala.collection.immutable.Map<String,String> config;
   protected static Boolean escapeFields = false;
-  protected static Boolean disableMultiValued = false;
   protected static StructType schema;
   protected static String uniqueKey = "id";
   protected transient JavaSparkContext sc;
@@ -192,7 +190,6 @@ public class SolrRDD implements Serializable {
     this.collection = collection;
     this.config = config;
     this.escapeFields = Boolean.parseBoolean(optionalParam(config, ESCAPE_FIELDNAMES, "false"));
-    this.disableMultiValued = Boolean.parseBoolean(optionalParam(config, DISABLE_MULTIVALUED, "false"));
     try {
         String solrBaseUrl = getSolrBaseUrl(zkHost);
         // Hit Solr Schema API to get base information
@@ -630,7 +627,7 @@ public class SolrRDD implements Serializable {
               Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
               Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
               Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-              if (isDocValues && !(isMultiValued && disableMultiValued)) {
+              if (!isStored && isDocValues && !isMultiValued) {
                   fieldList[f] = field.name() + ":field("+fieldName+")";
               } else {
                   fieldList[f] = field.name() + ":" + fieldName;
@@ -650,10 +647,7 @@ public class SolrRDD implements Serializable {
         for (int f = 0; f < fields.length; f++) {
           StructField field = fields[f];
           Metadata meta = field.metadata();
-          String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
           Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
-          Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
-          Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
           Object fieldValue = isMultiValued ? doc.getFieldValues(field.name()) : doc.getFieldValue(field.name());;
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
@@ -844,7 +838,7 @@ public class SolrRDD implements Serializable {
         log.warn("Can't retrieve an index only field: " + field);
         tvc = null;
       }
-      if (tvc != null && disableMultiValued && tvc.isMultiValued && tvc.isDocValues) {
+      if (tvc != null && tvc.isMultiValued && tvc.isDocValues) {
         log.warn("Can't retrieve a multiValued docValues field: " + field);
         tvc = null;
       }
