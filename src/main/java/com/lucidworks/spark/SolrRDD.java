@@ -42,8 +42,6 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
 
-import scala.Option;
-
 public class SolrRDD implements Serializable {
 
   public static Logger log = Logger.getLogger(SolrRDD.class);
@@ -212,7 +210,7 @@ public class SolrRDD implements Serializable {
   }
 
     protected static String optionalParam(scala.collection.immutable.Map<String,String> config, String param, String defaultValue) {
-      Option opt = config.get(param);
+      scala.Option<String> opt = config.get(param);
       String val = (opt != null && !opt.isEmpty()) ? (String)opt.get() : null;
       return (val == null || val.trim().isEmpty()) ? defaultValue : val;
     }

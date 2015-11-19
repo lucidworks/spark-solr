@@ -25,9 +25,6 @@ import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.types.*;
 import org.apache.spark.sql.Row;
 
-import scala.Tuple2;
-
-
 public class SchemaPreservingSolrRDD extends SolrRDD {
   public static Logger log = Logger.getLogger(SolrRDD.class);
 
@@ -125,8 +122,8 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
       }
     }).mapToPair(new PairFunction<SolrDocument, String, SolrDocument>() {
       @Override
-      public Tuple2<String, SolrDocument> call(SolrDocument solrDocument){
-        return new Tuple2<String, SolrDocument>(solrDocument.get("id").toString(), solrDocument);
+      public scala.Tuple2<String, SolrDocument> call(SolrDocument solrDocument){
+        return new scala.Tuple2<String, SolrDocument>(solrDocument.get("id").toString(), solrDocument);
       }
     });
     final Map<String, SolrDocument> childMap = childdocs.collectAsMap();
