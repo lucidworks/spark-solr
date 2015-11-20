@@ -19,33 +19,6 @@
         </license>
     </licenses>
 
-    <developers>
-        <developer>
-            <name>Tim Potter</name>
-            <email>tim.potter@lucidworks.com</email>
-            <organization>Lucidworks</organization>
-            <organizationUrl>http://www.lucidworks.com</organizationUrl>
-        </developer>
-        <developer>
-            <name>Andrzej Bialecki</name>
-            <email>ab@lucidworks.com</email>
-            <organization>Lucidworks</organization>
-            <organizationUrl>http://www.lucidworks.com</organizationUrl>
-        </developer>
-        <developer>
-            <name>Ganesh Kumar</name>
-            <email>ganesh.kumar@lucidworks.com</email>
-            <organization>Lucidworks</organization>
-            <organizationUrl>http://www.lucidworks.com</organizationUrl>
-        </developer>
-        <developer>
-            <name>Kiran Chitturi</name>
-            <email>kiran.chitturi@lucidworks.com</email>
-            <organization>Lucidworks</organization>
-            <organizationUrl>http://www.lucidworks.com</organizationUrl>
-        </developer>
-    </developers>
-
     <scm>
         <connection>scm:git:git@github.com:LucidWorks/spark-solr.git</connection>
         <developerConnection>scm:git:git@github.com:LucidWorks/spark-solr.git</developerConnection>
