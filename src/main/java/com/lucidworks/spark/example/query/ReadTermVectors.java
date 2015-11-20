@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Generate a JavaRDD<Vector> from term vector information in the Solr index.
+ * Generate a {@code JavaRDD<org.apache.spark.mllib.linalg.Vector>} from term vector information in the Solr index.
  */
 public class ReadTermVectors implements SparkApp.RDDProcessor {
 
