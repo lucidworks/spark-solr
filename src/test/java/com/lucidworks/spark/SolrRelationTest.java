@@ -177,6 +177,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     count = df.filter(df.col("field1_s").equalTo("a")).count();
     assertCount(2, count, "field1_s == a");
 
+    count = df.filter(df.col("field1_s").equalTo("a")).count();
+    assertCount(2, count, "field1_s <=> a");
+
     count = df.filter(df.col("field3_i").gt(3000)).count();
     assertCount(1, count, "field3_i > 3000");
 

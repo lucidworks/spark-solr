@@ -259,6 +259,10 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       EqualTo eq = (EqualTo)f;
       attr = eq.attribute();
       crit = String.valueOf(eq.value());
+    } else if (f instanceof EqualNullSafe) {
+      EqualNullSafe eq = (EqualNullSafe)f;
+      attr = eq.attribute();
+      crit = String.valueOf(eq.value());
     } else if (f instanceof GreaterThan) {
       GreaterThan gt = (GreaterThan)f;
       attr = gt.attribute();
