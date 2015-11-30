@@ -67,7 +67,7 @@ Tweets will start flowing into Solr; be sure to let the streaming job run for a 
 
 [NOTE]
 ====
-The sample command above includes properties for Twitter API credentials which need to be provided by you. 
+The sample command above includes properties for Twitter API credentials which need to be provided by you.
 
 If you don't already have your Twitter API credentials, you will need to set up a Twitter app (https://apps.twitter.com) and get your user and access tokens.
 
@@ -307,20 +307,20 @@ For background on Solr security, see: https://cwiki.apache.org/confluence/displa
 
 The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
 
-For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file that sets the location of your Kerberos keytab file, such as:
+For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
 
 [source]
 Client {
   com.sun.security.auth.module.Krb5LoginModule required
   useKeyTab=true
-  keyTab="/opt/lucidworks-hdpsearch/job/solr.keytab"
+  keyTab="/keytabs/solr.keytab"
   storeKey=true
   useTicketCache=true
   debug=true
   principal="solr";
 };
 
-To use this configuration to authenticate to Solr, you simply need to pass the path using the -solrJaasAuthConfig option, such as:
+To use this configuration to authenticate to Solr, you simply need to pass the path to `jaas-client.conf` created above using the `-solrJaasAuthConfig option`, such as:
 
 [source]
 spark-submit --master yarn-server \
@@ -328,7 +328,7 @@ spark-submit --master yarn-server \
   $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
   hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
   -hdfsPath /user/spark/testdata/syn_sample_50k \
-  -solrJaasAuthConfig=/opt/lucidworks-hdpsearch/job/jaas-client.conf
+  -solrJaasAuthConfig=/path/to/jaas-client.conf
 
 // end::spark-auth[]
 // end::spark-devdocs[]
