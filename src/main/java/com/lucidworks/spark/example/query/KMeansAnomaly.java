@@ -75,9 +75,9 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     options.put("zkhost", zkHost);
     options.put("collection", collection);
     options.put("query", queryStr);
-    options.put(SolrRDD.SOLR_SPLIT_FIELD_PARAM, "_version_");
-    options.put(SolrRDD.SOLR_SPLITS_PER_SHARD_PARAM, "4");
-    options.put(SolrRDD.SOLR_FIELD_LIST_PARAM, "id,_version_,"+UID_FIELD+","+TS_FIELD+",bytes_s,response_s,verb_s");
+    options.put(SolrRelation.SOLR_SPLIT_FIELD_PARAM, "_version_");
+    options.put(SolrRelation.SOLR_SPLITS_PER_SHARD_PARAM, "4");
+    options.put(SolrRelation.SOLR_FIELD_LIST_PARAM, "id,_version_,"+UID_FIELD+","+TS_FIELD+",bytes_s,response_s,verb_s");
 
     // Use the Solr DataSource to load rows from a Solr collection using a query
     // highlights include:
