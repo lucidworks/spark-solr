@@ -19,6 +19,13 @@
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <name>Lucidworks</name>
+            <organization>Lucidworks</organization>
+            <organizationUrl>www.lucidworks.com</organizationUrl>
+        </developer>
+    </developers>
     <scm>
         <connection>scm:git:git@github.com:LucidWorks/spark-solr.git</connection>
         <developerConnection>scm:git:git@github.com:LucidWorks/spark-solr.git</developerConnection>
