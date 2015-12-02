@@ -105,7 +105,7 @@ public class TestSolrCloudClusterSupport {
     long startMs = System.currentTimeMillis();
 
     ZkStateReader zkr = cloudSolrServer.getZkStateReader();
-    zkr.updateClusterState(true); // force the state to be fresh
+    zkr.updateLiveNodes(); // force the state to be fresh
 
     ClusterState cs = zkr.getClusterState();
     Collection<Slice> slices = cs.getActiveSlices(testCollectionName);
@@ -118,7 +118,7 @@ public class TestSolrCloudClusterSupport {
       // refresh state every 2 secs
       if (waitMs % 2000 == 0) {
         log.info("Updating ClusterState");
-        cloudSolrServer.getZkStateReader().updateClusterState(true);
+        cloudSolrServer.getZkStateReader().updateLiveNodes();
       }
 
       cs = cloudSolrServer.getZkStateReader().getClusterState();
@@ -161,7 +161,7 @@ public class TestSolrCloudClusterSupport {
   }
 
   protected static String printClusterStateInfo(String collection) throws Exception {
-    cloudSolrServer.getZkStateReader().updateClusterState(true);
+    cloudSolrServer.getZkStateReader().updateLiveNodes();
     String cs = null;
     ClusterState clusterState = cloudSolrServer.getZkStateReader().getClusterState();
     if (collection != null) {

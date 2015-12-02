@@ -35,8 +35,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.7</java.version>
-        <spark.version>1.5.1</spark.version>
-        <solr.version>5.2.1</solr.version>
+        <spark.version>1.5.2</spark.version>
+        <solr.version>5.3.1</solr.version>
         <scala.version>2.10.4</scala.version>
         <scala.binary.version>2.10</scala.binary.version>
         <MaxPermSize>128m</MaxPermSize>
