@@ -91,7 +91,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     if (this.fieldList != null && this.fieldList.length > 0) {
       solrQuery.setFields(this.fieldList);
     } else {
-      solrQuery.remove("fl");
+      applyDefaultFields();
     }
 
     if (rows != null) {
@@ -159,11 +159,11 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
         if (this.fieldList != null && this.fieldList.length > 0) {
           solrQuery.setFields(this.fieldList);
         } else {
-          solrQuery.remove("fl");
+          applyDefaultFields();
         }
       }
     } else {
-      solrQuery.remove("fl");
+      applyDefaultFields();
     }
 
     // clear all existing filters
@@ -195,6 +195,22 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       }
     }
     return rows;
+  }
+
+  protected void applyDefaultFields() {
+      StructField[] schemaFields = solrRDD.getSchema().fields();
+      List<String> fieldList = new ArrayList<String>();
+      for (int sf = 0; sf < schemaFields.length; sf++) {
+          StructField schemaField = schemaFields[sf];
+          Metadata meta = schemaField.metadata();
+          Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+          Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+          Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+          if (isStored || (isDocValues && !isMultiValued)) {
+              fieldList.add(schemaField.name());
+          }
+      }
+      solrQuery.setFields(fieldList.toArray(new String[fieldList.size()]));
   }
 
   protected void applyFilter(Filter filter) {

@@ -55,6 +55,7 @@ public class SolrRDD implements Serializable {
   public static String SOLR_SPLITS_PER_SHARD_PARAM = "splits_per_shard";
   public static String SOLR_PARALLEL_SHARDS = "parallel_shards";
   public static String PRESERVE_SCHEMA = "preserveschema";
+  public static String ESCAPE_FIELDNAMES = "escape_fieldnames";
   public static SolrQuery ALL_DOCS = toQuery(null);
 
   public static SolrQuery toQuery(String queryString) {
@@ -163,6 +164,7 @@ public class SolrRDD implements Serializable {
   protected String zkHost;
   protected String collection;
   protected static scala.collection.immutable.Map<String,String> config;
+  protected static Boolean escapeFields = false;
   protected static StructType schema;
   protected static String uniqueKey = "id";
   protected transient JavaSparkContext sc;
@@ -186,6 +188,7 @@ public class SolrRDD implements Serializable {
     this.zkHost = zkHost;
     this.collection = collection;
     this.config = config;
+    this.escapeFields = Boolean.parseBoolean(optionalParam(config, ESCAPE_FIELDNAMES, "false"));
     try {
         String solrBaseUrl = getSolrBaseUrl(zkHost);
         // Hit Solr Schema API to get base information
@@ -316,6 +319,10 @@ public class SolrRDD implements Serializable {
     if (sorts == null || sorts.isEmpty())
         query.addSort(SolrQuery.SortClause.asc(uniqueKey));
 
+    String fields = query.getFields();
+    if (fields != null) {
+        applyFields(fields.split(","), query);
+    }
     // parallelize the requests to the shards
     JavaRDD<SolrDocument> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, SolrDocument>() {
@@ -338,6 +345,11 @@ public class SolrRDD implements Serializable {
     String sorts = query.getSortField();
     if (sorts == null || sorts.isEmpty())
         query.addSort(SolrQuery.SortClause.asc(uniqueKey));
+
+    String fields = query.getFields();
+    if (fields != null) {
+        applyFields(fields.split(","), query);
+    }
 
     // get field type of split field
     final DataType fieldDataType;
@@ -433,6 +445,11 @@ public class SolrRDD implements Serializable {
     if (sorts == null || sorts.isEmpty())
         query.addSort(SolrQuery.SortClause.asc(uniqueKey));
 
+    String fields = query.getFields();
+    if (fields != null) {
+        applyFields(fields.split(","), query);
+    }
+
     // parallelize the requests to the shards
     JavaRDD<Vector> docs = jsc.parallelize(shards, shards.size()).flatMap(
       new FlatMapFunction<String, Vector>() {
@@ -505,6 +522,11 @@ public class SolrRDD implements Serializable {
     String sorts = query.getSortField();
     if (sorts == null || sorts.isEmpty())
         query.addSort(SolrQuery.SortClause.asc(uniqueKey));
+
+    String fields = query.getFields();
+    if (fields != null) {
+        applyFields(fields.split(","), query);
+    }
 
     long startMs = System.currentTimeMillis();
     List<String> cursors = collectCursors(solrClient, query, true);
@@ -595,6 +617,30 @@ public class SolrRDD implements Serializable {
     return sqlContext.applySchema(rows, schema);
   }
 
+  protected static void applyFields(String[] fields, SolrQuery solrQuery) {
+      Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+      for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
+      String[] fieldList = new String[fields.length];
+      for (int f = 0; f < fields.length; f++) {
+          StructField field = fieldMap.get(fields[f].replaceAll("`",""));
+          if (field != null) {
+              Metadata meta = field.metadata();
+              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+              if (!isStored && isDocValues && !isMultiValued) {
+                  fieldList[f] = field.name() + ":field("+fieldName+")";
+              } else {
+                  fieldList[f] = field.name() + ":" + fieldName;
+              }
+          } else {
+              fieldList[f] = fields[f];
+          }
+      }
+      solrQuery.setFields(fieldList);
+  }
+
   public JavaRDD<Row> toRows(StructType schema, JavaRDD<SolrDocument> docs) {
     final StructField[] fields = schema.fields();
     JavaRDD<Row> rows = docs.map(new Function<SolrDocument, Row>() {
@@ -644,6 +690,9 @@ public class SolrRDD implements Serializable {
         if (fieldMeta.fieldType != null) metadata.putString("type", fieldMeta.fieldType);
         if (fieldMeta.dynamicBase != null) metadata.putString("dynamicBase", fieldMeta.dynamicBase);
         if (fieldMeta.fieldTypeClass != null) metadata.putString("class", fieldMeta.fieldTypeClass);
+        if (escapeFields) {
+            fieldName = fieldName.replaceAll("\\.","_");
+        }
         listOfFields.add(DataTypes.createStructField(fieldName, dataType, !fieldMeta.isRequired, metadata.build()));
       }
 
@@ -799,9 +848,12 @@ public class SolrRDD implements Serializable {
           }
         }
       }
-
-      if (!tvc.isStored) {
+      if (!(tvc.isStored || tvc.isDocValues)) {
         log.warn("Can't retrieve an index only field: " + field);
+        tvc = null;
+      }
+      if (tvc != null && !tvc.isStored && tvc.isMultiValued && tvc.isDocValues) {
+        log.warn("Can't retrieve a non stored multiValued docValues field: " + field);
         tvc = null;
       }
       if (tvc != null) {
@@ -847,6 +899,11 @@ public class SolrRDD implements Serializable {
         solrQuery.set("cursorMark", cursorMark);
       } else {
         solrQuery.setStart(startIndex);
+      }
+
+      String fields = solrQuery.getFields();
+      if (fields != null) {
+          applyFields(fields.split(","), solrQuery);
       }
 
       Integer rows = solrQuery.getRows();
