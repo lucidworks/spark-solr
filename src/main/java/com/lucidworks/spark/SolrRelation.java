@@ -14,7 +14,10 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.*;
-import org.apache.spark.sql.types.*;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -24,91 +27,69 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
-import scala.Option;
 import scala.collection.JavaConverters;
-import scala.collection.immutable.Map;
 
 public class SolrRelation extends BaseRelation implements Serializable, TableScan, PrunedFilteredScan, InsertableRelation {
 
   public static Logger log = Logger.getLogger(SolrRelation.class);
 
-  public static String SOLR_ZK_HOST_PARAM = "zkhost";
-  public static String SOLR_COLLECTION_PARAM = "collection";
-  public static String SOLR_QUERY_PARAM = "query";
-  public static String SOLR_FIELD_LIST_PARAM = "fields";
-  public static String SOLR_ROWS_PARAM = "rows";
-  public static String SOLR_SPLIT_FIELD_PARAM = "split_field";
-  public static String SOLR_SPLITS_PER_SHARD_PARAM = "splits_per_shard";
-
-  public static String SOLR_PARALLEL_SHARDS = "parallel_shards";
-
   protected String[] fieldList;
-  public static String PRESERVE_SCHEMA = "preserveschema";
   protected Boolean preserveSchema = false;
-  protected String splitFieldName;
-  protected int splitsPerShard = 1;
   protected SolrQuery solrQuery;
   protected SolrRDD solrRDD;
   protected StructType schema;
   protected ModifiableSolrParams addlSolrParams;
-  protected boolean parallelShards = true;
   protected transient SQLContext sqlContext;
 
   protected Integer rows = null;
 
-  protected transient JavaSparkContext sc;
-
+  protected transient JavaSparkContext jsc;
 
   public SolrRelation() {}
 
-  public SolrRelation(SQLContext sqlContext, Map<String,String> config) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config) throws Exception {
     this(sqlContext, config, null);
   }
 
-  public SolrRelation(SQLContext sqlContext, Map<String,String> config, DataFrame dataFrame) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config, DataFrame dataFrame) throws Exception {
 
     if (sqlContext == null)
       throw new IllegalArgumentException("SQLContext cannot be null!");
 
     this.sqlContext = sqlContext;
-    this.sc =  new JavaSparkContext(sqlContext.sparkContext());
-    String preserveSch = optionalParam(config, PRESERVE_SCHEMA, "N");
+    this.jsc = new JavaSparkContext(sqlContext.sparkContext());
+    String preserveSch = SolrRDD.optionalParam(config, SolrRDD.PRESERVE_SCHEMA, "N");
     if ("Y".equals(preserveSch) || Boolean.parseBoolean(preserveSch)) {
       preserveSchema = true;
     };
-    String zkHost = requiredParam(config, SOLR_ZK_HOST_PARAM);
-    String collection = requiredParam(config, SOLR_COLLECTION_PARAM);
-    String query = optionalParam(config, SOLR_QUERY_PARAM, "*:*");
-    String fieldListParam = optionalParam(config, SOLR_FIELD_LIST_PARAM, null);
+    String zkHost = SolrRDD.requiredParam(config, SolrRDD.SOLR_ZK_HOST_PARAM);
+    String collection = SolrRDD.requiredParam(config, SolrRDD.SOLR_COLLECTION_PARAM);
+    String query = SolrRDD.optionalParam(config, SolrRDD.SOLR_QUERY_PARAM, "*:*");
+    String fieldListParam = SolrRDD.optionalParam(config, SolrRDD.SOLR_FIELD_LIST_PARAM, null);
     if (fieldListParam != null) {
       this.fieldList = fieldListParam.split(",");
     } else {
       this.fieldList = null;
     }
-    String rowsParam = optionalParam(config, SOLR_ROWS_PARAM, null);
+    String rowsParam = SolrRDD.optionalParam(config, SolrRDD.SOLR_ROWS_PARAM, null);
     if (rowsParam != null) {
       this.rows = new Integer(rowsParam);
     }
 
-    parallelShards = Boolean.parseBoolean(optionalParam(config, SOLR_PARALLEL_SHARDS, "true"));
-
-    splitFieldName = optionalParam(config, SOLR_SPLIT_FIELD_PARAM, null);
-    if (splitFieldName != null)
-      splitsPerShard = Integer.parseInt(optionalParam(config, SOLR_SPLITS_PER_SHARD_PARAM, "20"));
-
     if (!preserveSchema) {
-      solrRDD = new SolrRDD(zkHost, collection);
+      solrRDD = new SolrRDD(zkHost, collection, config);
     }
     else {
-      solrRDD = new SchemaPreservingSolrRDD(zkHost, collection);
-      solrRDD.setSc(sc);
+      solrRDD = new SchemaPreservingSolrRDD(zkHost, collection, config);
+      solrRDD.setSc(jsc);
     }
 
     solrQuery = SolrRDD.toQuery(query);
 
-    if (fieldList != null) {
-      solrQuery.setFields(fieldList);
+    if (this.fieldList != null && this.fieldList.length > 0) {
+      solrQuery.setFields(this.fieldList);
     } else {
       solrQuery.remove("fl");
     }
@@ -121,7 +102,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     // start with solr. to pass to the query as additional params,
     // but skip the q and fl as they are first-class options for this relation
     addlSolrParams = new ModifiableSolrParams();
-    java.util.Map<String,String> configMap = JavaConverters.asJavaMapConverter(config).asJava();
+    Map<String,String> configMap = JavaConverters.asJavaMapConverter(config).asJava();
     for (String key : configMap.keySet()) {
       if (key.startsWith("solr.")) {
         String param = key.substring(5);
@@ -137,24 +118,16 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     solrQuery.add(addlSolrParams);
 
     solrQuery.set("collection", collection);
+
     if (dataFrame != null) {
       schema = dataFrame.schema();
+    } else if (this.fieldList != null && this.fieldList.length > 0) {
+      schema = solrRDD.deriveQuerySchema(this.fieldList);
     } else {
       schema = solrRDD.getQuerySchema(solrQuery);
     }
   }
 
-  protected String optionalParam(Map<String,String> config, String param, String defaultValue) {
-    Option opt = config.get(param);
-    String val = (opt != null && !opt.isEmpty()) ? (String)opt.get() : null;
-    return (val == null || val.trim().isEmpty()) ? defaultValue : val;
-  }
-
-  protected String requiredParam(Map<String,String> config, String param) {
-    String val = optionalParam(config, param, null);
-    if (val == null) throw new IllegalArgumentException(param+" parameter is required!");
-    return val;
-  }
 
   public SolrQuery getQuery() {
     return solrQuery;
@@ -183,14 +156,13 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       if (fields != null && fields.length > 0) {
         solrQuery.setFields(fields);
       } else {
-        if (this.fieldList != null) {
+        if (this.fieldList != null && this.fieldList.length > 0) {
           solrQuery.setFields(this.fieldList);
         } else {
           solrQuery.remove("fl");
         }
       }
-    }
-    else {
+    } else {
       solrQuery.remove("fl");
     }
 
@@ -211,9 +183,8 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     try {
 
       // build the schema based on the desired fields - applicable only for non-schemapreserving dataframes in solr
-      StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? deriveQuerySchema(fields) : schema;
-      JavaRDD<SolrDocument> docs = parallelShards ?
-              solrRDD.queryShards(sc, solrQuery, splitFieldName, splitsPerShard) : solrRDD.queryDeep(sc, solrQuery);
+      StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? solrRDD.deriveQuerySchema(fields) : schema;
+      JavaRDD<SolrDocument> docs = solrRDD.query(jsc, solrQuery);
       rows = solrRDD.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
       if (e instanceof RuntimeException) {
@@ -224,15 +195,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       }
     }
     return rows;
-  }
-
-  // derive a schema for a specific query from the full collection schema
-  protected StructType deriveQuerySchema(String[] fields) {
-    java.util.Map<String,StructField> fieldMap = new HashMap<String,StructField>();
-    for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
-    List<StructField> listOfFields = new ArrayList<StructField>();
-    for (String field : fields) listOfFields.add(fieldMap.get(field));
-    return DataTypes.createStructType(listOfFields);
   }
 
   protected void applyFilter(Filter filter) {
@@ -249,6 +211,18 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     } else {
       solrQuery.addFilterQuery(fq(filter));
     }
+  }
+
+  protected String attributeToFieldName(String attribute) {
+      Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+      for (StructField f : solrRDD.getSchema().fields()) fieldMap.put(f.name(), f);
+      StructField field = fieldMap.get(attribute.replaceAll("`",""));
+      if (field != null) {
+          Metadata meta = field.metadata();
+          String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+          return fieldName;
+      }
+      return attribute;
   }
 
   protected String fq(Filter f) {
@@ -315,7 +289,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     } else {
       throw new IllegalArgumentException("Filters of type '"+f+" ("+f.getClass().getName()+")' not supported!");
     }
-    return negate+attr+":"+crit;
+    return negate+attributeToFieldName(attr)+":"+crit;
   }
 
   public void insert(final DataFrame df, boolean overwrite) {
