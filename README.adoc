@@ -44,7 +44,7 @@ Also, to ensure you can see tweets as they are indexed in near real-time, you sh
 Specifically, for this exercise, we’ll commit tweets every 2 seconds.
 
 [source]
-curl -XPOST http://localhost:8983/solr/socialdata/config \
+curl -X POST http://localhost:8983/solr/socialdata/config \
  -d '{"set-property":{"updateHandler.autoSoftCommit.maxTime":"2000"}}'
 
 Now, let’s populate Solr with tweets using Spark streaming:
