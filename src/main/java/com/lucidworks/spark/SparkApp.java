@@ -11,6 +11,7 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.lucidworks.spark.example.events.Eventsim;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
@@ -243,6 +244,8 @@ public class SparkApp implements Serializable {
       return new TableScanBenchmark();
     else if ("kmeans-anomaly".equals(streamProcType))
       return new KMeansAnomaly();
+    else if ("eventsim".equals(streamProcType))
+      return new Eventsim();
 
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
@@ -271,6 +274,7 @@ public class SparkApp implements Serializable {
     formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
     formatter.printHelp("query-solr-benchmark", getProcessorOptions(new TableScanBenchmark()));
     formatter.printHelp("kmeans-anomaly", getProcessorOptions(new KMeansAnomaly()));
+    formatter.printHelp("eventsim", getProcessorOptions(new Eventsim()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {

@@ -1,5 +1,6 @@
 package com.lucidworks.spark.fusion;
 
+import com.codahale.metrics.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.HttpEntity;
@@ -21,7 +22,6 @@ import org.apache.http.impl.client.*;
 import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.common.SolrException;
 import org.codehaus.jackson.map.ObjectMapper;
 
@@ -38,7 +38,6 @@ import java.net.SocketException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.zip.GZIPOutputStream;
 
 public class FusionPipelineClient {
 
@@ -60,6 +59,7 @@ public class FusionPipelineClient {
   // holds a context and a client object
   static class FusionSession {
     long sessionEstablishedAt = -1;
+    Meter docsSentMeter = null;
   }
 
   List<String> originalEndpoints;
@@ -74,6 +74,9 @@ public class FusionPipelineClient {
   String fusionPass = null;
   String fusionRealm = null;
   AtomicInteger requestCounter = null;
+  Map<String,Meter> metersByHost = new HashMap<>();
+
+  MetricRegistry metrics = null;
 
   static long maxNanosOfInactivity = TimeUnit.NANOSECONDS.convert(599, TimeUnit.SECONDS);
 
@@ -93,13 +96,13 @@ public class FusionPipelineClient {
     // build the HttpClient to be used for all requests
     HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
     httpClientBuilder.setDefaultRequestConfig(globalConfig).setDefaultCookieStore(cookieStore);
+    httpClientBuilder.setMaxConnPerRoute(100);
+    httpClientBuilder.setMaxConnTotal(500);
 
     if (fusionUser != null && fusionRealm == null)
       httpClientBuilder.addInterceptorFirst(new PreEmptiveBasicAuthenticator(fusionUser, fusionPass));
 
     httpClient = httpClientBuilder.build();
-    HttpClientUtil.setMaxConnections(httpClient, 500);
-    HttpClientUtil.setMaxConnectionsPerHost(httpClient, 100);
 
     originalEndpoints = Arrays.asList(endpointUrl.split(","));
     try {
@@ -116,6 +119,24 @@ public class FusionPipelineClient {
     jsonObjectMapper = new ObjectMapper();
 
     requestCounter = new AtomicInteger(0);
+  }
+
+  public void setMetricsRegistry(MetricRegistry metrics) {
+    this.metrics = metrics;
+  }
+
+  protected Meter getMeterByHost(String meterName, String host) {
+
+    if (metrics == null)
+      return null;
+
+    String key = meterName+" ("+host+")";
+    Meter meter =  metersByHost.get(key);
+    if (meter == null) {
+      meter = metrics.meter(meterName + "-" + host);
+      metersByHost.put(key, meter);
+    }
+    return meter;
   }
 
   protected Map<String,FusionSession> establishSessions(List<String> endpoints, String user, String password, String realm) throws Exception {
@@ -215,6 +236,7 @@ public class FusionPipelineClient {
 
     URL fusionUrl = new URL(url);
     String hostAndPort = fusionUrl.getHost()+":"+fusionUrl.getPort();
+    fusionSession.docsSentMeter = getMeterByHost("Docs Sent to Fusion", hostAndPort);
 
     return fusionSession;
   }
@@ -398,9 +420,8 @@ public class FusionPipelineClient {
       this.jsonObj = jsonObj;
     }
 
-    @Override
     public void writeTo(OutputStream outputStream) throws IOException {
-      mapper.writeValue(new GZIPOutputStream(outputStream), jsonObj);
+      mapper.writeValue(outputStream, jsonObj);
     }
   }
 
@@ -429,8 +450,8 @@ public class FusionPipelineClient {
 
       // stream the json directly to the HTTP output
       EntityTemplate et = new EntityTemplate(new JacksonContentProducer(jsonObjectMapper, docs));
-      et.setContentType("application/json; charset=utf-8");
-      et.setContentEncoding("gzip");//StandardCharsets.UTF_8.name());
+      et.setContentType("application/json");
+      et.setContentEncoding(StandardCharsets.UTF_8.name());
       postRequest.setEntity(et); // new BufferedHttpEntity(et));
 
       HttpClientContext context = HttpClientContext.create();
@@ -473,6 +494,8 @@ public class FusionPipelineClient {
         raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
       } else {
         // OK!
+        if (fusionSession != null && fusionSession.docsSentMeter != null)
+          fusionSession.docsSentMeter.mark(docs.size());
       }
     } finally {
 
