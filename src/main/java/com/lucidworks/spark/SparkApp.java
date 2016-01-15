@@ -45,7 +45,7 @@ public class SparkApp implements Serializable {
   /**
    * Defines the interface to a Spark RDD processing implementation that can be run from this command-line app.
    */
-  public static interface RDDProcessor extends Serializable {
+  public interface RDDProcessor extends Serializable {
     String getName();
     Option[] getOptions();
     int run(SparkConf conf, CommandLine cli) throws Exception;
