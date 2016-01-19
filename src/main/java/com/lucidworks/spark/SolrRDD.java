@@ -849,18 +849,20 @@ public class SolrRDD implements Serializable {
         }
       }
       if (!(tvc.isStored || tvc.isDocValues)) {
-        log.warn("Can't retrieve an index only field: " + field);
+        log.info("Can't retrieve an index only field: " + field);
         tvc = null;
       }
       if (tvc != null && !tvc.isStored && tvc.isMultiValued && tvc.isDocValues) {
-        log.warn("Can't retrieve a non stored multiValued docValues field: " + field);
+        log.info("Can't retrieve a non stored multiValued docValues field: " + field);
         tvc = null;
       }
       if (tvc != null) {
         fieldTypeMap.put(field, tvc);
       }
     }
-
+    if (fieldTypeMap.isEmpty()) {
+      log.warn("No readable fields found!");
+    }
     return fieldTypeMap;
   }
 
