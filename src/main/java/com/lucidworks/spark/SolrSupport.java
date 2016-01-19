@@ -1,5 +1,6 @@
 package com.lucidworks.spark;
 
+
 import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
@@ -10,15 +11,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.ConnectException;
 import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -36,6 +29,7 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.cloud.*;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -43,6 +37,9 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import scala.Tuple2;
+
+import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
+
 
 import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
 
@@ -72,6 +69,10 @@ public class SolrSupport implements Serializable {
     }
   }
 
+  public static CloudSolrClient getSolrClient(String zkHost) {
+   return getSolrServer(zkHost);
+  }
+
   public static CloudSolrClient getSolrServer(String key) {
     CloudSolrClient solr = null;
     synchronized (solrServers) {
@@ -84,6 +85,17 @@ public class SolrSupport implements Serializable {
       }
     }
     return solr;
+  }
+
+  public static String getSolrBaseUrl(String zkHost) throws Exception {
+    CloudSolrClient solrServer = getSolrClient(zkHost);
+    Set<String> liveNodes = solrServer.getZkStateReader().getClusterState().getLiveNodes();
+    if (liveNodes.isEmpty())
+      throw new RuntimeException("No live nodes found for cluster: " + zkHost);
+    String solrBaseUrl = solrServer.getZkStateReader().getBaseUrlForNodeName(liveNodes.iterator().next());
+    if (!solrBaseUrl.endsWith("?"))
+      solrBaseUrl += "/";
+    return solrBaseUrl;
   }
 
   public static void streamDocsIntoSolr(final String zkHost,
@@ -154,8 +166,7 @@ public class SolrSupport implements Serializable {
   public static void indexDStreamOfDocs(final String zkHost,
                                         final String collection,
                                         final int batchSize,
-                                        JavaDStream<SolrInputDocument> docs)
-  {
+                                        JavaDStream<SolrInputDocument> docs) {
     docs.foreachRDD(
       new Function<JavaRDD<SolrInputDocument>, Void>() {
         public Void call(JavaRDD<SolrInputDocument> solrInputDocumentJavaRDD) throws Exception {
@@ -171,17 +182,17 @@ public class SolrSupport implements Serializable {
         new Function<JavaRDD<Object>, Void>() {
           public Void call(JavaRDD<Object> rdd) throws Exception {
             rdd.foreachPartition(
-                new VoidFunction<Iterator<Object>>() {
-                  public void call(Iterator<Object> docIter) throws Exception {
-                    String[] creds = (fusionCredentials != null) ? fusionCredentials.split(":") : null;
-                    FusionPipelineClient fusionClient = 
-                        (creds != null) ? new FusionPipelineClient(fusionUrl, creds[0], creds[1], creds[2]) 
-                                        : new FusionPipelineClient(fusionUrl);
-                    List batch = new ArrayList();
-                    Date indexedAt = new Date();
-                    while (docIter.hasNext()) {
-                      Object inputDoc = docIter.next();
-                      batch.add(inputDoc);
+              new VoidFunction<Iterator<Object>>() {
+                public void call(Iterator<Object> docIter) throws Exception {
+                  String[] creds = (fusionCredentials != null) ? fusionCredentials.split(":") : null;
+                  FusionPipelineClient fusionClient =
+                    (creds != null) ? new FusionPipelineClient(fusionUrl, creds[0], creds[1], creds[2])
+                      : new FusionPipelineClient(fusionUrl);
+                  List batch = new ArrayList();
+                  Date indexedAt = new Date();
+                  while (docIter.hasNext()) {
+                    Object inputDoc = docIter.next();
+                    batch.add(inputDoc);
                       if (batch.size() >= batchSize) {
                         fusionClient.postBatchToPipeline(batch);
                         batch.clear();
@@ -460,5 +471,51 @@ public class SolrSupport implements Serializable {
 
     return enriched;
   }
+
+  // TODO: need to build up a LBSolrServer here with all possible replicas
+
+  public static List<String> buildShardList(CloudSolrClient cloudSolrServer, String collection) {
+    ZkStateReader zkStateReader = cloudSolrServer.getZkStateReader();
+
+    ClusterState clusterState = zkStateReader.getClusterState();
+
+    String[] collections = null;
+    if (clusterState.hasCollection(collection)) {
+      collections = new String[]{collection};
+    } else {
+      // might be a collection alias?
+      Aliases aliases = zkStateReader.getAliases();
+      String aliasedCollections = aliases.getCollectionAlias(collection);
+      if (aliasedCollections == null)
+        throw new IllegalArgumentException("Collection " + collection + " not found!");
+      collections = aliasedCollections.split(",");
+    }
+
+    Set<String> liveNodes = clusterState.getLiveNodes();
+    Random random = new Random(5150);
+
+    List<String> shards = new ArrayList<String>();
+    for (String coll : collections) {
+      for (Slice slice : clusterState.getSlices(coll)) {
+        List<String> replicas = new ArrayList<String>();
+        for (Replica r : slice.getReplicas()) {
+          if (r.getState().equals(Replica.State.ACTIVE)) {
+            ZkCoreNodeProps replicaCoreProps = new ZkCoreNodeProps(r);
+            if (liveNodes.contains(replicaCoreProps.getNodeName()))
+              replicas.add(replicaCoreProps.getCoreUrl());
+          }
+        }
+        int numReplicas = replicas.size();
+        if (numReplicas == 0)
+          throw new IllegalStateException("Shard " + slice.getName() + " in collection "+
+                  coll+" does not have any active replicas!");
+
+        String replicaUrl = (numReplicas == 1) ? replicas.get(0) : replicas.get(random.nextInt(replicas.size()));
+        shards.add(replicaUrl);
+      }
+    }
+    return shards;
+  }
+
 
 }

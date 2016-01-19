@@ -1,13 +1,15 @@
 package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.RDDProcessorTestBase;
+import com.lucidworks.spark.SolrQuerySupport;
 import com.lucidworks.spark.SolrRDD;
-import com.lucidworks.spark.SolrRDD.QueryResultsIterator;
+import com.lucidworks.spark.SolrQuerySupport.QueryResultsIterator;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.spark.sql.types.StructType;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -73,8 +75,10 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
     sendDocsThread.start();
     Thread.sleep(2000);
 
+    String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, testCollection);
+    StructType schema = SolrQuerySupport.getBaseSchema(zkHost, testCollection, false);
     //StreamingResultsIterator sri = new StreamingResultsIterator(cloudSolrClient, solrQuery, "*");
-    QueryResultsIterator sri = new QueryResultsIterator(cloudSolrClient, solrQuery, "*");
+    QueryResultsIterator sri = new QueryResultsIterator(cloudSolrClient, solrQuery, "*", uniqueKey, schema);
     int numDocsFound = 0;
     boolean hasNext = false;
     do {

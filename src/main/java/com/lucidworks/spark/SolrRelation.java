@@ -1,5 +1,6 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.util.ScalaUtil;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -60,20 +61,20 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     this.sqlContext = sqlContext;
     this.jsc = new JavaSparkContext(sqlContext.sparkContext());
-    String preserveSch = SolrRDD.optionalParam(config, SolrRDD.PRESERVE_SCHEMA, "N");
+    String preserveSch = ScalaUtil.optionalParam(config, SolrRDD.PRESERVE_SCHEMA, "N");
     if ("Y".equals(preserveSch) || Boolean.parseBoolean(preserveSch)) {
       preserveSchema = true;
     };
-    String zkHost = SolrRDD.requiredParam(config, SolrRDD.SOLR_ZK_HOST_PARAM);
-    String collection = SolrRDD.requiredParam(config, SolrRDD.SOLR_COLLECTION_PARAM);
-    String query = SolrRDD.optionalParam(config, SolrRDD.SOLR_QUERY_PARAM, "*:*");
-    String fieldListParam = SolrRDD.optionalParam(config, SolrRDD.SOLR_FIELD_LIST_PARAM, null);
+    String zkHost = ScalaUtil.requiredParam(config, SolrRDD.SOLR_ZK_HOST_PARAM);
+    String collection = ScalaUtil.requiredParam(config, SolrRDD.SOLR_COLLECTION_PARAM);
+    String query = ScalaUtil.optionalParam(config, SolrRDD.SOLR_QUERY_PARAM, "*:*");
+    String fieldListParam = ScalaUtil.optionalParam(config, SolrRDD.SOLR_FIELD_LIST_PARAM, null);
     if (fieldListParam != null) {
       this.fieldList = fieldListParam.split(",");
     } else {
       this.fieldList = null;
     }
-    String rowsParam = SolrRDD.optionalParam(config, SolrRDD.SOLR_ROWS_PARAM, null);
+    String rowsParam = ScalaUtil.optionalParam(config, SolrRDD.SOLR_ROWS_PARAM, null);
     if (rowsParam != null) {
       this.rows = new Integer(rowsParam);
     }
@@ -86,7 +87,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       solrRDD.setSc(jsc);
     }
 
-    solrQuery = SolrRDD.toQuery(query);
+    solrQuery = SolrQuerySupport.toQuery(query, solrRDD.getUniqueKey());
 
     if (this.fieldList != null && this.fieldList.length > 0) {
       solrQuery.setFields(this.fieldList);

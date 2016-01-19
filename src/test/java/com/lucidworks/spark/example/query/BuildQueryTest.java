@@ -1,5 +1,6 @@
 package com.lucidworks.spark.example.query;
 
+import com.lucidworks.spark.SolrQuerySupport;
 import com.lucidworks.spark.SolrRDD;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.junit.Test;
@@ -18,18 +19,18 @@ public class BuildQueryTest {
   public void testQueryBuilder() {
     SolrQuery q = null;
 
-    q = SolrRDD.toQuery(null);
+    q = SolrQuerySupport.toQuery(null, SolrQuerySupport.DEFAULT_UNIQUE_ID);
     assertEquals("*:*", q.getQuery());
     assertEquals(new Integer(SolrRDD.DEFAULT_PAGE_SIZE), q.getRows());
 
-    q = SolrRDD.toQuery("q=*:*");
+    q = SolrQuerySupport.toQuery("q=*:*", SolrQuerySupport.DEFAULT_UNIQUE_ID);
     assertEquals("*:*", q.getQuery());
     assertEquals(new Integer(SolrRDD.DEFAULT_PAGE_SIZE), q.getRows());
 
     String qs = "text:hello";
     String fq = "price:[100 TO *]";
     String sort = "id";
-    q = SolrRDD.toQuery("q="+encode(qs)+"&fq="+encode(fq)+"&sort="+sort);
+    q = SolrQuerySupport.toQuery("q="+encode(qs)+"&fq="+encode(fq)+"&sort="+sort, SolrQuerySupport.DEFAULT_UNIQUE_ID);
     assertEquals(qs, q.getQuery());
     assertEquals(new Integer(SolrRDD.DEFAULT_PAGE_SIZE), q.getRows());
     assertTrue(q.getFilterQueries().length == 1);

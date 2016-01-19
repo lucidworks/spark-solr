@@ -24,7 +24,7 @@ import org.apache.spark.mllib.clustering.KMeans;
 import org.apache.spark.mllib.clustering.KMeansModel;
 import org.apache.spark.mllib.linalg.Vector;
 
-import com.lucidworks.spark.SolrRDD.PivotField;
+import com.lucidworks.spark.SolrQuerySupport.PivotField;
 
 import java.sql.Timestamp;
 import java.util.HashMap;

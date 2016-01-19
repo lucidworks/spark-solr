@@ -1,5 +1,6 @@
 package com.lucidworks.spark.example.query;
 
+import com.lucidworks.spark.SolrQuerySupport;
 import com.lucidworks.spark.SolrRDD;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
@@ -59,7 +60,7 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
     JavaSparkContext jsc = new JavaSparkContext(conf);
 
     SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-    final SolrQuery solrQuery = SolrRDD.toQuery(queryStr);
+    final SolrQuery solrQuery = SolrQuerySupport.toQuery(queryStr, solrRDD.getUniqueKey());
     JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(jsc.sc(), solrQuery);
 
     JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {

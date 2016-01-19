@@ -29,15 +29,15 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
 
   public static Logger log = Logger.getLogger(SchemaPreservingSolrRDD.class);
 
-  public SchemaPreservingSolrRDD(String collection) {
+  public SchemaPreservingSolrRDD(String collection) throws Exception {
     super("localhost:9983", collection); // assume local embedded ZK if not supplied
   }
 
-  public SchemaPreservingSolrRDD(String zkHost, String collection) {
+  public SchemaPreservingSolrRDD(String zkHost, String collection) throws Exception {
     super(zkHost, collection, new scala.collection.immutable.HashMap<String,String>());
   }
 
-  public SchemaPreservingSolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) {
+  public SchemaPreservingSolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) throws Exception {
     super(zkHost, collection, config);
   }
 
@@ -45,7 +45,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
   public StructType getQuerySchema(SolrQuery query) throws Exception {
     query.addFilterQuery("__lwcategory_s:schema AND __lwroot_s:root");
     JavaRDD<SolrDocument> rdd1 = queryShards(sc, query);
-    return readSchema(rdd1.collect().get(0), getSolrClient(zkHost) , collection);
+    return readSchema(rdd1.collect().get(0), SolrSupport.getSolrClient(zkHost) , collection);
   }
 
   public static StructType readSchema(SolrDocument doc, SolrClient Solr, String collection) throws IOException, SolrServerException {
@@ -82,7 +82,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         if (name.substring(0, name.length() - 2).equals("__lwchilddocname")) {
           finalName = field.getValue().toString();
         } else {
-            fldr.add(new StructField(name.substring(0, name.length() - 2), getsqlDataType(field.getValue().toString()), true, Metadata.empty()));
+            fldr.add(new StructField(name.substring(0, name.length() - 2), SolrQuerySupport.getsqlDataType(field.getValue().toString()), true, Metadata.empty()));
           }
       }
 

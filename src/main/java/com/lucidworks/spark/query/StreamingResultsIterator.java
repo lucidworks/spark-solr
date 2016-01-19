@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.SolrQuerySupport;
 import com.lucidworks.spark.SolrRDD;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -8,6 +9,7 @@ import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -33,12 +35,14 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
   protected LinkedBlockingDeque<SolrDocument> queue;
 
   private CountDownLatch docListInfoLatch = new CountDownLatch(1);
+  private final String uniqueKey;
+  private final StructType schema;
 
-  public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
-    this(solrServer, solrQuery, null);
+  public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String uniqueKey, StructType schema) {
+    this(solrServer, solrQuery, null, uniqueKey, schema);
   }
 
-  public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
+  public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark, String uniqueKey, StructType schema) {
     this.queue = new LinkedBlockingDeque<SolrDocument>();
     this.solrServer = solrServer;
     this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
@@ -46,6 +50,8 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     this.usingCursors = (cursorMark != null);
     this.nextCursorMark = cursorMark;
     this.cursorMarkOfCurrentPage = cursorMark;
+    this.uniqueKey = uniqueKey;
+    this.schema = schema;
     if (solrQuery.getRows() == null)
       solrQuery.setRows(PagedResultsIterator.DEFAULT_PAGE_SIZE); // default page size
   }
@@ -88,7 +94,7 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
     this.cursorMarkOfCurrentPage = nextCursorMark;
-    QueryResponse resp = SolrRDD.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
+    QueryResponse resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this, uniqueKey, schema);
 
     if (usingCursors) {
       nextCursorMark = resp.getNextCursorMark();

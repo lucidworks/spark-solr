@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.SolrQuerySupport;
 import com.lucidworks.spark.SolrRDD;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrClient;
@@ -7,6 +8,7 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocumentList;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.Iterator;
 import java.util.List;
@@ -29,17 +31,22 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
   protected String cursorMark = null;
   protected boolean closeAfterIterating = false;
 
+  protected final String uniqueKey;
+  protected final StructType schema;
+
   protected List<T> currentPage;
 
-  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
-    this(solrServer, solrQuery, null);
+  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String uniqueKey, StructType schema) {
+    this(solrServer, solrQuery, null, uniqueKey, schema);
   }
 
-  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
+  public PagedResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark, String uniqueKey, StructType schema) {
     this.solrServer = solrServer;
     this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
     this.solrQuery = solrQuery;
     this.cursorMark = cursorMark;
+    this.uniqueKey = uniqueKey;
+    this.schema = schema;
     if (solrQuery.getRows() == null)
       solrQuery.setRows(DEFAULT_PAGE_SIZE); // default page size
   }
@@ -70,7 +77,7 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
 
   protected List<T> fetchNextPage() throws SolrServerException {
     int start = (cursorMark != null) ? 0 : getStartForNextPage();
-    QueryResponse resp = SolrRDD.querySolr(solrServer, solrQuery, start, cursorMark);
+    QueryResponse resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMark, uniqueKey, schema);
     if (cursorMark != null)
       cursorMark = resp.getNextCursorMark();
 
