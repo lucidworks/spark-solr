@@ -618,27 +618,29 @@ public class SolrRDD implements Serializable {
   }
 
   protected static void applyFields(String[] fields, SolrQuery solrQuery) {
-      Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+    Map<String,StructField> fieldMap = new HashMap<String,StructField>();
+    if (schema != null) {
       for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
       String[] fieldList = new String[fields.length];
       for (int f = 0; f < fields.length; f++) {
-          StructField field = fieldMap.get(fields[f].replaceAll("`",""));
-          if (field != null) {
-              Metadata meta = field.metadata();
-              String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
-              Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
-              Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
-              Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
-              if (!isStored && isDocValues && !isMultiValued) {
-                  fieldList[f] = field.name() + ":field("+fieldName+")";
-              } else {
-                  fieldList[f] = field.name() + ":" + fieldName;
-              }
+        StructField field = fieldMap.get(fields[f].replaceAll("`",""));
+        if (field != null) {
+          Metadata meta = field.metadata();
+          String fieldName = meta.contains("name") ? meta.getString("name") : field.name();
+          Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+          Boolean isDocValues = meta.contains("docValues") ? meta.getBoolean("docValues") : false;
+          Boolean isStored = meta.contains("stored") ? meta.getBoolean("stored") : false;
+          if (!isStored && isDocValues && !isMultiValued) {
+            fieldList[f] = field.name() + ":field("+fieldName+")";
           } else {
-              fieldList[f] = fields[f];
+            fieldList[f] = field.name() + ":" + fieldName;
           }
+        } else {
+          fieldList[f] = fields[f];
+        }
       }
       solrQuery.setFields(fieldList);
+    }
   }
 
   public JavaRDD<Row> toRows(StructType schema, JavaRDD<SolrDocument> docs) {
