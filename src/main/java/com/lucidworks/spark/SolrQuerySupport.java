@@ -211,7 +211,9 @@ public class SolrQuerySupport implements Serializable {
 
   protected static void applyFields(String[] fields, SolrQuery solrQuery, StructType schema) {
     Map<String,StructField> fieldMap = new HashMap<String,StructField>();
-    for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
+    for (StructField f : schema.fields()) {
+      fieldMap.put(f.name(), f);
+    }
     String[] fieldList = new String[fields.length];
     for (int f = 0; f < fields.length; f++) {
       StructField field = fieldMap.get(fields[f].replaceAll("`",""));

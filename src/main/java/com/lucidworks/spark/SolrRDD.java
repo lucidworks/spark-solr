@@ -56,8 +56,6 @@ public class SolrRDD implements Serializable {
   private final String uniqueKey;
   protected transient JavaSparkContext sc;
 
-  private final CloudSolrClient solrServer;
-
   public SolrRDD(String collection) throws Exception {
     this("localhost:9983", collection); // assume local embedded ZK if not supplied
   }
@@ -68,7 +66,6 @@ public class SolrRDD implements Serializable {
 
   public SolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) throws Exception {
     this.zkHost = zkHost;
-    this.solrServer = SolrSupport.getSolrClient(zkHost);
     this.collection = collection;
     this.config = config;
     this.escapeFields = Boolean.parseBoolean(ScalaUtil.optionalParam(config, ESCAPE_FIELDNAMES, "false"));
@@ -114,6 +111,7 @@ public class SolrRDD implements Serializable {
     params.set("collection", collection);
     params.set("qt", "/get");
     params.set("id", docId);
+    CloudSolrClient solrServer = SolrSupport.getSolrClient(zkHost);
     QueryResponse resp = null;
     try {
       resp = solrServer.query(params);
@@ -133,6 +131,7 @@ public class SolrRDD implements Serializable {
     if (useDeepPagingCursor)
       return queryDeep(jsc, query);
 
+    CloudSolrClient solrServer = SolrSupport.getSolrClient(zkHost);
     query.set("collection", collection);
     List<SolrDocument> results = new ArrayList<SolrDocument>();
     Iterator<SolrDocument> resultsIter = new QueryResultsIterator(solrServer, query, null, uniqueKey, schema);
@@ -163,6 +162,7 @@ public class SolrRDD implements Serializable {
   }
 
   public JavaRDD<SolrDocument> queryShards(JavaSparkContext jsc, final SolrQuery origQuery) throws SolrServerException {
+    CloudSolrClient solrServer = SolrSupport.getSolrClient(zkHost);
     // first get a list of replicas to query for this collection
     List<String> shards = SolrSupport.buildShardList(solrServer, collection);
 
@@ -256,6 +256,7 @@ public class SolrRDD implements Serializable {
     if (splitFieldName == null || splitsPerShard <= 1)
       return queryShards(jsc, origQuery);
 
+    CloudSolrClient solrServer = SolrSupport.getSolrClient(zkHost);
     long timerDiffMs = 0L;
     long timerStartMs = 0L;
 
@@ -282,6 +283,7 @@ public class SolrRDD implements Serializable {
   }
 
   public JavaRDD<Vector> queryTermVectors(JavaSparkContext jsc, final SolrQuery query, final String field, final int numFeatures) throws SolrServerException {
+    CloudSolrClient solrServer = SolrSupport.getSolrClient(zkHost);
     // first get a list of replicas to query for this collection
     List<String> shards = SolrSupport.buildShardList(solrServer, collection);
 
@@ -343,7 +345,7 @@ public class SolrRDD implements Serializable {
     }
 
     long startMs = System.currentTimeMillis();
-    List<String> cursors = SolrQuerySupport.collectCursors(solrServer, query, true, uniqueKey);
+    List<String> cursors = SolrQuerySupport.collectCursors(SolrSupport.getSolrClient(zkHost), query, true, uniqueKey);
     long tookMs = System.currentTimeMillis() - startMs;
     log.info("Took "+tookMs+"ms to collect "+cursors.size()+" cursor marks");
     int numPartitions = Math.min(maxPartitions, cursors.size());
@@ -353,7 +355,7 @@ public class SolrRDD implements Serializable {
     JavaRDD<SolrDocument> docs = cursorJavaRDD.flatMap(
       new FlatMapFunction<String, SolrDocument>() {
         public Iterable<SolrDocument> call(String cursorMark) throws Exception {
-          return SolrQuerySupport.querySolr(solrServer, query, 0, cursorMark, uniqueKey, schema).getResults();
+          return SolrQuerySupport.querySolr(SolrSupport.getSolrClient(zkHost), query, 0, cursorMark, uniqueKey, schema).getResults();
         }
       }
     );
@@ -428,7 +430,8 @@ public class SolrRDD implements Serializable {
     solrQuery.set("collection", collection);
     solrQuery.addFacetField(labelField);
     solrQuery.setFacetMinCount(1);
-    QueryResponse qr = SolrQuerySupport.querySolr(solrServer, solrQuery, 0, null, uniqueKey, schema);
+
+    QueryResponse qr = SolrQuerySupport.querySolr(SolrSupport.getSolrServer(zkHost), solrQuery, 0, null, uniqueKey, schema);
     List<String> values = new ArrayList<>();
     for (FacetField.Count f : qr.getFacetField(labelField).getValues()) {
       values.add(f.getName());
@@ -491,7 +494,7 @@ public class SolrRDD implements Serializable {
     q.setFacetMinCount(1);
     q.setFacetLimit(maxCols);
     q.setRows(0);
-    FacetField ff = SolrQuerySupport.querySolr(solrServer, q, 0, null, uniqueKey, schema).getFacetField(fieldName);
+    FacetField ff = SolrQuerySupport.querySolr(SolrSupport.getSolrServer(zkHost), q, 0, null, uniqueKey, schema).getFacetField(fieldName);
     for (FacetField.Count f : ff.getValues()) {
       listOfFields.add(DataTypes.createStructField(fieldPrefix+f.getName().toLowerCase(), DataTypes.IntegerType, false));
     }

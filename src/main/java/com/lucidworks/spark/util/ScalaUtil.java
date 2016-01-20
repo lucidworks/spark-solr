@@ -1,6 +1,8 @@
 package com.lucidworks.spark.util;
 
-public class ScalaUtil {
+import java.io.Serializable;
+
+public class ScalaUtil implements Serializable {
 
   public static String optionalParam(scala.collection.immutable.Map<String,String> config, String param, String defaultValue) {
     scala.Option<String> opt = config.get(param);
