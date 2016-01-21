@@ -9,6 +9,7 @@ import com.lucidworks.spark.util.ScalaUtil;
 import com.lucidworks.spark.util.SolrJsonSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.FacetField;
@@ -17,6 +18,7 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.SparkContext;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -52,7 +54,7 @@ public class SolrRDD implements Serializable {
   protected String collection;
   protected scala.collection.immutable.Map<String,String> config;
   protected Boolean escapeFields = false;
-  protected StructType schema;
+  protected StructType schema = null;
   private final String uniqueKey;
   protected transient JavaSparkContext sc;
 
@@ -64,7 +66,7 @@ public class SolrRDD implements Serializable {
       this(zkHost, collection, new scala.collection.immutable.HashMap<String,String>());
   }
 
-  public SolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) throws Exception {
+  public SolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) throws SparkException {
     this.zkHost = zkHost;
     this.collection = collection;
     this.config = config;
@@ -73,9 +75,9 @@ public class SolrRDD implements Serializable {
     try {
       this.schema = SolrQuerySupport.getBaseSchema(zkHost, collection, escapeFields);
     } catch (Exception exc) {
-      log.warn("No schema found " + exc);
-      this.schema = null;
+      log.error("No schema found" + exc);
     }
+    SolrQuerySupport.doTestQuery(zkHost, collection);
   }
 
   public String getUniqueKey() {
@@ -376,7 +378,7 @@ public class SolrRDD implements Serializable {
 
   public DataFrame applySchema(SQLContext sqlContext, SolrQuery query, JavaRDD<SolrDocument> docs) throws Exception {
     // now convert each SolrDocument to a Row object
-    StructType schema = getQuerySchema(query);
+    StructType schema = getQuerySchema(query, getSchema());
     JavaRDD<Row> rows = toRows(schema, docs);
     return sqlContext.applySchema(rows, schema);
   }
@@ -408,7 +410,7 @@ public class SolrRDD implements Serializable {
   }
 
   // derive a schema for a specific query from the full collection schema
-  public StructType deriveQuerySchema(String[] fields) {
+  public static StructType deriveQuerySchema(String[] fields, StructType schema) {
     Map<String, StructField> fieldMap = new HashMap<String, StructField>();
     for (StructField f : schema.fields()) fieldMap.put(f.name(), f);
     List<StructField> listOfFields = new ArrayList<StructField>();
@@ -416,10 +418,10 @@ public class SolrRDD implements Serializable {
     return DataTypes.createStructType(listOfFields);
   }
 
-  public StructType getQuerySchema(SolrQuery query) throws Exception {
+  public static StructType getQuerySchema(SolrQuery query, StructType schema) throws Exception {
     String fieldList = query.getFields();
     if (fieldList != null && !fieldList.isEmpty()) {
-      return deriveQuerySchema(fieldList.split(","));
+      return deriveQuerySchema(fieldList.split(","), schema);
     }
     return schema;
   }
@@ -455,7 +457,7 @@ public class SolrRDD implements Serializable {
    */
   public DataFrame withPivotFields(final DataFrame solrData, final PivotField[] pivotFields) throws IOException, SolrServerException {
 
-    final StructType schemaWithPivots = toPivotSchema(solrData.schema(), pivotFields);
+    final StructType schemaWithPivots = toPivotSchema(solrData.schema(), pivotFields, collection, schema, uniqueKey, zkHost);
 
     JavaRDD<Row> withPivotFields = solrData.javaRDD().map(new Function<Row, Row>() {
       @Override
@@ -474,18 +476,18 @@ public class SolrRDD implements Serializable {
     return solrData.sqlContext().createDataFrame(withPivotFields, schemaWithPivots);
   }
 
-  public StructType toPivotSchema(final StructType baseSchema, final PivotField[] pivotFields) throws IOException, SolrServerException {
+  public static StructType toPivotSchema(final StructType baseSchema, final PivotField[] pivotFields, String collection, StructType schema, String uniqueKey, String zkHost) throws IOException, SolrServerException {
     List<StructField> pivotSchemaFields = new ArrayList<>();
     pivotSchemaFields.addAll(Arrays.asList(baseSchema.fields()));
     for (PivotField pf : pivotFields) {
-      for (StructField sf : getPivotSchema(pf.solrField, pf.maxCols, pf.prefix, pf.otherSuffix)) {
+      for (StructField sf : getPivotSchema(pf.solrField, pf.maxCols, pf.prefix, pf.otherSuffix, collection, schema, uniqueKey, zkHost)) {
         pivotSchemaFields.add(sf);
       }
     }
     return DataTypes.createStructType(pivotSchemaFields);
   }
 
-  public List<StructField> getPivotSchema(String fieldName, int maxCols, String fieldPrefix, String otherName) throws IOException, SolrServerException {
+  public static List<StructField> getPivotSchema(String fieldName, int maxCols, String fieldPrefix, String otherName, String collection, StructType schema, String uniqueKey, String zkHost) throws IOException, SolrServerException {
     final List<StructField> listOfFields = new ArrayList<StructField>();
     SolrQuery q = new SolrQuery("*:*");
     q.set("collection", collection);

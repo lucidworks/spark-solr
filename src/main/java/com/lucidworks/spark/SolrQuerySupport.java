@@ -16,6 +16,7 @@ import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -62,7 +63,7 @@ public class SolrQuerySupport implements Serializable {
         Map<String, Object> schemaMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), schemaUrl, 2);
         return SolrJsonSupport.asString("/schema/uniqueKey", schemaMeta);
       } catch (SolrException solrExc) {
-        log.warn("Can't get uniqueKey for " + collection +" due to solr: "+solrExc);
+        log.warn("Can't get uniqueKey for " + collection + " due to solr: " + solrExc);
       }
     } catch (Exception exc) {
       log.warn("Can't get uniqueKey for " + collection + " due to: " + exc);
@@ -246,23 +247,23 @@ public class SolrQuerySupport implements Serializable {
     String fieldTypeClass;
   }
 
-  public static Map<String, SolrFieldMeta> getSchemaFields(String solrBaseUrl, String collection) {
-      String lukeUrl = solrBaseUrl+collection+"/admin/luke?numTerms=0";
-      // collect mapping of Solr field to type
-      Map<String,SolrFieldMeta> schemaFieldMap = new HashMap<String,SolrFieldMeta>();
+  public static Map<String, SolrFieldMeta> getSchemaFields(String solrBaseUrl, String collection) throws SparkException {
+    String lukeUrl = solrBaseUrl + collection + "/admin/luke?numTerms=0";
+    // collect mapping of Solr field to type
+    Map<String,SolrFieldMeta> schemaFieldMap = new HashMap<String,SolrFieldMeta>();
+    try {
       try {
-          try {
-              Map<String, Object> adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), lukeUrl, 2);
-              Map<String, Object> fieldsMap = SolrJsonSupport.asMap("/fields", adminMeta);
-              Set<String> fieldNamesSet = fieldsMap.keySet();
-              schemaFieldMap = getFieldTypes(fieldNamesSet.toArray(new String[fieldNamesSet.size()]), solrBaseUrl, collection);
-          } catch (SolrException solrExc) {
-              log.warn("Can't get field types for " + collection+" due to: "+solrExc);
-          }
-      } catch (Exception exc) {
-          log.warn("Can't get schema fields for " + collection + " due to: "+exc);
+        Map<String, Object> adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), lukeUrl, 2);
+        Map<String, Object> fieldsMap = SolrJsonSupport.asMap("/fields", adminMeta);
+        Set<String> fieldNamesSet = fieldsMap.keySet();
+        schemaFieldMap = getFieldTypes(fieldNamesSet.toArray(new String[fieldNamesSet.size()]), solrBaseUrl, collection);
+      } catch (SolrException solrExc) {
+        log.warn("Can't get field types for " + collection + " due to: "+solrExc);
       }
-      return schemaFieldMap;
+    } catch (Exception exc) {
+      log.warn("Can't get schema fields for " + collection + " due to: "+exc);
+    }
+    return schemaFieldMap;
   }
 
   public static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
@@ -407,7 +408,7 @@ public class SolrQuerySupport implements Serializable {
           solrQuery.setRows(DEFAULT_PAGE_SIZE);
 
       String sorts = solrQuery.getSortField();
-      if (sorts == null || sorts.isEmpty())
+      if ((sorts == null || sorts.isEmpty()) && uniqueKey != null)
           solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey));
 
       if (callback != null) {
@@ -556,34 +557,46 @@ public class SolrQuerySupport implements Serializable {
   }
 
   public static StructType getBaseSchema(String zkHost, String collection, boolean escapeFields) throws Exception {
-      String solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
-      Map<String,SolrFieldMeta> fieldTypeMap = SolrQuerySupport.getSchemaFields(solrBaseUrl, collection);
+    String solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
+    Map<String,SolrFieldMeta> fieldTypeMap = SolrQuerySupport.getSchemaFields(solrBaseUrl, collection);
 
-      List<StructField> listOfFields = new ArrayList<StructField>();
-      for (Map.Entry<String, SolrFieldMeta> field : fieldTypeMap.entrySet()) {
-        String fieldName = field.getKey();
-        SolrFieldMeta fieldMeta = field.getValue();
-        MetadataBuilder metadata = new MetadataBuilder();
-        metadata.putString("name", field.getKey());
-        DataType dataType = (fieldMeta.fieldTypeClass != null) ? SolrQuerySupport.SOLR_DATA_TYPES.get(fieldMeta.fieldTypeClass) : null;
-        if (dataType == null) dataType = DataTypes.StringType;
+    List<StructField> listOfFields = new ArrayList<StructField>();
+    for (Map.Entry<String, SolrFieldMeta> field : fieldTypeMap.entrySet()) {
+      String fieldName = field.getKey();
+      SolrFieldMeta fieldMeta = field.getValue();
+      MetadataBuilder metadata = new MetadataBuilder();
+      metadata.putString("name", field.getKey());
+      DataType dataType = (fieldMeta.fieldTypeClass != null) ? SolrQuerySupport.SOLR_DATA_TYPES.get(fieldMeta.fieldTypeClass) : null;
+      if (dataType == null) dataType = DataTypes.StringType;
 
-        if (fieldMeta.isMultiValued) {
-          dataType = new ArrayType(dataType, true);
-          metadata.putBoolean("multiValued", fieldMeta.isMultiValued);
-        }
-        if (fieldMeta.isRequired) metadata.putBoolean("required", fieldMeta.isRequired);
-        if (fieldMeta.isDocValues) metadata.putBoolean("docValues", fieldMeta.isDocValues);
-        if (fieldMeta.isStored) metadata.putBoolean("stored", fieldMeta.isStored);
-        if (fieldMeta.fieldType != null) metadata.putString("type", fieldMeta.fieldType);
-        if (fieldMeta.dynamicBase != null) metadata.putString("dynamicBase", fieldMeta.dynamicBase);
-        if (fieldMeta.fieldTypeClass != null) metadata.putString("class", fieldMeta.fieldTypeClass);
-        if (escapeFields) {
-            fieldName = fieldName.replaceAll("\\.","_");
-        }
-        listOfFields.add(DataTypes.createStructField(fieldName, dataType, !fieldMeta.isRequired, metadata.build()));
+      if (fieldMeta.isMultiValued) {
+        dataType = new ArrayType(dataType, true);
+        metadata.putBoolean("multiValued", fieldMeta.isMultiValued);
       }
+      if (fieldMeta.isRequired) metadata.putBoolean("required", fieldMeta.isRequired);
+      if (fieldMeta.isDocValues) metadata.putBoolean("docValues", fieldMeta.isDocValues);
+      if (fieldMeta.isStored) metadata.putBoolean("stored", fieldMeta.isStored);
+      if (fieldMeta.fieldType != null) metadata.putString("type", fieldMeta.fieldType);
+      if (fieldMeta.dynamicBase != null) metadata.putString("dynamicBase", fieldMeta.dynamicBase);
+      if (fieldMeta.fieldTypeClass != null) metadata.putString("class", fieldMeta.fieldTypeClass);
+      if (escapeFields) {
+        fieldName = fieldName.replaceAll("\\.","_");
+      }
+      listOfFields.add(DataTypes.createStructField(fieldName, dataType, !fieldMeta.isRequired, metadata.build()));
+    }
 
-      return DataTypes.createStructType(listOfFields);
+    return DataTypes.createStructType(listOfFields);
+  }
+
+  public static void doTestQuery(String zkHost, String collection) throws SparkException{
+    try {
+      SolrQuery query = SolrQuerySupport.toQuery("*:*&rows=0", null);
+      QueryResponse resp = SolrSupport.getSolrClient(zkHost).query(collection, query);
+      if (resp.getStatus() != 0) {
+        throw new SparkException("Unsuccessful status code in Solr response. Solr Response:" + resp.toString());
+      }
+    } catch (Exception exc) {
+      throw new SparkException("Failed to query collection '" + collection + "'", exc);
+    }
   }
 }
