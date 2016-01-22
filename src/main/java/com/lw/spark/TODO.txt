@@ -1,0 +1,4 @@
+*  Escaping field names for SparkSQL
+*  Supporting field aliasing in spark-solr
+*  Schema dependency to check and get the valid schema
+*
