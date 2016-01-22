@@ -118,7 +118,14 @@ public class SparkApp implements Serializable {
     }
 
     // Determine the processor to run
-    RDDProcessor procImpl = newProcessor(args[0].trim().toLowerCase(Locale.ROOT));
+    RDDProcessor procImpl;
+    ClassLoader myCL = SparkApp.class.getClassLoader();
+    try {
+      Class<? extends RDDProcessor> clazz = (Class<? extends RDDProcessor>) myCL.loadClass(args[0]);
+      procImpl = clazz.newInstance();
+    } catch (ClassNotFoundException cnfe) {
+      procImpl = newProcessor(args[0].trim().toLowerCase(Locale.ROOT));
+    }
 
     // ensure the processor is serializable
     assertSerializable(procImpl);
