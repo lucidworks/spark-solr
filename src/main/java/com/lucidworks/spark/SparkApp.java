@@ -14,10 +14,7 @@ import java.util.zip.ZipInputStream;
 import com.lucidworks.spark.example.events.Eventsim;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
-import com.lucidworks.spark.example.query.KMeansAnomaly;
-import com.lucidworks.spark.example.query.ReadTermVectors;
-import com.lucidworks.spark.example.query.SolrQueryProcessor;
-import com.lucidworks.spark.example.query.TableScanBenchmark;
+import com.lucidworks.spark.example.query.*;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
@@ -248,7 +245,7 @@ public class SparkApp implements Serializable {
     else if ("logs2solr".equals(streamProcType))
       return new Logs2SolrRDDProcessor();
     else if ("query-solr-benchmark".equals(streamProcType))
-      return new TableScanBenchmark();
+      return new QueryBenchmark();
     else if ("kmeans-anomaly".equals(streamProcType))
       return new KMeansAnomaly();
     else if ("eventsim".equals(streamProcType))
@@ -279,7 +276,7 @@ public class SparkApp implements Serializable {
     formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
     formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));
     formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
-    formatter.printHelp("query-solr-benchmark", getProcessorOptions(new TableScanBenchmark()));
+    formatter.printHelp("query-solr-benchmark", getProcessorOptions(new QueryBenchmark()));
     formatter.printHelp("kmeans-anomaly", getProcessorOptions(new KMeansAnomaly()));
     formatter.printHelp("eventsim", getProcessorOptions(new Eventsim()));
 
