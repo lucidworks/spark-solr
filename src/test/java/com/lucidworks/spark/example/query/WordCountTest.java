@@ -6,13 +6,13 @@ import org.junit.Test;
 
 import static org.junit.Assert.fail;
 
-public class SolrQueryProcessorTest {
+public class WordCountTest {
 
   @Ignore
   @Test
   public void testQueryProcessor() {
     String[] args = new String[] {
-      "query-solr", "-zkHost", "localhost:9983",
+      "com.lucidworks.spark.example.query.WordCount", "-zkHost", "localhost:9983",
       "-collection", "gettingstarted", "-query", "*:*",
       "-master", "local[2]"
     };
@@ -21,7 +21,7 @@ public class SolrQueryProcessorTest {
       SparkApp.main(args);
     } catch (Exception exc) {
       exc.printStackTrace();
-      fail("QueryProcessor failed due to: "+exc);
+      fail("WordCount failed due to: "+exc);
     }
   }
 }

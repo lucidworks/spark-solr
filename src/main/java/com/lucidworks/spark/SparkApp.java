@@ -234,8 +234,8 @@ public class SparkApp implements Serializable {
 
     if ("twitter-to-solr".equals(streamProcType))
       return new TwitterToSolrStreamProcessor();
-    else if ("query-solr".equals(streamProcType))
-      return new SolrQueryProcessor();
+    else if ("word-count".equals(streamProcType))
+      return new WordCount();
     else if ("term-vectors".equals(streamProcType))
       return new ReadTermVectors();
     else if ("docfilter".equals(streamProcType))
@@ -271,7 +271,7 @@ public class SparkApp implements Serializable {
   private static void displayProcessorOptions(PrintStream out) throws Exception {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
-    formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
+    formatter.printHelp("word-count", getProcessorOptions(new WordCount()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
     formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
     formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));
