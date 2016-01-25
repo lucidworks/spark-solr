@@ -1,6 +1,6 @@
 package com.lucidworks.spark;
 
-import com.lucidworks.spark.ref.util.ScalaUtil;
+import com.lucidworks.spark.util.ScalaUtil;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
