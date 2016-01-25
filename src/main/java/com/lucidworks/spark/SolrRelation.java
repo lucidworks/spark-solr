@@ -1,9 +1,8 @@
 package com.lucidworks.spark;
 
-import com.lucidworks.spark.util.ScalaUtil;
+import com.lucidworks.spark.ref.util.ScalaUtil;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -15,12 +14,10 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.sources.*;
-import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -123,7 +120,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     if (dataFrame != null) {
       schema = dataFrame.schema();
     } else if (this.fieldList != null && this.fieldList.length > 0) {
-      schema = solrRDD.deriveQuerySchema(this.fieldList);
+      schema = solrRDD.deriveQuerySchema(this.fieldList, solrRDD.schema);
     } else {
       schema = solrRDD.getQuerySchema(solrQuery);
     }
@@ -184,7 +181,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     try {
 
       // build the schema based on the desired fields - applicable only for non-schemapreserving dataframes in solr
-      StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? solrRDD.deriveQuerySchema(fields) : schema;
+      StructType querySchema = (fields != null && fields.length > 0 && !preserveSchema) ? solrRDD.deriveQuerySchema(fields, solrRDD.schema) : schema;
       JavaRDD<SolrDocument> docs = solrRDD.query(jsc, solrQuery);
       rows = solrRDD.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
