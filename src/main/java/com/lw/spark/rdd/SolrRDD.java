@@ -1,15 +1,17 @@
 package com.lw.spark.rdd;
 
-import com.lucidworks.spark.SolrSupport;
-import com.lucidworks.spark.query.ShardSplit;
-import com.lw.spark.query.StreamingResultsIterator;
-import com.lw.spark.SolrConf;
+import com.lw.spark.query.ShardSplit;
 import com.lw.spark.query.SolrQuerySupport;
+import com.lw.spark.query.StreamingResultsIterator;
 import com.lw.spark.query.TermVectorIterator;
+import com.lw.spark.SolrSupport;
+import com.lw.spark.SolrConf;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.SparkException;
@@ -19,6 +21,7 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.mllib.linalg.Vector;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 
 public class SolrRDD implements Serializable{
@@ -31,14 +34,36 @@ public class SolrRDD implements Serializable{
   private final SparkConf sparkConf;
   private final SolrConf solrConf;
   private final CloudSolrClient solrClient;
+  private final String uniqueKey;
 
-  public SolrRDD(String collection, String zkHost, SparkContext sparkContext) throws SparkException{
+  public SolrRDD(String zkHost, String collection, SparkContext sparkContext) throws SparkException{
     this.collection = collection;
     this.zkHost = zkHost;
     this.jsc = new JavaSparkContext(sparkContext);
     this.sparkConf = sparkContext.getConf();
     this.solrConf = new SolrConf(this.sparkConf);
     this.solrClient = SolrSupport.getSolrClient(zkHost);
+    this.uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
+  }
+
+  /**
+   *  Get a document by ID using real-time get
+   */
+  public JavaRDD<SolrDocument> get(final String docId) throws SparkException {
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set("collection", collection);
+    params.set("qt", "/get");
+    params.set(uniqueKey, docId);
+
+    QueryResponse resp = null;
+    try {
+      resp = solrClient.query(params);
+    } catch (Exception exc) {
+      throw new SparkException("Exception while querying Solr", exc);
+    }
+    SolrDocument doc = (SolrDocument) resp.getResponse().get("doc");
+    List<SolrDocument> list = (doc != null) ? Collections.singletonList(doc): Collections.emptyList();
+    return jsc.parallelize(list, 1);
   }
 
   /**
@@ -53,7 +78,6 @@ public class SolrRDD implements Serializable{
     final SolrQuery query = origQuery.getCopy();
 
     query.set("collection", collection);
-    String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey);
 
     // Parallelize the requests to shards
@@ -73,7 +97,6 @@ public class SolrRDD implements Serializable{
     final SolrQuery query = origQuery.getCopy();
 
     query.set("collection", collection);
-    String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
     SolrQuerySupport.setQueryDefaultsForTV(query, field, uniqueKey);
 
     // Parallelize the requests to shards
@@ -103,7 +126,6 @@ public class SolrRDD implements Serializable{
 
     final SolrQuery query = origQuery.getCopy();
     query.set("collection", collection);
-    String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey);
 
     JavaRDD<ShardSplit> splitsRDD = SolrQuerySupport.splitShard(jsc, query, shards, splitFieldName, splitsPerShard, collection);
