@@ -1,8 +1,7 @@
 package com.lucidworks.spark.example.query;
 
-import com.lucidworks.spark.SolrRDD;
 import com.lucidworks.spark.SparkApp;
-import com.lucidworks.spark.query.SolrTermVector;
+import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
@@ -10,7 +9,6 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.api.java.function.Function;
 import org.apache.spark.mllib.clustering.KMeans;
 import org.apache.spark.mllib.clustering.KMeansModel;
 import org.apache.spark.mllib.linalg.Vector;

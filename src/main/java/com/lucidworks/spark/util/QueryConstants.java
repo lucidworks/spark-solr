@@ -1,4 +1,4 @@
-package com.lw.spark.util;
+package com.lucidworks.spark.util;
 
 public class QueryConstants {
   public static final String DEFAULT_REQUIRED_FIELD = "id";

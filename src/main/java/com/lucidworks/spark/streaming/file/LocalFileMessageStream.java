@@ -1,7 +1,7 @@
 package com.lucidworks.spark.streaming.file;
 
-import com.lucidworks.spark.streaming.MessageHandler;
 import com.lucidworks.spark.streaming.MessageStream;
+import com.lucidworks.spark.streaming.MessageHandler;
 
 import java.io.BufferedReader;
 import java.io.File;

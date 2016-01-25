@@ -1,5 +1,28 @@
-package com.lucidworks.spark;
+package com.lucidworks.spark.util;
 
+
+import com.lucidworks.spark.ShardPartitioner;
+import com.lucidworks.spark.filter.DocFilterContext;
+import com.lucidworks.spark.fusion.FusionPipelineClient;
+import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.SolrClient;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
+import org.apache.solr.client.solrj.impl.*;
+import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.cloud.*;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.api.java.function.VoidFunction;
+import org.apache.spark.streaming.api.java.JavaDStream;
+import scala.Tuple2;
 
 import java.beans.BeanInfo;
 import java.beans.IntrospectionException;
@@ -14,35 +37,6 @@ import java.net.SocketException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.lucidworks.spark.filter.DocFilterContext;
-import com.lucidworks.spark.fusion.FusionPipelineClient;
-import com.lucidworks.spark.util.EmbeddedSolrServerFactory;
-import com.lucidworks.spark.util.SolrJsonSupport;
-import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.client.solrj.impl.*;
-import org.apache.solr.client.solrj.request.SolrPing;
-import org.apache.solr.client.solrj.request.UpdateRequest;
-import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.client.solrj.response.SolrPingResponse;
-import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.cloud.*;
-import org.apache.spark.api.java.JavaPairRDD;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.Function;
-import org.apache.spark.api.java.function.VoidFunction;
-import org.apache.spark.streaming.api.java.JavaDStream;
-import scala.Tuple2;
-
-import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
-
 
 import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
 

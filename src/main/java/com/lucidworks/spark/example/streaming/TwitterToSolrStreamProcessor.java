@@ -1,6 +1,6 @@
 package com.lucidworks.spark.example.streaming;
 
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -11,7 +11,6 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
-
 import org.apache.spark.streaming.twitter.TwitterUtils;
 import twitter4j.Status;
 

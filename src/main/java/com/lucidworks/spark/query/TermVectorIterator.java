@@ -1,4 +1,4 @@
-package com.lw.spark.query;
+package com.lucidworks.spark.query;
 
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;

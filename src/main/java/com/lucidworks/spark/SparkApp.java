@@ -1,37 +1,26 @@
 package com.lucidworks.spark;
 
-import java.io.*;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
-
-import com.lucidworks.spark.example.events.Eventsim;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
-import com.lucidworks.spark.example.query.ReadTermVectors;
 import com.lucidworks.spark.example.query.SolrQueryProcessor;
 import com.lucidworks.spark.example.query.TableScanBenchmark;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
-
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.GnuParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
+import com.lucidworks.spark.example.events.Eventsim;
+import com.lucidworks.spark.example.query.ReadTermVectors;
+import org.apache.commons.cli.*;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+
+import java.io.*;
+import java.net.URL;
+import java.util.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
 import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
 
 /**

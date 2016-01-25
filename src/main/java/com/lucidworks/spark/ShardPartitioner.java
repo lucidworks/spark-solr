@@ -1,12 +1,9 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.cloud.DocCollection;
-import org.apache.solr.common.cloud.DocRouter;
-import org.apache.solr.common.cloud.ImplicitDocRouter;
-import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.cloud.*;
 import org.apache.spark.Partitioner;
 
 import java.io.Serializable;
@@ -110,7 +107,7 @@ public class ShardPartitioner extends Partitioner implements Serializable {
 
   protected final synchronized CloudSolrClient getCloudSolrServer() {
     if (cloudSolrServer == null)
-      cloudSolrServer = (CloudSolrClient)SolrSupport.getSolrServer(zkHost);
+      cloudSolrServer = (CloudSolrClient) SolrSupport.getSolrServer(zkHost);
     return cloudSolrServer;
   }
 }

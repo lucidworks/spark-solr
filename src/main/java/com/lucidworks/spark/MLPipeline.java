@@ -1,8 +1,5 @@
 package com.lucidworks.spark;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
@@ -12,11 +9,8 @@ import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.OneVsRest;
-import org.apache.spark.ml.feature.HashingTF;
-import org.apache.spark.ml.feature.IndexToString;
-import org.apache.spark.ml.feature.StringIndexer;
-import org.apache.spark.ml.feature.StringIndexerModel;
-import org.apache.spark.ml.feature.Tokenizer;
+import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
+import org.apache.spark.ml.feature.*;
 import org.apache.spark.ml.param.ParamMap;
 import org.apache.spark.ml.tuning.CrossValidator;
 import org.apache.spark.ml.tuning.CrossValidatorModel;
@@ -26,7 +20,9 @@ import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class MLPipeline implements SparkApp.RDDProcessor {
 

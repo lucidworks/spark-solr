@@ -1,6 +1,9 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.ScalaUtil;
+import com.lucidworks.spark.util.SolrQuerySupport;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
@@ -17,17 +20,10 @@ import org.apache.spark.sql.sources.*;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import scala.collection.JavaConverters;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import scala.collection.JavaConverters;
+import java.util.*;
 
 public class SolrRelation extends BaseRelation implements Serializable, TableScan, PrunedFilteredScan, InsertableRelation {
 
@@ -47,31 +43,31 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   public SolrRelation() {}
 
-  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config) throws Exception {
     this(sqlContext, config, null);
   }
 
-  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String,String> config, DataFrame dataFrame) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config, DataFrame dataFrame) throws Exception {
 
     if (sqlContext == null)
       throw new IllegalArgumentException("SQLContext cannot be null!");
 
     this.sqlContext = sqlContext;
     this.jsc = new JavaSparkContext(sqlContext.sparkContext());
-    String preserveSch = ScalaUtil.optionalParam(config, SolrRDD.PRESERVE_SCHEMA, "N");
+    String preserveSch = ScalaUtil.optionalParam(config, PRESERVE_SCHEMA, "N");
     if ("Y".equals(preserveSch) || Boolean.parseBoolean(preserveSch)) {
       preserveSchema = true;
     };
-    String zkHost = ScalaUtil.requiredParam(config, SolrRDD.SOLR_ZK_HOST_PARAM);
-    String collection = ScalaUtil.requiredParam(config, SolrRDD.SOLR_COLLECTION_PARAM);
-    String query = ScalaUtil.optionalParam(config, SolrRDD.SOLR_QUERY_PARAM, "*:*");
-    String fieldListParam = ScalaUtil.optionalParam(config, SolrRDD.SOLR_FIELD_LIST_PARAM, null);
+    String zkHost = ScalaUtil.requiredParam(config, SOLR_ZK_HOST_PARAM);
+    String collection = ScalaUtil.requiredParam(config, SOLR_COLLECTION_PARAM);
+    String query = ScalaUtil.optionalParam(config, SOLR_QUERY_PARAM, "*:*");
+    String fieldListParam = ScalaUtil.optionalParam(config, SOLR_FIELD_LIST_PARAM, null);
     if (fieldListParam != null) {
       this.fieldList = fieldListParam.split(",");
     } else {
       this.fieldList = null;
     }
-    String rowsParam = ScalaUtil.optionalParam(config, SolrRDD.SOLR_ROWS_PARAM, null);
+    String rowsParam = ScalaUtil.optionalParam(config, SOLR_ROWS_PARAM, null);
     if (rowsParam != null) {
       this.rows = new Integer(rowsParam);
     }

@@ -1,8 +1,8 @@
 package com.lucidworks.spark.example.query;
 
-import com.lucidworks.spark.SolrRDD;
-import com.lucidworks.spark.SolrRelation;
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.util.SolrQuerySupport.PivotField;
+import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -11,6 +11,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.mllib.clustering.KMeans;
+import org.apache.spark.mllib.clustering.KMeansModel;
+import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
@@ -19,12 +22,6 @@ import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.hive.HiveContext;
 import org.apache.spark.sql.types.DataTypes;
-
-import org.apache.spark.mllib.clustering.KMeans;
-import org.apache.spark.mllib.clustering.KMeansModel;
-import org.apache.spark.mllib.linalg.Vector;
-
-import com.lucidworks.spark.SolrQuerySupport.PivotField;
 
 import java.sql.Timestamp;
 import java.util.HashMap;

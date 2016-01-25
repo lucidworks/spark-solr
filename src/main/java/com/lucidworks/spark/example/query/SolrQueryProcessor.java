@@ -1,7 +1,7 @@
 package com.lucidworks.spark.example.query;
 
-import com.lucidworks.spark.SolrQuerySupport;
-import com.lucidworks.spark.SolrRDD;
+import com.lucidworks.spark.util.SolrQuerySupport;
+import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -19,9 +19,11 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import scala.Tuple2;
 
-
 import java.io.Serializable;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Example of how to query Solr and process the result set as a Spark RDD
@@ -59,9 +61,9 @@ public class SolrQueryProcessor implements SparkApp.RDDProcessor {
 
     JavaSparkContext jsc = new JavaSparkContext(conf);
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-    final SolrQuery solrQuery = SolrQuerySupport.toQuery(queryStr, solrRDD.getUniqueKey());
-    JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(jsc.sc(), solrQuery);
+    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
+    final SolrQuery solrQuery = SolrQuerySupport.toQuery(queryStr);
+    JavaRDD<SolrDocument> solrJavaRDD = solrRDD.query(solrQuery);
 
     JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {
       public Iterable<String> call(SolrDocument doc) {

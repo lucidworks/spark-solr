@@ -1,6 +1,6 @@
 package com.lucidworks.spark.example.hadoop;
 
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -11,13 +11,14 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.SparkConf;
-
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.input.PortableDataStream;
 import scala.Tuple2;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipInputStream;

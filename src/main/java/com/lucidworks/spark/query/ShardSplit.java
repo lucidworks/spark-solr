@@ -1,6 +1,7 @@
 package com.lucidworks.spark.query;
 
 import org.apache.solr.client.solrj.SolrQuery;
+
 import java.io.Serializable;
 
 /**

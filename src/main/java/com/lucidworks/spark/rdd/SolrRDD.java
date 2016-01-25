@@ -1,11 +1,11 @@
-package com.lw.spark.rdd;
+package com.lucidworks.spark.rdd;
 
-import com.lw.spark.query.ShardSplit;
-import com.lw.spark.util.SolrQuerySupport;
-import com.lw.spark.query.StreamingResultsIterator;
-import com.lw.spark.query.TermVectorIterator;
-import com.lw.spark.util.SolrSupport;
-import com.lw.spark.SolrConf;
+import com.lucidworks.spark.SolrConf;
+import com.lucidworks.spark.util.SolrQuerySupport;
+import com.lucidworks.spark.query.ShardSplit;
+import com.lucidworks.spark.query.StreamingResultsIterator;
+import com.lucidworks.spark.query.TermVectorIterator;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;

@@ -1,6 +1,6 @@
 package com.lucidworks.spark.example.query;
 
-import com.lucidworks.spark.SolrRDD;
+import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -10,7 +10,9 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import java.util.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Example of how to query Solr and process the result set as a Spark RDD

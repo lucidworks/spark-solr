@@ -1,6 +1,5 @@
 package com.lucidworks.spark.util;
 
-import com.lucidworks.spark.SolrQuerySupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -58,7 +57,7 @@ public class SolrSchemaUtil implements Serializable{
         if (name.substring(0, name.length() - 2).equals("__lwchilddocname")) {
           finalName = field.getValue().toString();
         } else {
-            fldr.add(new StructField(name.substring(0, name.length() - 2), SolrQuerySupport.getsqlDataType(field.getValue().toString()), true, Metadata.empty()));
+            fldr.add(new StructField(name.substring(0, name.length() - 2), SQLQuerySupport.getsqlDataType(field.getValue().toString()), true, Metadata.empty()));
           }
       }
 

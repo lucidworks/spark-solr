@@ -1,6 +1,6 @@
 package com.lucidworks.spark.query;
 
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -272,7 +272,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
 
   public ShardSplit join(FieldStatsInfo stats, ShardSplit lhs, ShardSplit rhs) {
     ShardSplit joined = null;
-    
+
     if (lhs.getLowerInc() != null && rhs.getLowerInc() != null) {
       String lhsLowerInc = String.valueOf(lhs.getLowerInc());
       String rhsLowerInc = String.valueOf(rhs.getLowerInc());

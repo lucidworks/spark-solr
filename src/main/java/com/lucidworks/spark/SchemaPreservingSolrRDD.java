@@ -1,7 +1,9 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.ScalaUtil;
 import com.lucidworks.spark.util.SolrSchemaUtil;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -33,7 +35,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     super(zkHost, collection, new scala.collection.immutable.HashMap<String, String>());
   }
 
-  public SchemaPreservingSolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String,String> config) throws Exception {
+  public SchemaPreservingSolrRDD(String zkHost, String collection, scala.collection.immutable.Map<String, String> config) throws Exception {
     super(zkHost, collection, config);
   }
 
@@ -118,7 +120,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         x.add(null);
       }
       if ((x2Key.substring(x2Key.length() - 2, x2Key.length()).equals("_s") && !x2Key.startsWith("__lw") && !x2Key.startsWith("links"))) {
-        String type = ScalaUtil.getFieldTypeMapping(st,x2Key.substring(0, x2Key.length() - 2));
+        String type = ScalaUtil.getFieldTypeMapping(st, x2Key.substring(0, x2Key.length() - 2));
         if (!type.equals("")) {
           String x2Val = x1.get(x2[i]).toString();
           if (type.equals("integer")) {
@@ -200,7 +202,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         }
         solrDocument.addField("__lwroot_s", "root");
         solrDocument.addField("__lwcategory_s", "data");
-        List<org.apache.spark.sql.Row> r1 = new ArrayList<Row>();
+        List<Row> r1 = new ArrayList<Row>();
         r1.add(r);
         return recurseWriteData(styp, solrDocument, r, 0);
       }
@@ -209,7 +211,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
     return finalrdd;
   }
 
-  public SolrInputDocument recurseWriteData(StructType st,SolrInputDocument solrDocument, org.apache.spark.sql.Row df, int counter) {
+  public SolrInputDocument recurseWriteData(StructType st,SolrInputDocument solrDocument, Row df, int counter) {
     scala.collection.Iterator x = st.iterator();
     int linkCount = 0;
     while (x.hasNext()) {
@@ -222,7 +224,7 @@ public class SchemaPreservingSolrRDD extends SolrRDD {
         solrDocument.addField("links" + linkCount + "_s", idChild);
         solrDocument1.addField("__lwchilddocname_s", sf.name());
         solrDocument1.addField("__lwcategory_s", "data");
-        org.apache.spark.sql.Row df1 = (org.apache.spark.sql.Row) df.get(counter);
+        Row df1 = (Row) df.get(counter);
         solrDocument.addChildDocument(recurseWriteData((StructType) sf.dataType(), solrDocument1, df1, 0));
       } else {
           if (df != null) {

@@ -1,4 +1,4 @@
-package com.lw.spark.util;
+package com.lucidworks.spark.util;
 
 import org.apache.spark.mllib.linalg.MatrixUDT;
 import org.apache.spark.mllib.linalg.VectorUDT;

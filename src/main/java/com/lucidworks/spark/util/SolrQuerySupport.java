@@ -1,9 +1,9 @@
-package com.lw.spark.util;
+package com.lucidworks.spark.util;
 
-import com.lw.spark.query.NumberFieldShardSplitStrategy;
-import com.lw.spark.query.ShardSplit;
-import com.lw.spark.query.ShardSplitStrategy;
-import com.lw.spark.query.StringFieldShardSplitStrategy;
+import com.lucidworks.spark.query.NumberFieldShardSplitStrategy;
+import com.lucidworks.spark.query.ShardSplitStrategy;
+import com.lucidworks.spark.query.StringFieldShardSplitStrategy;
+import com.lucidworks.spark.query.ShardSplit;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
@@ -29,8 +29,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.lw.spark.util.QueryConstants.*;
 
 public class SolrQuerySupport implements Serializable {
 
@@ -73,7 +71,7 @@ public class SolrQuerySupport implements Serializable {
     } catch (Exception exc) {
       log.warn("Can't get uniqueKey for " + collection + " due to: " + exc);
     }
-    return DEFAULT_REQUIRED_FIELD;
+    return QueryConstants.DEFAULT_REQUIRED_FIELD;
   }
 
   public static SolrQuery toQuery(String queryString) {
@@ -108,7 +106,7 @@ public class SolrQuerySupport implements Serializable {
 
     Integer rows = q.getRows();
     if (rows == null)
-      q.setRows(DEFAULT_PAGE_SIZE);
+      q.setRows(QueryConstants.DEFAULT_PAGE_SIZE);
 
     return q;
   }
@@ -137,7 +135,7 @@ public class SolrQuerySupport implements Serializable {
 
       Integer rows = solrQuery.getRows();
       if (rows == null)
-        solrQuery.setRows(DEFAULT_PAGE_SIZE);
+        solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE);
 
       if (callback != null) {
         resp = solrServer.queryAndStreamResponse(solrQuery, callback);
@@ -191,7 +189,7 @@ public class SolrQuerySupport implements Serializable {
     query.set("distrib", "false");
     query.setStart(0);
     if (query.getRows() == null) {
-      query.setRows(DEFAULT_PAGE_SIZE);
+      query.setRows(QueryConstants.DEFAULT_PAGE_SIZE);
     }
     SolrQuerySupport.addDefaultSort(query, uniqueKey);
   }
@@ -211,7 +209,7 @@ public class SolrQuerySupport implements Serializable {
     query.set("distrib", false);
     query.setStart(0);
     if (query.getRows() == null)
-      query.setRows(DEFAULT_PAGE_SIZE); // default page size
+      query.setRows(QueryConstants.DEFAULT_PAGE_SIZE); // default page size
 
     SolrQuerySupport.addDefaultSort(query, uniqueKey);
   }

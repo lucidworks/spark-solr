@@ -1,7 +1,6 @@
 package com.lucidworks.spark.streaming.netty;
 
 import com.lucidworks.spark.streaming.MessageHandler;
-
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
