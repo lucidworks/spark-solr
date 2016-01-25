@@ -6,16 +6,13 @@ import com.lucidworks.spark.SolrQuerySupport.SolrFieldMeta;
 import com.lucidworks.spark.SolrQuerySupport.TermVectorIterator;
 import com.lucidworks.spark.query.*;
 import com.lucidworks.spark.util.ScalaUtil;
-import com.lucidworks.spark.util.SolrJsonSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
-import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.SparkContext;
 import org.apache.spark.SparkException;
@@ -378,7 +375,7 @@ public class SolrRDD implements Serializable {
 
   public DataFrame applySchema(SQLContext sqlContext, SolrQuery query, JavaRDD<SolrDocument> docs) throws Exception {
     // now convert each SolrDocument to a Row object
-    StructType schema = getQuerySchema(query, getSchema());
+    StructType schema = getQuerySchema(query);
     JavaRDD<Row> rows = toRows(schema, docs);
     return sqlContext.applySchema(rows, schema);
   }
@@ -418,7 +415,7 @@ public class SolrRDD implements Serializable {
     return DataTypes.createStructType(listOfFields);
   }
 
-  public static StructType getQuerySchema(SolrQuery query, StructType schema) throws Exception {
+  public StructType getQuerySchema(SolrQuery query) throws Exception {
     String fieldList = query.getFields();
     if (fieldList != null && !fieldList.isEmpty()) {
       return deriveQuerySchema(fieldList.split(","), schema);
