@@ -1,10 +1,10 @@
 package com.lw.spark.rdd;
 
 import com.lw.spark.query.ShardSplit;
-import com.lw.spark.query.SolrQuerySupport;
+import com.lw.spark.util.SolrQuerySupport;
 import com.lw.spark.query.StreamingResultsIterator;
 import com.lw.spark.query.TermVectorIterator;
-import com.lw.spark.SolrSupport;
+import com.lw.spark.util.SolrSupport;
 import com.lw.spark.SolrConf;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -142,6 +142,10 @@ public class SolrRDD implements Serializable{
       }
     );
     return docs;
+  }
+
+  public String getUniqueKey() {
+    return this.uniqueKey;
   }
 
 }

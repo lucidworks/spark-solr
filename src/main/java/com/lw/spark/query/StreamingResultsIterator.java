@@ -1,8 +1,6 @@
 package com.lw.spark.query;
 
-import com.lw.spark.query.SolrQuerySupport;
-import com.lw.spark.rdd.SolrRDD;
-import com.lw.spark.query.PagedResultsIterator;
+import com.lw.spark.util.SolrQuerySupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -11,7 +9,6 @@ import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
-import org.apache.spark.sql.types.StructType;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;

@@ -1,12 +1,9 @@
-package com.lw.spark.query;
+package com.lw.spark.util;
 
-import com.lucidworks.spark.SolrSupport;
-import com.lucidworks.spark.query.NumberFieldShardSplitStrategy;
-import com.lucidworks.spark.query.ShardSplit;
-import com.lucidworks.spark.query.ShardSplitStrategy;
-import com.lucidworks.spark.query.StringFieldShardSplitStrategy;
-import com.lucidworks.spark.util.SolrJsonSupport;
-import org.apache.calcite.avatica.ColumnMetaData;
+import com.lw.spark.query.NumberFieldShardSplitStrategy;
+import com.lw.spark.query.ShardSplit;
+import com.lw.spark.query.ShardSplitStrategy;
+import com.lw.spark.query.StringFieldShardSplitStrategy;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
@@ -23,9 +20,6 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructType;
-
-import static com.lw.spark.query.QueryConstants.*;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -35,6 +29,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static com.lw.spark.util.QueryConstants.*;
 
 public class SolrQuerySupport implements Serializable {
 

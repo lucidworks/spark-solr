@@ -1,7 +1,7 @@
 package com.lw.spark;
 
 import org.apache.spark.SparkConf;
-import static com.lw.spark.ConfigurationConstants.*;
+import static com.lw.spark.util.ConfigurationConstants.*;
 
 public class SolrConf {
 

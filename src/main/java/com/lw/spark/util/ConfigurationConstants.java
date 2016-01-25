@@ -1,4 +1,4 @@
-package com.lw.spark;
+package com.lw.spark.util;
 
 public class ConfigurationConstants {
   public static final String SOLR_ZK_HOST_PARAM = "solr.zkhost";

@@ -1,6 +1,6 @@
 package com.lw.spark.query;
 
-import com.lw.spark.query.SolrQuerySupport;
+import com.lw.spark.util.SolrQuerySupport;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
