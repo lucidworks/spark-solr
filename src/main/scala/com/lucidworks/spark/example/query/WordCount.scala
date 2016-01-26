@@ -1,7 +1,8 @@
 package com.lucidworks.spark.example.query
 
-import com.lucidworks.spark.SolrRDD
 import com.lucidworks.spark.SparkApp.RDDProcessor
+import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.SolrQuerySupport
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
@@ -35,9 +36,9 @@ class WordCount extends RDDProcessor{
     val queryStr = cli.getOptionValue("query", "*:*")
 
     val sc = SparkContext.getOrCreate(conf)
-    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection)
-    val solrQuery: SolrQuery = SolrRDD.toQuery(queryStr)
-    val rdd: RDD[SolrDocument]  = solrRDD.query(sc, solrQuery).rdd
+    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
+    val solrQuery: SolrQuery = SolrQuerySupport.toQuery(queryStr)
+    val rdd: RDD[SolrDocument]  = solrRDD.queryShards(solrQuery).rdd
 
     val words: RDD[String] = rdd.map(doc => scala.Option.apply(doc.get("text_t")).getOrElse("").toString)
     val pWords: RDD[String] = words.flatMap(s => s.toLowerCase.replaceAll("[.,!?\n]", " ").trim().split(" "))
