@@ -65,7 +65,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     if (dataFrame != null) {
       this.schema = dataFrame.schema();
     } else if (solrQuery.getFields() != null && solrQuery.getFields().length() > 0) {
-      this.schema = SolrSchemaUtil.deriveQuerySchema(solrConf.getFieldList(), this.baseSchema);
+      this.schema = SolrSchemaUtil.deriveQuerySchema(solrQuery.getFields().split(","), this.baseSchema);
     } else {
       this.schema = SolrSchemaUtil.getQuerySchema(solrQuery, this.baseSchema);
     }
@@ -118,9 +118,9 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     RDD<Row> rows = null;
     try {
-      // build the schema based on the desired fields - applicable only for non-schemapreserving dataframes in solr
-      StructType querySchema = (fields != null && fields.length > 0 && !solrConf.preserveSchema()) ? SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) : schema;
+      StructType querySchema = (fields != null && fields.length > 0) ? SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) : schema;
       JavaRDD<SolrDocument> docs = solrRDD.queryShards(solrQuery);
+  //    log.info("The docs are " + docs.collect());
       rows = SolrSchemaUtil.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
       if (e instanceof RuntimeException) {

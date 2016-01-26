@@ -290,7 +290,6 @@ public class SolrSchemaUtil implements Serializable{
           Metadata meta = field.metadata();
           Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
           Object fieldValue = isMultiValued ? doc.getFieldValues(field.name()) : doc.getFieldValue(field.name());
-          ;
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
               vals[f] = ((Collection) fieldValue).toArray();
