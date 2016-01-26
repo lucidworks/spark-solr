@@ -95,14 +95,9 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
   @Override
   public RDD<Row> buildScan(String[] fields, Filter[] filters) {
-    // Schema preserving data frames return all fields by default
-    if (solrConf.preserveSchema()) {
-      SolrSchemaUtil.applyDefaultFields(baseSchema, solrQuery);
-    } else {
-      log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
-      if (fields != null && fields.length > 0) {
-        solrQuery.setFields(fields);
-      }
+    log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
+    if (fields != null && fields.length > 0) {
+      solrQuery.setFields(fields);
     }
 
     // clear all existing filters

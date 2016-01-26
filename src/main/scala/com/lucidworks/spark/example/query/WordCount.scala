@@ -12,6 +12,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.immutable.HashMap
 
+import com.lucidworks.spark.util.ConfigurationConstants._
+
 /**
  * Example of an wordCount spark app to process tweets from a Solr collection
  */
@@ -51,14 +53,14 @@ class WordCount extends RDDProcessor{
 
     wordsCountPairs.take(20).iterator.foreach(println)
 
-    // Now use schema information in Solr to build a queriable SchemaRDD
+    // Now use schema information in Solr to build a queryable SchemaRDD
     val sqlContext = new SQLContext(sc)
 
     // Pro Tip: SolrRDD will figure out the schema if you don't supply a list of field names in your query
     val options = HashMap[String, String](
-      "zkHost" -> zkHost,
-      "collection" -> collection,
-      "query" -> queryStr
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collection,
+      SOLR_QUERY_PARAM -> queryStr
       )
 
     val df: DataFrame = sqlContext.read.format("solr").options(options).load()
