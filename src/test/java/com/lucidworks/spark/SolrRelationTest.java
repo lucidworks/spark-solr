@@ -23,7 +23,7 @@ import java.io.File;
 import java.util.*;
 
 import static org.junit.Assert.*;
-
+import static com.lucidworks.spark.util.ConfigurationConstants.*;
 
 /**
  * Tests for the SolrRelation implementation.
@@ -91,8 +91,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     String zkHost = cluster.getZkServer().getZkAddress();
     Map<String, String> options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, testCollection);
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, testCollection);
     sourceData.write().format(DefaultSource.SOLR_FORMAT).options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
 
@@ -102,7 +102,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     dumpSolrCollection(testCollection, q);
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-    options.put(SolrRDD.SOLR_FIELD_LIST_PARAM, array2cdl(cols));
+    options.put(SOLR_FIELD_LIST_PARAM, array2cdl(cols));
     DataFrame fromSolr = sqlContext.read().format(DefaultSource.SOLR_FORMAT).options(options).load();
     fromSolr = fromSolr.sort("id");
     fromSolr.printSchema();
@@ -149,11 +149,11 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     buildCollection(zkHost, testCollection, testData, 2);
 
     Map<String, String> options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, testCollection);
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, testCollection);
 
     DataFrame df = sqlContext.read().format("solr").options(options).load();
-
+    df.show();
     validateSchema(df);
     //df.show();
 
@@ -212,8 +212,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     createCollection("testFilterSupport2", numShards, replicationFactor, 2, confName, confDir);
 
     options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, "testFilterSupport2");
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, "testFilterSupport2");
 
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
@@ -225,7 +225,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection("testFilterSupport2");
   }
 
-  //@Ignore
+  @Ignore
   @Test
   public void testNestedDataFrames() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
@@ -256,9 +256,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     HashMap<String, String> options = new HashMap<String, String>();
     String zkHost = cluster.getZkServer().getZkAddress();
     options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, "testNested");
-    options.put("preserveschema", "Y");
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, "testNested");
+    options.put(PRESERVE_SCHEMA, "true");
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
     DataFrame df2 = sqlContext.read().format("solr").options(options).load();
@@ -298,7 +298,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     model.save(jsc.sc(), "NBParquet");
   }
 
-  //@Ignore
+  @Ignore
   @Test
   public void loadLRParquetIntoSolr() throws Exception {
     createMLModelLRParquet();
@@ -314,9 +314,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     DataFrame dfLR = sqlContext.load("LRParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, "TestLR");
-    options.put("preserveschema", "Y");
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, "TestLR");
+    options.put(PRESERVE_SCHEMA, "true");
     dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfLR.show();
     dfLR.printSchema();
@@ -331,7 +331,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     FileUtils.forceDelete(lRModel);
   }
 
-  //@Ignore
+  @Ignore
   @Test
   public void loadNBParquetIntoSolr() throws Exception {
     createMLModelNBParquet();
@@ -347,9 +347,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     DataFrame dfNB = sqlContext.load("NBParquet/data/");
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
-    options.put(SolrRDD.SOLR_ZK_HOST_PARAM, zkHost);
-    options.put("preserveschema", "Y");
-    options.put(SolrRDD.SOLR_COLLECTION_PARAM, "TestNB");
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(PRESERVE_SCHEMA, "true");
+    options.put(SOLR_COLLECTION_PARAM, "TestNB");
     dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfNB.show();
     Thread.sleep(5000);

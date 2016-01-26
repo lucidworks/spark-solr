@@ -81,20 +81,20 @@ public class TableScanBenchmark implements SparkApp.RDDProcessor {
     solrQuery.setSorts(sorts);
     solrQuery.setRows(rows);
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection);
+    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
 
     JavaRDD<SolrDocument> docs = null;
 
     long startMs = System.currentTimeMillis();
 
-    docs = solrRDD.queryShards(jsc, solrQuery, splitField, splitsPerShard);
+    docs = solrRDD.queryShards(solrQuery, splitField, splitsPerShard);
     long count = docs.count();
 
     long tookMs = System.currentTimeMillis() - startMs;
     System.out.println("took " + tookMs + "ms read "+count+" docs using queryShards with splits");
 
     startMs = System.currentTimeMillis();
-    docs = solrRDD.queryShards(jsc, solrQuery);
+    docs = solrRDD.queryShards(solrQuery);
 
     count = docs.count();
 

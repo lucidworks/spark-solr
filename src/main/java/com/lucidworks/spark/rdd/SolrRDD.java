@@ -30,17 +30,18 @@ public class SolrRDD implements Serializable{
 
   private final String collection;
   private final String zkHost;
-  private final JavaSparkContext jsc;
-  private final SparkConf sparkConf;
-  private final SolrConf solrConf;
-  private final CloudSolrClient solrClient;
   private final String uniqueKey;
+
+  private transient final JavaSparkContext jsc;
+  private transient final SparkConf sparkConf;
+  private transient final SolrConf solrConf;
+  private transient final CloudSolrClient solrClient;
 
   public SolrRDD(String zkHost, String collection, SparkContext sparkContext) throws SparkException{
     this.collection = collection;
     this.zkHost = zkHost;
     this.jsc = new JavaSparkContext(sparkContext);
-    this.sparkConf = sparkContext.getConf();
+    this.sparkConf = (sparkContext.getConf() != null) ? sparkContext.getConf() : new SparkConf();
     this.solrConf = new SolrConf(this.sparkConf);
     this.solrClient = SolrSupport.getSolrClient(zkHost);
     this.uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
@@ -64,6 +65,10 @@ public class SolrRDD implements Serializable{
     SolrDocument doc = (SolrDocument) resp.getResponse().get("doc");
     List<SolrDocument> list = (doc != null) ? Collections.singletonList(doc): Collections.emptyList();
     return jsc.parallelize(list, 1);
+  }
+
+  public JavaRDD<SolrDocument> query(String query) {
+    return queryShards(SolrQuerySupport.toQuery(query));
   }
 
   /**
@@ -92,7 +97,7 @@ public class SolrRDD implements Serializable{
     return docs;
   }
 
-  public JavaRDD<Vector> queryTV(final SolrQuery origQuery, final String field, final int numFeatures) throws SparkException {
+  public JavaRDD<Vector> queryTermVectors(final SolrQuery origQuery, final String field, final int numFeatures) throws SparkException {
     List<String> shards = SolrSupport.buildShardList(solrClient, collection);
     final SolrQuery query = origQuery.getCopy();
 
@@ -148,4 +153,19 @@ public class SolrRDD implements Serializable{
     return this.uniqueKey;
   }
 
+  public String getCollection() {
+    return this.collection;
+  }
+
+  public String getZKHost() {
+    return this.zkHost;
+  }
+
+  public CloudSolrClient getSolrClient() {
+    return this.solrClient;
+  }
+
+  public SolrConf getSolrConf() {
+    return this.solrConf;
+  }
 }

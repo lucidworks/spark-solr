@@ -82,11 +82,11 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
     sorts.add(new SolrQuery.SortClause("created_at_tdt", "asc"));
     solrQuery.setSorts(sorts);
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection);
+    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
 
     // query Solr for term vectors
     JavaRDD<Vector> termVectorsFromSolr =
-      solrRDD.queryTermVectors(jsc, solrQuery, field, numFeatures);
+      solrRDD.queryTermVectors(solrQuery, field, numFeatures);
     termVectorsFromSolr.cache();
 
     // Cluster the data using KMeans

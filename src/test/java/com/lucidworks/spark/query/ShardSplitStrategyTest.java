@@ -1,9 +1,9 @@
 package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.RDDProcessorTestBase;
-import com.lucidworks.spark.SolrQuerySupport;
-import com.lucidworks.spark.SolrRDD;
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.util.SolrQuerySupport;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.response.QueryResponse;
@@ -82,7 +82,7 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
     assertTrue(minFromSort.longValue() == minFromStats.longValue());
     assertTrue(maxFromSort.longValue() == maxFromStats.longValue());
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection);
+    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
     List<String> shardList = SolrSupport.buildShardList(cloudSolrServer, collection);
 
     SolrQuery solrQuery = new SolrQuery("*:*");
@@ -141,7 +141,7 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
         }
       }
 
-      QueryResponse qr = SolrQuerySupport.querySolr(SolrSupport.getHttpSolrClient(ss.getShardUrl()), splitQuery, 0, null, solrRDD.getUniqueKey(), solrRDD.getSchema());
+      QueryResponse qr = SolrQuerySupport.querySolr(SolrSupport.getHttpSolrClient(ss.getShardUrl()), splitQuery, 0, null);
       SolrDocumentList docList = qr.getResults();
       numDocs += docList.getNumFound();
       for (SolrDocument doc : docList) {

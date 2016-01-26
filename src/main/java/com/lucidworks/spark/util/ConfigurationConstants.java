@@ -1,6 +1,9 @@
 package com.lucidworks.spark.util;
 
 public class ConfigurationConstants {
+
+  public static final String CONFIG_PREFIX = "solr.";
+
   public static final String SOLR_ZK_HOST_PARAM = "solr.zkhost";
   public static final String SOLR_COLLECTION_PARAM = "solr.collection";
   public static final String SOLR_QUERY_PARAM = "solr.query";

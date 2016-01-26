@@ -1,9 +1,7 @@
 package com.lucidworks.spark.util;
 
-import com.lucidworks.spark.query.NumberFieldShardSplitStrategy;
-import com.lucidworks.spark.query.ShardSplitStrategy;
-import com.lucidworks.spark.query.StringFieldShardSplitStrategy;
-import com.lucidworks.spark.query.ShardSplit;
+import com.lucidworks.spark.query.*;
+import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
@@ -11,24 +9,31 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.StreamingResponseCallback;
+import org.apache.solr.client.solrj.response.FacetField;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.api.java.function.Function;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class SolrQuerySupport implements Serializable {
 
@@ -372,5 +377,125 @@ public class SolrQuerySupport implements Serializable {
       }
     });
     return splitsRDD;
+  }
+
+  public static final class PivotField implements Serializable {
+    public final String solrField;
+    public final String prefix;
+    public final String otherSuffix;
+    public final int maxCols;
+
+    public PivotField(String solrField, String prefix) {
+      this(solrField, prefix, 10);
+    }
+
+    public PivotField(String solrField, String prefix, int maxCols) {
+      this(solrField, prefix, maxCols, "other");
+    }
+
+    public PivotField(String solrField, String prefix, int maxCols, String otherSuffix) {
+      this.solrField = solrField;
+      this.prefix = prefix;
+      this.maxCols = maxCols;
+      this.otherSuffix = otherSuffix;
+    }
+  }
+
+  public static final int[] getPivotFieldRange(StructType schema, String pivotPrefix) {
+    StructField[] schemaFields = schema.fields();
+    int startAt = -1;
+    int endAt = -1;
+    for (int f=0; f < schemaFields.length; f++) {
+      String name = schemaFields[f].name();
+      if (startAt == -1 && name.startsWith(pivotPrefix)) {
+        startAt = f;
+      }
+      if (startAt != -1 && !name.startsWith(pivotPrefix)) {
+        endAt = f-1; // we saw the last field in the range before this field
+        break;
+      }
+    }
+    return new int[]{startAt,endAt};
+  }
+
+  public static final void fillPivotFieldValues(String rawValue, Object[] row, StructType schema, String pivotPrefix) {
+    int[] range = getPivotFieldRange(schema, pivotPrefix);
+    for (int i=range[0]; i <= range[1]; i++) row[i] = 0;
+    try {
+      row[schema.fieldIndex(pivotPrefix+rawValue.toLowerCase())] = 1;
+    } catch (IllegalArgumentException ia) {
+      row[range[1]] = 1;
+    }
+  }
+
+  /**
+   * Allows you to pivot a categorical field into multiple columns that can be aggregated into counts, e.g.
+   * a field holding HTTP method (http_verb=GET) can be converted into: http_method_get=1, which is a common
+   * task when creating aggregations.
+   */
+  public static DataFrame withPivotFields(final DataFrame solrData, final PivotField[] pivotFields, SolrRDD solrRDD) throws Exception {
+
+    StructType schema = SolrSchemaUtil.getBaseSchema(solrRDD.getZKHost(), solrRDD.getCollection(), solrRDD.getSolrConf().escapeFieldNames());
+    final StructType schemaWithPivots = toPivotSchema(solrData.schema(), pivotFields, solrRDD.getCollection(), schema, solrRDD.getUniqueKey(), solrRDD.getZKHost());
+
+    JavaRDD<Row> withPivotFields = solrData.javaRDD().map(new Function<Row, Row>() {
+      @Override
+      public Row call(Row row) throws Exception {
+        Object[] fields = new Object[schemaWithPivots.size()];
+        for (int c = 0; c < row.length(); c++)
+          fields[c] = row.get(c);
+
+        for (PivotField pf : pivotFields)
+          SolrQuerySupport.fillPivotFieldValues(row.getString(row.fieldIndex(pf.solrField)), fields, schemaWithPivots, pf.prefix);
+
+        return RowFactory.create(fields);
+      }
+    });
+
+    return solrData.sqlContext().createDataFrame(withPivotFields, schemaWithPivots);
+  }
+
+  public static StructType toPivotSchema(final StructType baseSchema, final PivotField[] pivotFields, String collection, StructType schema, String uniqueKey, String zkHost) throws IOException, SolrServerException {
+    List<StructField> pivotSchemaFields = new ArrayList<>();
+    pivotSchemaFields.addAll(Arrays.asList(baseSchema.fields()));
+    for (PivotField pf : pivotFields) {
+      for (StructField sf : getPivotSchema(pf.solrField, pf.maxCols, pf.prefix, pf.otherSuffix, collection, schema, uniqueKey, zkHost)) {
+        pivotSchemaFields.add(sf);
+      }
+    }
+    return DataTypes.createStructType(pivotSchemaFields);
+  }
+
+  public static List<StructField> getPivotSchema(String fieldName, int maxCols, String fieldPrefix, String otherName, String collection, StructType schema, String uniqueKey, String zkHost) throws IOException, SolrServerException {
+    final List<StructField> listOfFields = new ArrayList<StructField>();
+    SolrQuery q = new SolrQuery("*:*");
+    q.set("collection", collection);
+    q.setFacet(true);
+    q.addFacetField(fieldName);
+    q.setFacetMinCount(1);
+    q.setFacetLimit(maxCols);
+    q.setRows(0);
+    FacetField ff = SolrQuerySupport.querySolr(SolrSupport.getSolrServer(zkHost), q, 0, null).getFacetField(fieldName);
+    for (FacetField.Count f : ff.getValues()) {
+      listOfFields.add(DataTypes.createStructField(fieldPrefix+f.getName().toLowerCase(), DataTypes.IntegerType, false));
+    }
+    if (otherName != null) {
+      listOfFields.add(DataTypes.createStructField(fieldPrefix+otherName, DataTypes.IntegerType, false));
+    }
+    return listOfFields;
+  }
+
+  /**
+   * Iterates over the entire results set of a query (all hits).
+   */
+  public static class QueryResultsIterator extends PagedResultsIterator<SolrDocument> {
+
+    public QueryResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
+      super(solrServer, solrQuery, cursorMark);
+    }
+
+    protected List<SolrDocument> processQueryResponse(QueryResponse resp) {
+      return resp.getResults();
+    }
   }
 }

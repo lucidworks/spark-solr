@@ -4,9 +4,9 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingDeque;
 
-import com.lucidworks.spark.SolrRDD;
-import com.lucidworks.spark.SolrSupport;
 import com.lucidworks.spark.StreamProcessorTestBase;
+import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
@@ -73,15 +73,15 @@ public class BasicIndexingTest extends StreamProcessorTestBase {
     Thread.sleep(2000);
 
     // verify docs got indexed ... relies on soft auto-commits firing frequently
-    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection);
+    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection, jssc.sparkContext().sc());
     JavaRDD<SolrDocument> resultsRDD =
-      solrRDD.query(jssc.sparkContext(), new SolrQuery("*:*"), false);
+      solrRDD.queryShards(new SolrQuery("*:*"));
 
     long numFound = resultsRDD.count();
     assertTrue("expected "+inputDocs.length+" docs in query results, but got "+numFound,
       numFound == inputDocs.length);
 
-    JavaRDD<SolrDocument> doc1 = solrRDD.get(jssc.sparkContext(), "1");
+    JavaRDD<SolrDocument> doc1 = solrRDD.get("1");
     assertEquals("foo", doc1.collect().get(0).getFirstValue("field1"));
   }
 }
