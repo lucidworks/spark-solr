@@ -23,7 +23,9 @@ import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.apache.solr.common.SolrException;
-import org.codehaus.jackson.map.ObjectMapper;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.scala.DefaultScalaModule;
 
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
@@ -117,6 +119,7 @@ public class FusionPipelineClient {
 
     random = new Random();
     jsonObjectMapper = new ObjectMapper();
+    jsonObjectMapper.registerModule(new DefaultScalaModule());
 
     requestCounter = new AtomicInteger(0);
   }

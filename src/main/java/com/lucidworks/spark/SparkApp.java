@@ -1,6 +1,13 @@
 package com.lucidworks.spark;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.PrintStream;
+import java.io.Serializable;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -11,10 +18,13 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.lucidworks.spark.example.events.Eventsim;
+import com.lucidworks.spark.example.events.EventsimIndexer;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
-import com.lucidworks.spark.example.query.*;
+import com.lucidworks.spark.example.query.KMeansAnomaly;
+import com.lucidworks.spark.example.query.QueryBenchmark;
+import com.lucidworks.spark.example.query.ReadTermVectors;
+import com.lucidworks.spark.example.query.SolrQueryProcessor;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
@@ -22,7 +32,6 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.log4j.Logger;
@@ -182,48 +191,48 @@ public class SparkApp implements Serializable {
    */
   public static Option[] getCommonOptions() {
     return new Option[] {
-      OptionBuilder
-              .withArgName("SECONDS")
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-              .withDescription("Batch interval (seconds) for streaming applications; default is 1 second")
-              .create("batchInterval"),
-      OptionBuilder
-              .withArgName("URL")
+              .required(false)
+              .desc("Batch interval (seconds) for streaming applications; default is 1 second")
+              .longOpt("batchInterval")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-              .withDescription("The master URL to connect to, such as \"local\" to run locally with one thread, \"local[4]\" to run locally with 4 cores, or \"spark://master:7077\" to run on a Spark standalone cluster.")
-              .create("master"),
-      OptionBuilder
-              .withArgName("HOST")
+              .required(false)
+              .desc("The master URL to connect to, such as \"local\" to run locally with one thread, \"local[4]\" to run locally with 4 cores, or \"spark://master:7077\" to run on a Spark standalone cluster.")
+              .longOpt("master")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-              .withDescription("Address of the Zookeeper ensemble; defaults to: localhost:9983")
-              .create("zkHost"),
-      OptionBuilder
-              .withArgName("COLLECTION")
+              .required(false)
+              .desc("Address of the Zookeeper ensemble; defaults to: localhost:9983")
+              .longOpt("zkHost")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-              .withDescription("Name of collection; no default")
-              .create("collection"),
-      OptionBuilder
-              .withArgName("#")
+              .required(false)
+              .desc("Name of collection; no default")
+              .longOpt("collection")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-              .withDescription("Number of docs to queue up on the client before sending to Solr; default is 10")
-              .create("batchSize"),
-      OptionBuilder
-        .withArgName("PATH")
+              .required(false)
+              .desc("Number of docs to queue up on the client before sending to Solr; default is 10")
+              .longOpt("batchSize")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-        .withDescription("For authenticating to Solr using JAAS, sets the '" + LOGIN_CONFIG_PROP + "' system property.")
-        .create("solrJaasAuthConfig"),
-      OptionBuilder
-        .withArgName("NAME")
+              .required(false)
+              .desc("For authenticating to Solr using JAAS, sets the '" + LOGIN_CONFIG_PROP + "' system property.")
+              .longOpt("solrJaasAuthConfig")
+              .build(),
+      Option.builder()
               .hasArg()
-              .isRequired(false)
-        .withDescription("For authenticating to Solr using JAAS, sets the 'solr.kerberos.jaas.appname' system property; default is Client")
-        .create("solrJaasAppName")
+              .required(false)
+              .desc("For authenticating to Solr using JAAS, sets the 'solr.kerberos.jaas.appname' system property; default is Client")
+              .longOpt("solrJaasAppName")
+              .build()
     };
   }
 
@@ -249,7 +258,7 @@ public class SparkApp implements Serializable {
     else if ("kmeans-anomaly".equals(streamProcType))
       return new KMeansAnomaly();
     else if ("eventsim".equals(streamProcType))
-      return new Eventsim();
+      return new EventsimIndexer();
 
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
@@ -278,7 +287,7 @@ public class SparkApp implements Serializable {
     formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
     formatter.printHelp("query-solr-benchmark", getProcessorOptions(new QueryBenchmark()));
     formatter.printHelp("kmeans-anomaly", getProcessorOptions(new KMeansAnomaly()));
-    formatter.printHelp("eventsim", getProcessorOptions(new Eventsim()));
+    formatter.printHelp("eventsim", getProcessorOptions(new EventsimIndexer()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {
