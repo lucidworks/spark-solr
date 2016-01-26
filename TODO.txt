@@ -4,4 +4,4 @@
 *  Creating schema during indexing
 *  Supporting doc values export through stream.io or /export
 *  Adding more test cases and complete unit tests
-*
+*  Test SolrRDD/SolrRelation with

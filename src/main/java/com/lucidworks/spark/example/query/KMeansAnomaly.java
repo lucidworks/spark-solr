@@ -99,7 +99,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
 
     // this "view" has the verb_s and response_s fields expanded into aggregatable
     SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
-    DataFrame solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD);
+    DataFrame solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD, false);
     // register this DataFrame so we can execute a SQL query against it for doing sessionization using lag window func
     solrDataWithPivots.registerTempTable("logs");
 

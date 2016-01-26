@@ -101,7 +101,14 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
   public RDD<Row> buildScan(String[] fields, Filter[] filters) {
     log.info("Building Solr scan using fields=" + (fields != null ? Arrays.asList(fields).toString() : ""));
     if (fields != null && fields.length > 0) {
+      cleanupFieldNames(fields);
       solrQuery.setFields(fields);
+    }
+
+    // Add aliasing to the fields
+    if (solrQuery.getFields() != null && solrQuery.getFields().length() > 0) {
+      // TODO: I am not sure what this exactly does. Figure out the logic
+      SolrSchemaUtil.setAliases(solrQuery.getFields().split(","), solrQuery, baseSchema);
     }
 
     // clear all existing filters
@@ -131,6 +138,12 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     }
 
     return rows;
+  }
+
+  private static void cleanupFieldNames(String[] fields) {
+    for (int i=0; i<fields.length; i++) {
+      fields[i] = fields[i].replaceAll("`", "");
+    }
   }
 
   @Override

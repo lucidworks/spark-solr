@@ -225,7 +225,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection("testFilterSupport2");
   }
 
-  @Ignore
+  @Ignore //the SchemaPreservingSolrRDD no longer exists
   @Test
   public void testNestedDataFrames() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
@@ -258,7 +258,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM, zkHost);
     options.put(SOLR_COLLECTION_PARAM, "testNested");
-    options.put(PRESERVE_SCHEMA, "true");
+    //options.put(PRESERVE_SCHEMA, "true");
     df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     Thread.sleep(1000);
     DataFrame df2 = sqlContext.read().format("solr").options(options).load();
@@ -298,7 +298,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     model.save(jsc.sc(), "NBParquet");
   }
 
-  @Ignore
+  @Ignore //the SchemaPreservingSolrRDD no longer exists
   @Test
   public void loadLRParquetIntoSolr() throws Exception {
     createMLModelLRParquet();
@@ -316,7 +316,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM, zkHost);
     options.put(SOLR_COLLECTION_PARAM, "TestLR");
-    options.put(PRESERVE_SCHEMA, "true");
+    //options.put(PRESERVE_SCHEMA, "true");
     dfLR.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfLR.show();
     dfLR.printSchema();
@@ -331,7 +331,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     FileUtils.forceDelete(lRModel);
   }
 
-  @Ignore
+  @Ignore //the SchemaPreservingSolrRDD no longer exists
   @Test
   public void loadNBParquetIntoSolr() throws Exception {
     createMLModelNBParquet();
@@ -348,7 +348,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     HashMap<String, String> options = new HashMap<String, String>();
     options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(PRESERVE_SCHEMA, "true");
+    //options.put(PRESERVE_SCHEMA, "true");
     options.put(SOLR_COLLECTION_PARAM, "TestNB");
     dfNB.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
     dfNB.show();
