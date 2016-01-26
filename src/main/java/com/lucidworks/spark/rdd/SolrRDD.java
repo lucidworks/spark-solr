@@ -12,7 +12,6 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
@@ -33,16 +32,12 @@ public class SolrRDD implements Serializable{
   private final String uniqueKey;
 
   private transient final JavaSparkContext jsc;
-  private transient final SparkConf sparkConf;
-  private transient final SolrConf solrConf;
   private transient final CloudSolrClient solrClient;
 
   public SolrRDD(String zkHost, String collection, SparkContext sparkContext) throws SparkException{
     this.collection = collection;
     this.zkHost = zkHost;
     this.jsc = new JavaSparkContext(sparkContext);
-    this.sparkConf = (sparkContext.getConf() != null) ? sparkContext.getConf() : new SparkConf();
-    this.solrConf = new SolrConf(this.sparkConf);
     this.solrClient = SolrSupport.getSolrClient(zkHost);
     this.uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection);
   }
@@ -165,7 +160,4 @@ public class SolrRDD implements Serializable{
     return this.solrClient;
   }
 
-  public SolrConf getSolrConf() {
-    return this.solrConf;
-  }
 }

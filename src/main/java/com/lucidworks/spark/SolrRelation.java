@@ -2,7 +2,6 @@ package com.lucidworks.spark;
 
 
 import com.lucidworks.spark.rdd.SolrRDD;
-import com.lucidworks.spark.util.ScalaUtil;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSchemaUtil;
 import com.lucidworks.spark.util.SolrSupport;
@@ -52,10 +51,15 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
 
     this.sqlContext = sqlContext;
     this.sc = sqlContext.sparkContext();
-    this.solrConf = new SolrConf(sc.getConf(), config);
+    this.solrConf = new SolrConf(config);
 
-    String zkHost = ScalaUtil.requiredParam(config, SOLR_ZK_HOST_PARAM);
-    String collection = ScalaUtil.requiredParam(config, SOLR_COLLECTION_PARAM);
+    String zkHost = solrConf.getZKHost();
+    String collection = solrConf.getCollection();
+
+    if (zkHost == null)
+      throw new IllegalArgumentException("Param '" + SOLR_ZK_HOST_PARAM + "' is required");
+    if (collection == null)
+      throw new IllegalArgumentException("Param '" + SOLR_COLLECTION_PARAM + "' is required");
 
     solrRDD = new SolrRDD(zkHost, collection, sc);
 
@@ -114,7 +118,7 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     RDD<Row> rows = null;
     try {
       StructType querySchema = (fields != null && fields.length > 0) ? SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) : schema;
-      JavaRDD<SolrDocument> docs = solrRDD.queryShards(solrQuery);
+      JavaRDD<SolrDocument> docs = solrRDD.queryShards(solrQuery, solrConf.getSplitField(), solrConf.getSplitsPerShard());
   //    log.info("The docs are " + docs.collect());
       rows = SolrSchemaUtil.toRows(querySchema, docs).rdd();
     } catch (Exception e) {

@@ -15,7 +15,6 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -433,9 +432,9 @@ public class SolrQuerySupport implements Serializable {
    * a field holding HTTP method (http_verb=GET) can be converted into: http_method_get=1, which is a common
    * task when creating aggregations.
    */
-  public static DataFrame withPivotFields(final DataFrame solrData, final PivotField[] pivotFields, SolrRDD solrRDD) throws Exception {
+  public static DataFrame withPivotFields(final DataFrame solrData, final PivotField[] pivotFields, SolrRDD solrRDD, boolean escapeFieldNames) throws Exception {
 
-    StructType schema = SolrSchemaUtil.getBaseSchema(solrRDD.getZKHost(), solrRDD.getCollection(), solrRDD.getSolrConf().escapeFieldNames());
+    StructType schema = SolrSchemaUtil.getBaseSchema(solrRDD.getZKHost(), solrRDD.getCollection(), escapeFieldNames);
     final StructType schemaWithPivots = toPivotSchema(solrData.schema(), pivotFields, solrRDD.getCollection(), schema, solrRDD.getUniqueKey(), solrRDD.getZKHost());
 
     JavaRDD<Row> withPivotFields = solrData.javaRDD().map(new Function<Row, Row>() {
