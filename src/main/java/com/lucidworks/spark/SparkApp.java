@@ -3,8 +3,7 @@ package com.lucidworks.spark;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
-import com.lucidworks.spark.example.query.SolrQueryProcessor;
-import com.lucidworks.spark.example.query.TableScanBenchmark;
+import com.lucidworks.spark.example.query.*;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 import com.lucidworks.spark.example.events.Eventsim;
@@ -107,7 +106,14 @@ public class SparkApp implements Serializable {
     }
 
     // Determine the processor to run
-    RDDProcessor procImpl = newProcessor(args[0].trim().toLowerCase(Locale.ROOT));
+    RDDProcessor procImpl;
+    ClassLoader myCL = SparkApp.class.getClassLoader();
+    try {
+      Class<? extends RDDProcessor> clazz = (Class<? extends RDDProcessor>) myCL.loadClass(args[0]);
+      procImpl = clazz.newInstance();
+    } catch (ClassNotFoundException cnfe) {
+      procImpl = newProcessor(args[0].trim().toLowerCase(Locale.ROOT));
+    }
 
     // ensure the processor is serializable
     assertSerializable(procImpl);
@@ -219,8 +225,8 @@ public class SparkApp implements Serializable {
 
     if ("twitter-to-solr".equals(streamProcType))
       return new TwitterToSolrStreamProcessor();
-    else if ("query-solr".equals(streamProcType))
-      return new SolrQueryProcessor();
+    else if ("word-count".equals(streamProcType))
+      return new WordCount();
     else if ("term-vectors".equals(streamProcType))
       return new ReadTermVectors();
     else if ("docfilter".equals(streamProcType))
@@ -230,7 +236,7 @@ public class SparkApp implements Serializable {
     else if ("logs2solr".equals(streamProcType))
       return new Logs2SolrRDDProcessor();
     else if ("query-solr-benchmark".equals(streamProcType))
-      return new TableScanBenchmark();
+      return new QueryBenchmark();
     else if ("kmeans-anomaly".equals(streamProcType))
       return new KMeansAnomaly();
     else if ("eventsim".equals(streamProcType))
@@ -256,12 +262,12 @@ public class SparkApp implements Serializable {
   private static void displayProcessorOptions(PrintStream out) throws Exception {
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
-    formatter.printHelp("query-solr", getProcessorOptions(new SolrQueryProcessor()));
+    formatter.printHelp("word-count", getProcessorOptions(new WordCount()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
     formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
     formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));
     formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
-    formatter.printHelp("query-solr-benchmark", getProcessorOptions(new TableScanBenchmark()));
+    formatter.printHelp("query-solr-benchmark", getProcessorOptions(new QueryBenchmark()));
     formatter.printHelp("kmeans-anomaly", getProcessorOptions(new KMeansAnomaly()));
     formatter.printHelp("eventsim", getProcessorOptions(new Eventsim()));
 
