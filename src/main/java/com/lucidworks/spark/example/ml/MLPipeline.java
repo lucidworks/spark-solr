@@ -1,5 +1,6 @@
-package com.lucidworks.spark;
+package com.lucidworks.spark.example.ml;
 
+import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
