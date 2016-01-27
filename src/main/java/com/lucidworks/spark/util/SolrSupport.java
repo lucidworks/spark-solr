@@ -114,10 +114,10 @@ public class SolrSupport implements Serializable {
           Tuple2<String, SolrInputDocument> next = tupleIter.next();
           if (cuss == null) {
             // once! all docs in this partition have the same leader!
-            String shardId = shardPartitioner.getShardId(next._1);
+            String shardId = shardPartitioner.getShardId(next._1());
             cuss = getCUSS(zkHost, collection, shardId, queueSize, numRunners, pollQueueTime);
           }
-          SolrInputDocument doc = next._2;
+          SolrInputDocument doc = next._2();
           doc.setField("indexed_at_tdt", new Date());
           cuss.add(doc);
         }

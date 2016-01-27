@@ -63,6 +63,10 @@ public class TestSolrCloudClusterSupport {
     cluster.shutdown();
   }
 
+  protected void setCloudSolrServer(CloudSolrClient solrClient) {
+    cloudSolrServer = solrClient;
+  }
+
   protected static void deleteCollection(String collectionName) {
     try {
       cluster.deleteCollection(collectionName);

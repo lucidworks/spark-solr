@@ -1,6 +1,5 @@
 package com.lucidworks.spark.rdd;
 
-import com.lucidworks.spark.SolrConf;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.query.ShardSplit;
 import com.lucidworks.spark.query.StreamingResultsIterator;

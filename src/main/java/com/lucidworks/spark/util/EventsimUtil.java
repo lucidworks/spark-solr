@@ -12,6 +12,7 @@ import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.spark.SparkException;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.status.api.v1.NotFoundException;
 import org.noggit.JSONParser;
@@ -25,6 +26,8 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static com.lucidworks.spark.util.SolrQuerySupport.getFieldTypes;
 
 public class EventsimUtil {
   static final Logger log = Logger.getLogger(EventsimUtil.class);
@@ -48,8 +51,8 @@ public class EventsimUtil {
     List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
     });
 
-    StructType schema = SolrSchemaUtil.getBaseSchema(zkHost, collectionName, false);
-    List<String> existingFields = Arrays.asList(schema.fieldNames());
+    Map<String, SolrQuerySupport.SolrFieldMeta> fields = getFieldTypes(new String[]{}, SolrSupport.getSolrBaseUrl(zkHost), collectionName);
+    Set<String> existingFields = fields.keySet();
 
     // Add the fields to Solr schema
     for (Map<String, Object> fd: fieldDefinitions) {
@@ -58,14 +61,15 @@ public class EventsimUtil {
         // Add the field to Solr
         SchemaRequest.AddField addFieldRequest = new SchemaRequest.AddField(fd);
         SchemaResponse.UpdateResponse updateResponse = addFieldRequest.process(solrClient);
+
         if (updateResponse.getStatus() != 0)
           throw new Exception("Incorrect status response from Solr. Errors are: " + updateResponse.getResponse().get("errors"));
+        if (updateResponse.getResponse().asMap(5).containsKey("errors"))
+          throw new Exception("Errors from schema request: " + updateResponse.getResponse().get("errors").toString());
         log.info("Added field definition: " + fd.toString());
       }
     }
   }
-
-
 
   /**
    * Load the eventsim json dataset and post it through HttpClient

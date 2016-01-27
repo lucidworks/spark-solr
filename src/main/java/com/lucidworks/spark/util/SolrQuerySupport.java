@@ -33,6 +33,7 @@ import java.net.ConnectException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class SolrQuerySupport implements Serializable {
 
@@ -247,6 +248,12 @@ public class SolrQuerySupport implements Serializable {
 
     // avoid looking up field types more than once
     Map<String,String> fieldTypeToClassMap = new HashMap<String,String>();
+
+    // In case of empty, just return all fields with their respective types
+    if (fields.length == 0) {
+      List<String> fieldNames = fieldInfoFromSolr.stream().map(s -> s.get("name").toString()).collect(Collectors.toList());
+      fields = fieldNames.toArray(new String[fieldNames.size()]);
+    }
 
     // collect mapping of Solr field to type
     Map<String,SolrFieldMeta> fieldTypeMap = new HashMap<String,SolrFieldMeta>();

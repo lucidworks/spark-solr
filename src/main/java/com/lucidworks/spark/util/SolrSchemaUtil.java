@@ -108,7 +108,19 @@ public class SolrSchemaUtil implements Serializable{
     }
   }
 
+
   public static Map<String, SolrFieldMeta> getSchemaFields(String solrBaseUrl, String collection) throws SparkException {
+    return getFieldTypes(new String[]{}, solrBaseUrl, collection);
+  }
+
+  /**
+   * Get the schema information from Luke
+   * @param solrBaseUrl
+   * @param collection
+   * @return
+   * @throws SparkException
+   */
+  public static Map<String, SolrFieldMeta> getSchemaFieldsFromLuke(String solrBaseUrl, String collection) throws SparkException {
     String lukeUrl = solrBaseUrl + collection + "/admin/luke?numTerms=0";
     // collect mapping of Solr field to type
     Map<String,SolrFieldMeta> schemaFieldMap = new HashMap<String,SolrFieldMeta>();
@@ -129,7 +141,7 @@ public class SolrSchemaUtil implements Serializable{
 
   public static StructType getBaseSchema(String zkHost, String collection, boolean escapeFields) throws Exception {
     String solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
-    Map<String, SolrFieldMeta> fieldTypeMap = getSchemaFields(solrBaseUrl, collection);
+    Map<String, SolrFieldMeta> fieldTypeMap = getSchemaFieldsFromLuke(solrBaseUrl, collection);
 
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (Map.Entry<String, SolrFieldMeta> field : fieldTypeMap.entrySet()) {
@@ -166,14 +178,6 @@ public class SolrSchemaUtil implements Serializable{
     List<StructField> listOfFields = new ArrayList<StructField>();
     for (String field : fields) listOfFields.add(fieldMap.get(field));
     return DataTypes.createStructType(listOfFields);
-  }
-
-  public static StructType getQuerySchema(SolrQuery query, StructType schema) throws Exception {
-    String fieldList = query.getFields();
-    if (fieldList != null && !fieldList.isEmpty()) {
-      return deriveQuerySchema(fieldList.split(","), schema);
-    }
-    return schema;
   }
 
   public static void applyDefaultFields(StructType baseSchema, SolrQuery solrQuery) {

@@ -48,7 +48,7 @@
     "name": "length", "type": "double", "indexed": "true", "stored": "true"
   },
   {
-    "name": "timestamp", "type": "tdate", "indexed": "false", "stored": "false", "docValues": "false"
+    "name": "timestamp", "type": "tdate", "indexed": "false", "stored": "false", "docValues": "true"
   },
   {
     "name": "registration", "type": "tdate", "indexed": "true", "stored": "true"

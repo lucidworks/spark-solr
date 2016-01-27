@@ -70,8 +70,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
       this.schema = dataFrame.schema();
     } else if (solrQuery.getFields() != null && solrQuery.getFields().length() > 0) {
       this.schema = SolrSchemaUtil.deriveQuerySchema(solrQuery.getFields().split(","), this.baseSchema);
-    } else {
-      this.schema = SolrSchemaUtil.getQuerySchema(solrQuery, this.baseSchema);
     }
   }
 

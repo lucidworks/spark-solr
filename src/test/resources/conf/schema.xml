@@ -3,7 +3,6 @@
   <field name="_version_" type="long" indexed="true" stored="true"/>
   <field name="_root_" type="string" indexed="true" stored="false"/>
   <field name="id" type="string" indexed="true" stored="true" required="true"/> 
-  <dynamicField name="*"  type="string" indexed="true" stored="true"/>
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
