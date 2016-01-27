@@ -391,7 +391,8 @@
             <!--</plugin>-->
         <!--</plugins>-->
     <!--</reporting>-->
-    <!--<dependencies>-->
+
+    <dependencies>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
