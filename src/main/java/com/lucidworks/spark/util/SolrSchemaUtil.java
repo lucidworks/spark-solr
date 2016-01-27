@@ -4,7 +4,10 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
@@ -23,6 +26,10 @@ import java.util.*;
 
 import static com.lucidworks.spark.util.SolrQuerySupport.*;
 
+/**
+ * Util classes to deal with Solr schema and Spark sql schema
+ * TODO: Refactor the methods to use CloudSolrClient rather than building one themselves
+ */
 public class SolrSchemaUtil implements Serializable{
 
   public static Logger log = Logger.getLogger(SolrSchemaUtil.class);
@@ -331,4 +338,5 @@ public class SolrSchemaUtil implements Serializable{
     }
     solrQuery.setFields(fieldList);
   }
+
 }

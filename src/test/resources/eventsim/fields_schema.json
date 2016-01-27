@@ -1,0 +1,56 @@
+[
+  {
+    "name": "userId", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "sessionId", "type": "int", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "page", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "auth", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "method", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "status", "type": "int", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "level", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "itemInSession", "type": "int", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "location", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "userAgent", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "lastName", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "firstName", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "gender", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "artist", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
+  },
+  {
+    "name": "song", "type": "string", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "length", "type": "double", "indexed": "true", "stored": "true"
+  },
+  {
+    "name": "timestamp", "type": "tdate", "indexed": "false", "stored": "false", "docValues": "false"
+  },
+  {
+    "name": "registration", "type": "tdate", "indexed": "true", "stored": "true"
+  }
+]
