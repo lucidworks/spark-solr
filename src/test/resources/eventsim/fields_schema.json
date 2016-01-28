@@ -39,7 +39,7 @@
     "name": "gender", "type": "string", "indexed": "true", "stored": "true"
   },
   {
-    "name": "artist", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
+    "name": "artist", "type": "string", "indexed": "true", "stored": "true"
   },
   {
     "name": "song", "type": "string", "indexed": "true", "stored": "true"
