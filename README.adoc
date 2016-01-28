@@ -256,8 +256,8 @@ You can set the "parallel_shards" option to "false" to disable this feature to s
 The `com.lucidworks.spark.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
 
 [source]
-SolrRDD solrRDD = new SolrRDD(zkHost, collection);
-JavaRDD<SolrDocument> solrJavaRDD = solrRDD.queryShards(jsc, solrQuery);
+SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
+JavaRDD<SolrDocument> solrJavaRDD = solrRDD.queryShards(solrQuery);
 
 Once you've converted the results in an RDD, you can use the Spark API to perform analytics against the data from Solr. For instance, the following code extracts terms from the tweet_s field of each document in the results:
 
