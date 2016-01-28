@@ -72,7 +72,17 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
       DataFrame records = sqlContext.sql("SELECT `userId`, `timestamp` from eventsim WHERE `gender` = 'M'");
       assert records.count() == 567;
-//      Row[] rows = records.collect();
+    }
+
+    // Configure the sql query to do splits using an int type field. TODO: Assert the number of partitions based on the field values
+    {
+      options.put(SOLR_SPLIT_FIELD_PARAM, "sessionId");
+      options.put(SOLR_SPLITS_PER_SHARD_PARAM, "10");
+      DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
+      eventsim.registerTempTable("eventsim");
+
+      List<Row> rows = eventsim.collectAsList();
+      assert rows.size() == 1000;
     }
 
   }

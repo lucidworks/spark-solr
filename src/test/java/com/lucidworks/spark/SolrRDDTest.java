@@ -69,4 +69,5 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     deleteCollection(testCollection);
   }
 
+
 }
