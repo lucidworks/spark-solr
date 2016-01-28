@@ -93,36 +93,29 @@
             </build>
         </profile>
         <profile>
-            <id>coverage-reports</id>
+            <id>coverage</id>
             <activation>
                 <activeByDefault>false</activeByDefault>
             </activation>
             <build>
                 <plugins>
+
                     <plugin>
-                        <groupId>org.scoverage</groupId>
-                        <artifactId>scoverage-maven-plugin</artifactId>
-                        <version>${scoverage.plugin.version}</version>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
                         <configuration>
-                            <scalaPluginVersion>${scala.plugin.version}</scalaPluginVersion>
+                            <excludes>
+                                <exclude>com/lucidworks/spark/example/**</exclude>
+                                <exclude>**/*Test*</exclude>
+                            </excludes>
                         </configuration>
-                    </plugin>
-                  <plugin>
-                    <groupId>org.jacoco</groupId>
-                    <artifactId>jacoco-maven-plugin</artifactId>
-                    <configuration>
-                        <excludes>
-                            <exclude>com/lucidworks/spark/example/**</exclude>
-                            <exclude>**/*Test*</exclude>
-                        </excludes>
-                    </configuration>
-                    <version>0.7.4.201502262128</version>
-                      <executions>
-                        <execution>
-                            <id>default-prepare-agent</id>
-                            <goals>
-                                <goal>prepare-agent</goal>
-                            </goals>
+                        <version>0.7.4.201502262128</version>
+                        <executions>
+                            <execution>
+                                <id>default-prepare-agent</id>
+                                <goals>
+                                    <goal>prepare-agent</goal>
+                                </goals>
                         </execution>
                         <execution>
                             <id>default-report</id>
@@ -132,15 +125,24 @@
                             </goals>
                         </execution>
                     </executions>
-                  </plugin>
-                  <plugin>
-                      <groupId>org.apache.maven.plugins</groupId>
-                      <artifactId>maven-surefire-plugin</artifactId>
-                      <version>2.18.1</version>
-                      <configuration>
-                          <argLine>${argLine} -XX:MaxPermSize=${MaxPermSize}</argLine>
-                      </configuration>
-                  </plugin>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.scoverage</groupId>
+                        <artifactId>scoverage-maven-plugin</artifactId>
+                        <version>${scoverage.plugin.version}</version>
+                        <configuration>
+                            <scalaVersion>${scala.version}</scalaVersion>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>2.18.1</version>
+                        <configuration>
+                            <argLine>${argLine} -XX:MaxPermSize=${MaxPermSize}</argLine>
+                        </configuration>
+                    </plugin>
+
                 </plugins>
             </build>
         </profile>
