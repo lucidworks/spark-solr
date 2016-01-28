@@ -1,21 +1,20 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.EventsimUtil;
-import com.lucidworks.spark.util.SolrSchemaUtil;
+import junit.framework.Assert;
 import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_COLLECTION_PARAM;
-import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_QUERY_PARAM;
-import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_ZK_HOST_PARAM;
+import static com.lucidworks.spark.util.ConfigurationConstants.*;
 
 public class SolrSqlTest extends RDDProcessorTestBase{
 
@@ -23,16 +22,14 @@ public class SolrSqlTest extends RDDProcessorTestBase{
   /**
    * 1. Create a collection
    * 2. Modify the schema to enable docValues for some fields
-   * 3. Reload the collection
-   * 4. Index sample dataset
-   * 5. Do a series of SQL queries and make sure they return valid results
-   * 6.
+   * 3. Index sample dataset
+   * 4. Do a series of SQL queries and make sure they return valid results
    * @throws Exception
    */
   //@Ignore
   @Test
   public void testSQLQueries() throws Exception {
-    String testCollectionName = "testSQLQueries-eventsim";
+    String testCollectionName = "testSQLQueries";
     String zkHost = cluster.getZkServer().getZkAddress();
 
     deleteCollection(testCollectionName);
@@ -53,21 +50,22 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
       DataFrame records = sqlContext.sql("SELECT * FROM eventsim");
       StructType schema = records.schema();
-
-      long numRecords = records.count();
-      assert numRecords == 1000;
+      List<Row> rows = records.collectAsList();
+      assert rows.size() == 1000;
 
       String[] fieldNames = schema.fieldNames();
       // list of fields are present in src/test/resources/eventsim/fields_schema.json
       assert fieldNames.length == 18 + 1 + 1; // extra fields are id and _version_
 
-      // assert the schema for specific fields 'timestamp', 'length', 'status', 'registration'
-      StructType baseSchema = SolrSchemaUtil.getBaseSchema(zkHost, testCollectionName, false);
-      StructField timestamp = schema.apply("timestamp");
-      assert timestamp.dataType().typeName().equals(DataTypes.TimestampType.typeName());
+      Assert.assertEquals(schema.apply("timestamp").dataType().typeName(), DataTypes.TimestampType.typeName());
+      Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.IntegerType.typeName());
+      Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
+      Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
+
+      assert rows.get(0).length() == 20;
     }
 
-    // Filter for some fields
+    // Filter using SQL syntax and escape field names
     {
       DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
       eventsim.registerTempTable("eventsim");
@@ -92,4 +90,5 @@ public class SolrSqlTest extends RDDProcessorTestBase{
     Map<String, String> options = Collections.singletonMap("zkHost", cluster.getZkServer().getZkAddress());
     sqlContext.read().format("solr").options(options).load();
   }
+
 }

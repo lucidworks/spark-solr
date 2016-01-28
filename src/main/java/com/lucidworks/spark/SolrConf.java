@@ -69,8 +69,8 @@ public class SolrConf implements Serializable{
   }
 
   public int getSplitsPerShard() {
-    if (sqlOptions.containsKey(SOLR_SPLIT_FIELD_PARAM)) {
-      return Integer.parseInt(sqlOptions.get(SOLR_SPLIT_FIELD_PARAM));
+    if (sqlOptions.containsKey(SOLR_SPLITS_PER_SHARD_PARAM)) {
+      return Integer.parseInt(sqlOptions.get(SOLR_SPLITS_PER_SHARD_PARAM));
     }
     return DEFAULT_SPLITS_PER_SHARD;
   }

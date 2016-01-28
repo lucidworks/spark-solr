@@ -77,13 +77,13 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     deleteCollection(testCollection);
   }
   
-  protected String array2cdl(String[] arr) {
+  protected static String array2cdl(String[] arr) {
     // this is really horrible
     String str = Arrays.asList(arr).toString();
     return str.substring(1, str.length() - 1).replaceAll(" ","");
   }
   
-  protected Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
+  protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
     sourceData = sourceData.sort("id");
     sourceData.printSchema();
     Row[] testData = sourceData.collect();

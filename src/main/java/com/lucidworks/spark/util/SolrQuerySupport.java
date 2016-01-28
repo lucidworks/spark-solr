@@ -219,7 +219,11 @@ public class SolrQuerySupport implements Serializable {
     SolrQuerySupport.addDefaultSort(query, uniqueKey);
   }
 
-  public static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+  public static Map<String, SolrFieldMeta> getFieldTypes(String[] fields, String solrBaseUrl, String collection) {
+    return getFieldTypes(fields, solrBaseUrl + collection + "/");
+  }
+
+  public static Map<String,SolrFieldMeta> getFieldTypes(String[] fields, String solrUrl) {
 
     // specific field list
     StringBuilder sb = new StringBuilder();
@@ -230,7 +234,7 @@ public class SolrQuerySupport implements Serializable {
     }
     String fl = sb.toString();
 
-    String fieldsUrl = solrBaseUrl+collection+"/schema/fields?showDefaults=true&includeDynamic=true"+fl;
+    String fieldsUrl = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"+fl;
     List<Map<String, Object>> fieldInfoFromSolr = null;
     try {
       Map<String, Object> allFields =
@@ -309,7 +313,7 @@ public class SolrQuerySupport implements Serializable {
       if (fieldTypeClass != null) {
         tvc.fieldTypeClass = fieldTypeClass;
       } else {
-        String fieldTypeUrl = solrBaseUrl+collection+"/schema/fieldtypes/"+tvc.fieldType;
+        String fieldTypeUrl = solrUrl + "schema/fieldtypes/" + tvc.fieldType;
         try {
           Map<String, Object> fieldTypeMeta =
                   SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient(), fieldTypeUrl, 2);
@@ -350,7 +354,7 @@ public class SolrQuerySupport implements Serializable {
     if ("_version_".equals(splitFieldName)) {
       fieldDataType = DataTypes.LongType;
     } else {
-      Map<String, SolrFieldMeta> fieldMetaMap = SolrQuerySupport.getFieldTypes(new String[]{splitFieldName}, shards.get(0), collection);
+      Map<String, SolrFieldMeta> fieldMetaMap = SolrQuerySupport.getFieldTypes(new String[]{splitFieldName}, shards.get(0));
       SolrFieldMeta solrFieldMeta = fieldMetaMap.get(splitFieldName);
       if (solrFieldMeta != null) {
         String fieldTypeClass = solrFieldMeta.fieldTypeClass;

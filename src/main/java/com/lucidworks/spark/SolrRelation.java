@@ -23,7 +23,6 @@ import org.apache.spark.sql.types.StructType;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Iterator;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_COLLECTION_PARAM;
@@ -124,7 +123,6 @@ public class SolrRelation extends BaseRelation implements Serializable, TableSca
     try {
       StructType querySchema = (fields != null && fields.length > 0) ? SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) : schema;
       JavaRDD<SolrDocument> docs = solrRDD.queryShards(solrQuery, solrConf.getSplitField(), solrConf.getSplitsPerShard());
-  //    log.info("The docs are " + docs.collect());
       rows = SolrSchemaUtil.toRows(querySchema, docs).rdd();
     } catch (Exception e) {
       if (e instanceof RuntimeException) {
