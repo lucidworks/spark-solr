@@ -40,7 +40,7 @@
     <spark.version>1.5.2</spark.version>
     <solr.version>5.3.1</solr.version>
     <scala.version>2.10.4</scala.version>
-    <scala.binary.version>2.10</scala.binary.version>A
+    <scala.binary.version>2.10</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
