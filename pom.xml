@@ -41,6 +41,7 @@
     <solr.version>5.3.1</solr.version>
     <scala.version>2.10.4</scala.version>
     <scala.binary.version>2.10</scala.binary.version>
+    <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
   <profiles>
@@ -79,7 +80,7 @@
       </build>
     </profile>
     <profile>
-      <id>coverage-reports</id>
+      <id>coverage</id>
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
@@ -89,6 +90,12 @@
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
             <version>0.7.4.201502262128</version>
+            <configuration>
+              <excludes>
+              <exclude>com/lucidworks/spark/example/**</exclude>
+              <exclude>**/*Test*</exclude>
+              </excludes>
+            </configuration>
             <executions>
               <execution>
                 <id>default-prepare-agent</id>
@@ -104,6 +111,14 @@
                 </goals>
               </execution>
             </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.scoverage</groupId>
+            <artifactId>scoverage-maven-plugin</artifactId>
+            <version>${scoverage.plugin.version}</version>
+            <configuration>
+              <scalaVersion>${scala.version}</scalaVersion>
+            </configuration>
           </plugin>
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>

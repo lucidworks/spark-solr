@@ -1,7 +1,8 @@
 package com.lucidworks.spark.example.query
 
-import com.lucidworks.spark.SolrRDD
 import com.lucidworks.spark.SparkApp.RDDProcessor
+import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.SolrQuerySupport
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
@@ -10,6 +11,8 @@ import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.immutable.HashMap
+
+import com.lucidworks.spark.util.ConfigurationConstants._
 
 /**
  * Example of an wordCount spark app to process tweets from a Solr collection
@@ -35,9 +38,9 @@ class WordCount extends RDDProcessor{
     val queryStr = cli.getOptionValue("query", "*:*")
 
     val sc = SparkContext.getOrCreate(conf)
-    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection)
-    val solrQuery: SolrQuery = SolrRDD.toQuery(queryStr)
-    val rdd: RDD[SolrDocument]  = solrRDD.query(sc, solrQuery).rdd
+    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
+    val solrQuery: SolrQuery = SolrQuerySupport.toQuery(queryStr)
+    val rdd: RDD[SolrDocument]  = solrRDD.queryShards(solrQuery).rdd
 
     val words: RDD[String] = rdd.map(doc => scala.Option.apply(doc.get("text_t")).getOrElse("").toString)
     val pWords: RDD[String] = words.flatMap(s => s.toLowerCase.replaceAll("[.,!?\n]", " ").trim().split(" "))
@@ -50,14 +53,14 @@ class WordCount extends RDDProcessor{
 
     wordsCountPairs.take(20).iterator.foreach(println)
 
-    // Now use schema information in Solr to build a queriable SchemaRDD
+    // Now use schema information in Solr to build a queryable SchemaRDD
     val sqlContext = new SQLContext(sc)
 
     // Pro Tip: SolrRDD will figure out the schema if you don't supply a list of field names in your query
     val options = HashMap[String, String](
-      "zkHost" -> zkHost,
-      "collection" -> collection,
-      "query" -> queryStr
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collection,
+      SOLR_QUERY_PARAM -> queryStr
       )
 
     val df: DataFrame = sqlContext.read.format("solr").options(options).load()

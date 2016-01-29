@@ -1,6 +1,6 @@
 package com.lucidworks.spark.example.hadoop;
 
-import com.lucidworks.spark.SolrSupport;
+import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -13,7 +13,6 @@ import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.PairFunction;
-
 import scala.Tuple2;
 
 public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {

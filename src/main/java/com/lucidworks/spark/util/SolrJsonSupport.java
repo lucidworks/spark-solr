@@ -13,6 +13,8 @@ import org.apache.http.HttpResponse;
 import org.apache.http.NoHttpResponseException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
@@ -50,15 +52,13 @@ public class SolrJsonSupport {
     
     return json;
   }
-  
-  /**
-   * Utility function for sending HTTP GET request to Solr and then doing some
-   * validation of the response.
-   */
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public static Map<String,Object> getJson(HttpClient httpClient, String getUrl) throws Exception {
-    Map<String,Object> json = null;
 
+
+  public static Map<String, Object> postJson(HttpClient httpClient, HttpPost httpPost) throws Exception{
+    return doJsonRequest(httpClient, httpPost.getURI().toURL().toString(), httpPost);
+  }
+
+  public static Map<String, Object> getJson(HttpClient httpClient, String getUrl) throws Exception {
     // ensure we're requesting JSON back from Solr
     URL url = new URL(getUrl);
     String queryString = url.getQuery();
@@ -67,15 +67,26 @@ public class SolrJsonSupport {
         getUrl += "&wt=json";
       }
     } else {
-      getUrl += "?wt=json";      
+      getUrl += "?wt=json";
     }
-       
+
     // Prepare a request object
     HttpGet httpget = new HttpGet(getUrl);
-    
+    return doJsonRequest(httpClient, getUrl, httpget);
+  }
+
+
+  /**
+   * Utility function for sending HTTP GET request to Solr and then doing some
+   * validation of the response.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public static Map<String,Object> doJsonRequest(HttpClient httpClient, String url, HttpUriRequest request) throws Exception {
+    Map<String,Object> json = null;
+
     // Execute the request
-    HttpResponse response = httpClient.execute(httpget);
-    
+    HttpResponse response = httpClient.execute(request);
+
     // Get hold of the response entity
     HttpEntity entity = response.getEntity();
     int statusCode = response.getStatusLine().getStatusCode();
@@ -97,7 +108,7 @@ public class SolrJsonSupport {
         }
       }
       throw new SolrException(SolrException.ErrorCode.getErrorCode(statusCode),
-        "GET request [" + getUrl + "] failed due to: " + response.getStatusLine() + ": " + body);
+        "Request [" + url + "] failed due to: " + response.getStatusLine() + ": " + body);
     }
     
     // If the response does not enclose an entity, there is no need
@@ -112,13 +123,13 @@ public class SolrJsonSupport {
           json = (Map<String,Object>)resp;
         } else {
           throw new SolrServerException("Expected JSON object in response from "+
-              getUrl+" but received "+ resp);
+              url +" but received "+ resp);
         }
       } catch (RuntimeException ex) {
         // In case of an unexpected exception you may want to abort
         // the HTTP request in order to shut down the underlying
         // connection and release it back to the connection manager.
-        httpget.abort();
+        request.abort();
         throw ex;
       } finally {
         // Closing the input stream will trigger connection release
@@ -136,8 +147,8 @@ public class SolrJsonSupport {
     }
     
     if (statusCode == -1)
-      throw new SolrServerException("Unable to determine outcome of GET request to: "+
-        getUrl+"! Response: "+json);
+      throw new SolrServerException("Unable to determine outcome of the request to: "+
+        url +"! Response: "+json);
     
     if (statusCode != 0) {      
       String errMsg = null;
@@ -148,7 +159,7 @@ public class SolrJsonSupport {
       
       if (errMsg == null) errMsg = String.valueOf(json);
       throw new SolrException(SolrException.ErrorCode.getErrorCode(statusCode),
-        "Request to "+getUrl+" failed due to: "+errMsg);
+        "Request to "+ url +" failed due to: "+errMsg);
     }
 
     return json;

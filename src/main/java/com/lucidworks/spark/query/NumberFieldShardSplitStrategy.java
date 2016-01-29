@@ -57,13 +57,14 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
     if (results.getNumFound() == 0)
       throw new IllegalStateException("Cannot get min/max for "+splitFieldName+" from "+shardUrl+"!");
 
-    long min = ((Long)results.get(0).getFirstValue(splitFieldName)).longValue();
+    Object o = results.get(0).getFirstValue(splitFieldName);
+    long min = Long.parseLong(o.toString());
     long count = qr.getResults().getNumFound();
 
     // get max value of this field using a top 1 query
     statsQuery.setSort(splitFieldName, SolrQuery.ORDER.desc);
     qr = solrClient.query(statsQuery);
-    long max = ((Long)qr.getResults().get(0).getFirstValue(splitFieldName)).longValue();
+    long max = Long.parseLong(qr.getResults().get(0).getFirstValue(splitFieldName).toString());
 
     NamedList<Object> nl = new NamedList<Object>();
     nl.add("min", new Long(min));

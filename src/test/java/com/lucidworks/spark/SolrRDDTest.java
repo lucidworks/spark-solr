@@ -1,8 +1,10 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.Aliases;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
@@ -43,8 +45,8 @@ public class SolrRDDTest extends RDDProcessorTestBase {
 
     // ok, alias is setup ... now fire a query against it
     long expectedNumDocs = 6;
-    SolrRDD solrRDD = new SolrRDD(zkHost, aliasName);
-    JavaRDD<SolrDocument> resultsRDD = solrRDD.query(jsc.sc(), "*:*");
+    SolrRDD solrRDD = new SolrRDD(zkHost, aliasName, jsc.sc());
+    JavaRDD<SolrDocument> resultsRDD = solrRDD.query("*:*");
     long numFound = resultsRDD.count();
     assertTrue("expected " + expectedNumDocs + " docs in query results from alias " + aliasName + ", but got " + numFound,
       numFound == expectedNumDocs);
@@ -57,34 +59,74 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     int numDocs = 2000;
     buildCollection(zkHost, testCollection, numDocs, 3);
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection);
+    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection, jsc.sc());
+
+
     SolrQuery testQuery = new SolrQuery();
     testQuery.setQuery("*:*");
     testQuery.setRows(57);
     testQuery.addSort(new SolrQuery.SortClause("id", SolrQuery.ORDER.asc));
-    JavaRDD<SolrDocument> docs = solrRDD.queryShards(jsc, testQuery);
+    JavaRDD<SolrDocument> docs = solrRDD.queryShards(testQuery);
     List<SolrDocument> docList = docs.collect();
     assertTrue("expected "+numDocs+" from queryShards but only found "+docList.size(), docList.size() == numDocs);
+
     deleteCollection(testCollection);
   }
 
   @Test
-  public void testQueryDeep() throws Exception {
+  public void testGet() throws Exception {
     String zkHost = cluster.getZkServer().getZkAddress();
-    String testCollection = "queryDeep";
-    int numDocs = 2000;
-    buildCollection(zkHost, testCollection, numDocs);
-    SolrRDD solrRDD = new SolrRDD(zkHost, testCollection);
-    SolrQuery testQuery = new SolrQuery();
-    testQuery.setQuery("*:*");
-    testQuery.setRows(200);
-    testQuery.addSort(new SolrQuery.SortClause("field3_i", SolrQuery.ORDER.desc));
-    testQuery.addSort(new SolrQuery.SortClause("id", SolrQuery.ORDER.asc));
-    JavaRDD<SolrDocument> docs = solrRDD.queryDeep(jsc, testQuery);
-    List<SolrDocument> docList = docs.collect();
-    assertTrue("expected "+numDocs+" from queryDeep but only found "+docList.size(), docList.size() == numDocs);
-    assertTrue("expected last doc with field3_i==" +(numDocs-1)+" but got "+docList.get(0),
-      numDocs-1 == (Integer)(docList.get(0)).getFirstValue("field3_i"));
+    String testCollection = "queryGet";
     deleteCollection(testCollection);
+    buildCollection(zkHost, testCollection, new String[0], 1);
+
+    SolrInputDocument doc = new SolrInputDocument();
+    doc.addField("id", "new-dummy-doc");
+    doc.addField("field1_s", "value1");
+    doc.addField("field2_s", "value2");
+    cloudSolrServer.add(testCollection, doc, -1);
+
+    SolrRDD rdd = new SolrRDD(zkHost, testCollection, jsc.sc());
+    List<SolrDocument> docs = rdd.get(doc.getField("id").getValue().toString()).collect();
+    assert docs.size() == 1;
+    assert docs.get(0).get("id").equals(doc.getField("id").getValue());
   }
+
+  @Test
+  public void testSolrQuery() throws Exception {
+    String zkHost = cluster.getZkServer().getZkAddress();
+    String testCollection = "testSolrQuery";
+    deleteCollection(testCollection);
+
+    String[] inputDocs = new String[] {
+      testCollection+"-1,foo,bar,1,[a;b],[1;2]",
+      testCollection+"-2,foo,baz,2,[c;d],[3;4]",
+      testCollection+"-3,bar,baz,3,[e;f],[5;6]"
+    };
+
+    buildCollection(zkHost, testCollection, inputDocs, 1);
+
+    {
+      String queryStr = "q=*:*&sort=id asc&fq=field1_s:foo";
+
+      SolrRDD solrRDD = new SolrRDD(zkHost, testCollection, jsc.sc());
+      List<SolrDocument> docs = solrRDD.query(queryStr).collect();
+
+      assert docs.size() == 2;
+      assert docs.get(0).get("id").equals(testCollection + "-1");
+    }
+
+    {
+      String queryStr = "q=*:*&sort=id&fq=field3_i:[2 TO 3]";
+
+      SolrRDD solrRDD = new SolrRDD(zkHost, testCollection, jsc.sc());
+      List<SolrDocument> docs = solrRDD.query(queryStr).collect();
+
+      assert docs.size() == 2;
+      assert docs.get(0).get("id").equals(testCollection + "-2");
+    }
+
+  }
+
+
 }

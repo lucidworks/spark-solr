@@ -1,6 +1,7 @@
 package com.lucidworks.spark.query;
 
-import com.lucidworks.spark.SolrRDD;
+import com.lucidworks.spark.util.SolrQuerySupport;
+import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -19,6 +20,8 @@ import java.util.concurrent.TimeUnit;
  * An iterator over a stream of query results from Solr.
  */
 public class StreamingResultsIterator extends StreamingResponseCallback implements Iterator<SolrDocument>, Iterable<SolrDocument> {
+
+  private static Logger log = Logger.getLogger(StreamingResultsIterator.class);
 
   protected SolrClient solrServer;
   protected SolrQuery solrQuery;
@@ -88,7 +91,7 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
     this.cursorMarkOfCurrentPage = nextCursorMark;
-    QueryResponse resp = SolrRDD.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
+    QueryResponse resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
 
     if (usingCursors) {
       nextCursorMark = resp.getNextCursorMark();
@@ -145,7 +148,7 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     if (doc != null) {
       queue.offer(doc);
     } else {
-      SolrRDD.log.warn("Received null SolrDocument from streamSolrDocument callback while processing cursorMark="+
+      log.warn("Received null SolrDocument from streamSolrDocument callback while processing cursorMark="+
               cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+" so far.");
     }
   }

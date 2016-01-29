@@ -1,6 +1,8 @@
 package com.lucidworks.spark.example.query
 
-import com.lucidworks.spark.{SolrSupport, SolrRDD, SparkApp}
+import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.SolrSupport
+import com.lucidworks.spark.SparkApp
 import org.apache.commons.cli.{Option, CommandLine}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
@@ -40,11 +42,11 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
     solrQuery.addSort(new SolrQuery.SortClause("id", "asc"))
     solrQuery.setRows(rows)
 
-    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection)
+    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
 
     var startMs: Long = System.currentTimeMillis
 
-    var count = solrRDD.queryShards(sc, solrQuery, splitField, splitsPerShard).count
+    var count = solrRDD.queryShards(solrQuery, splitField, splitsPerShard).count()
 
     var tookMs: Long = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards with $splitsPerShard splits")
@@ -58,12 +60,12 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     startMs = System.currentTimeMillis
 
-    count = solrRDD.queryShards(sc, solrQuery).count
+    count = solrRDD.queryShards(solrQuery).count()
 
     tookMs = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards")
 
-    sc.stop
+    sc.stop()
     0
   }
 }
