@@ -1,8 +1,0 @@
-*  Escaping field names for SparkSQL
-*  Supporting field aliasing in spark-solr
-*  Schema dependency to check and get the valid schema
-*  Creating schema using SolrSchema API during indexing
-*  Supporting doc values export through stream.io or /export
-*  Adding more test cases and complete unit tests for full coverage of SolrRDD and SolrRelation
-*  Multi-valued fields support for SparkSQL
-
