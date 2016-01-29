@@ -80,7 +80,7 @@
       </build>
     </profile>
     <profile>
-      <id>coverage-reports</id>
+      <id>coverage</id>
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
