@@ -1,6 +1,6 @@
 package com.lucidworks.spark.util;
 
-public class ConfigurationConstants {
+public interface ConfigurationConstants {
 
   public static final String CONFIG_PREFIX = "solr.";
 
