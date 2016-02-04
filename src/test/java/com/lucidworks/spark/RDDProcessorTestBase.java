@@ -20,9 +20,13 @@ import static org.junit.Assert.assertTrue;
 /**
  * Base class for testing RDDProcessor implementations.
  */
-public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable {
+public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable{
 
   protected static transient JavaSparkContext jsc;
+
+  public JavaSparkContext getJsc() {
+    return jsc;
+  }
 
   @BeforeClass
   public static void setupJavaSparkContext() {

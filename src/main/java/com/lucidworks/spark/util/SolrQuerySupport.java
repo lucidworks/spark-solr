@@ -476,6 +476,7 @@ public class SolrQuerySupport implements Serializable {
     return DataTypes.createStructType(pivotSchemaFields);
   }
 
+
   public static List<StructField> getPivotSchema(String fieldName, int maxCols, String fieldPrefix, String otherName, String collection, StructType schema, String uniqueKey, String zkHost) throws IOException, SolrServerException {
     final List<StructField> listOfFields = new ArrayList<StructField>();
     SolrQuery q = new SolrQuery("*:*");

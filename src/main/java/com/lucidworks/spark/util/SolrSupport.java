@@ -1,7 +1,7 @@
 package com.lucidworks.spark.util;
 
 
-import com.lucidworks.spark.ShardPartitioner;
+import com.lucidworks.spark.ShardIndexPartitioner;
 import com.lucidworks.spark.filter.DocFilterContext;
 import com.lucidworks.spark.fusion.FusionPipelineClient;
 import org.apache.log4j.Logger;
@@ -11,9 +11,7 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.impl.*;
 import org.apache.solr.client.solrj.request.UpdateRequest;
-import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
-import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -106,7 +104,7 @@ public class SolrSupport implements Serializable {
                                         final int pollQueueTime)
     throws Exception
   {
-    final ShardPartitioner shardPartitioner = new ShardPartitioner(zkHost, collection);
+    final ShardIndexPartitioner shardPartitioner = new ShardIndexPartitioner(zkHost, collection);
     pairs.partitionBy(shardPartitioner).foreachPartition(new VoidFunction<Iterator<Tuple2<String, SolrInputDocument>>>() {
       public void call(Iterator<Tuple2<String, SolrInputDocument>> tupleIter) throws Exception {
         ConcurrentUpdateSolrClient cuss = null;

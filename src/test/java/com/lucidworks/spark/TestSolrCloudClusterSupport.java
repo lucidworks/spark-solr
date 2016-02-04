@@ -21,6 +21,7 @@ import org.junit.AfterClass;
 import org.noggit.CharArr;
 import org.noggit.JSONWriter;
 import org.restlet.ext.servlet.ServerServlet;
+import org.scalatest.FunSuite;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -33,8 +34,16 @@ public class TestSolrCloudClusterSupport {
 
   static final Logger log = Logger.getLogger(TestSolrCloudClusterSupport.class);
 
-  protected static MiniSolrCloudCluster cluster;
-  protected static CloudSolrClient cloudSolrServer;
+  public static MiniSolrCloudCluster cluster;
+  public static CloudSolrClient cloudSolrServer;
+
+  public CloudSolrClient getClient() {
+    return cloudSolrServer;
+  }
+
+  public MiniSolrCloudCluster getCluster() {
+    return cluster;
+  }
 
   @BeforeClass
   public static void startCluster() throws Exception {
