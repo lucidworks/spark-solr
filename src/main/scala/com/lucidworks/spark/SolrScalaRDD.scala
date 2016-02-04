@@ -3,7 +3,7 @@ package com.lucidworks.spark
 import java.util.Random
 
 import com.lucidworks.spark.query.StreamingResultsIterator
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrIndexSupport, SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.common.SolrDocument
@@ -20,14 +20,6 @@ import scala.collection.mutable.ListBuffer
 
 /**
  * TODO: Add support for filter queries and be able to pass in SolrQuery object
- * @param zkHost
- * @param collection
- * @param query
- * @param fields
- * @param rows
- * @param splitField
- * @param splitsPerShard
- * @param sc
  */
 class SolrScalaRDD(
     val zkHost: String,
@@ -56,7 +48,12 @@ class SolrScalaRDD(
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     val rddPartition = split.asInstanceOf[SolrRDDPartition]
     log.info("Computing the partition " + rddPartition + "' for task" + context)
-    val documentIterator = new StreamingResultsIterator(cloudClient, rddPartition.query, rddPartition.cursorMark).iterator()
+    //TODO: Add backup mechanism by being able to query any replica
+    val shardUrl = rddPartition.solrShard.replicas(0).replicaLocation
+    val documentIterator = new StreamingResultsIterator(
+      SolrSupport.getHttpSolrClient(shardUrl),
+      rddPartition.query,
+      rddPartition.cursorMark).iterator()
     JavaConverters.asScalaIteratorConverter(documentIterator).asScala
   }
 
@@ -81,7 +78,7 @@ class SolrScalaRDD(
   }
 
   override protected def getPartitions: Array[Partition] = {
-    val shards = buildShardList(cloudClient, collection)
+    val shards = SolrIndexSupport.buildShardList(cloudClient, collection)
     val partitioner : ShardPartitioner = new ShardPartitioner(buildQuery, shards)
     partitioner.getPartitions
   }
@@ -97,53 +94,16 @@ class SolrScalaRDD(
     solrQuery.set("distrib", "false")
     solrQuery.setStart(0)
 
-    if (solrQuery.getSortField != null || solrQuery.getSortField.isEmpty)
+    if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty)
       solrQuery = solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey))
 
     solrQuery
   }
 
-  override def getPreferredLocations(split: Partition): Seq[String] = ???
+  //TODO: Implement this and return the list of replicas. How to co-ordinate the shard url between this and compute method
+//  override def getPreferredLocations(split: Partition): Seq[String] = ???
 //    split.asInstanceOf[SolrRDDPartition].solrShard.replicas
 
-  protected def buildShardList(solrClient: CloudSolrClient,
-                              collection: String): List[SolrShard] = {
-    val zkStateReader: ZkStateReader = solrClient.getZkStateReader
-
-    val clusterState: ClusterState = zkStateReader.getClusterState
-
-    var collections: Array[String] = null
-    if (clusterState.hasCollection(collection)) {
-      collections = Array[String](collection)
-    }
-    else {
-      val aliases: Aliases = zkStateReader.getAliases
-      val aliasedCollections: String = aliases.getCollectionAlias(collection)
-      if (aliasedCollections == null) throw new IllegalArgumentException("Collection " + collection + " not found!")
-      collections = aliasedCollections.split(",")
-    }
-
-    val liveNodes  = clusterState.getLiveNodes
-    val random: Random = new Random(5150)
-
-    val shards = new ListBuffer[SolrShard]()
-    for (coll <- collections) {
-      for (slice <- clusterState.getSlices(coll)) {
-        var replicas  =  new ListBuffer[SolrReplica]()
-        for (r <- slice.getReplicas) {
-          if (r.getState == Replica.State.ACTIVE) {
-            val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
-            if (liveNodes.contains(replicaCoreProps.getNodeName))
-              replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl)
-          }
-        }
-        val numReplicas: Int = replicas.size
-        if (numReplicas == 0) throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
-        shards += new SolrShard(slice.getName.charAt(slice.getName.length-1).toString.toInt, slice.getName, replicas.toList)
-      }
-    }
-    shards.toList
-  }
 
 }
 
