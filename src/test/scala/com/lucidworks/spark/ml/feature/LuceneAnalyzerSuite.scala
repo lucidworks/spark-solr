@@ -299,6 +299,31 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
     ))
     testLuceneAnalyzer(analyzer2, dataset5)
   }
+
+  test("PrefixTokensWithInputCol") {
+    val rawText1 = Array("Harold's NOT around.", "Anymore, I mean.")
+    val tokens1 = Array("harold's", "not", "around", "anymore", "i", "mean")
+
+    val rawText2 = Array("The dog's nose KNOWS!", "Good, fine, great...")
+    val tokens2 = Array("the", "dog's", "nose", "knows", "good", "fine", "great")
+
+    val tokens = tokens1 ++ tokens2
+    val prefixedTokens = tokens1.map("rawText1=" + _) ++ tokens2.map("rawText2=" + _)
+
+    // First transform without token prefixes
+    val analyzer = new LuceneAnalyzer()
+      .setInputCols(Array("rawText1", "rawText2"))
+      .setOutputCol("tokens")
+    val dataset = sqlContext.createDataFrame(
+      Seq(MV_MV_TokenizerTestData(rawText1, rawText2, tokens)))
+    testLuceneAnalyzer(analyzer, dataset)
+
+    // Then transform with token prefixes
+    analyzer.setPrefixTokensWithInputCol(true)
+    val prefixedDataset = sqlContext.createDataFrame(
+      Seq(MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)))
+    testLuceneAnalyzer(analyzer, prefixedDataset)
+  }
 }
 
 object LuceneAnalyzerSuite extends SparkSolrFunSuite {

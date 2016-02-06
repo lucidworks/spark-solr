@@ -63,6 +63,15 @@ class LuceneAnalyzer(override val uid: String)
   /** @group setParam */
   def setInputCol(value: String): this.type = set(inputCols, Array(value))
 
+  val prefixTokensWithInputCol: Param[Boolean] = new Param(this, "prefixTokensWithInputCol",
+    s"If true, the input column name will be prepended to every output token, separated by "
+    + s""""${LuceneAnalyzer.OutputTokenSeparator}"; default: false.""")
+  /** @group setParam */
+  def setPrefixTokensWithInputCol(value: Boolean): this.type = set(prefixTokensWithInputCol, value)
+  /** @group getParam */
+  def getPrefixTokensWithInputCol: Boolean = $(prefixTokensWithInputCol)
+  setDefault(prefixTokensWithInputCol -> false)
+
   val analysisSchema: Param[String] = new Param(this, "analysisSchema",
     "JSON analysis schema: Analyzers (named analysis pipelines: charFilters, tokenizer, filters)"
       + " and input column -> analyzer mappings",
@@ -109,17 +118,25 @@ class LuceneAnalyzer(override val uid: String)
     analyzer.exists(_.isValid)
   }
   override def transformSchema(schema: StructType): StructType = {
+    val fieldNames = schema.fieldNames.toSet
+    var inputColExists = false
     $(inputCols).foreach { colName =>
-      schema(colName).dataType match {
-        case StringType | ArrayType(StringType, _) =>
-        case other => throw new IllegalArgumentException(
-          s"Input column $colName : data type $other is not supported.")
+      if (fieldNames.contains(colName)) {
+        schema(colName).dataType match {
+          case StringType | ArrayType(StringType, _) => inputColExists = true
+          case other => throw new IllegalArgumentException(
+            s"Input column $colName : data type $other is not supported.")
+        }
       }
     }
-    if (schema.fieldNames.contains($(outputCol))) {
-      throw new IllegalArgumentException(s"Output column ${$(outputCol)} already exists.")
+    if (inputColExists) {
+      if (schema.fieldNames.contains($(outputCol))) {
+        throw new IllegalArgumentException(s"Output column ${$(outputCol)} already exists.")
+      }
+      StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
+    } else {
+      schema
     }
-    StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
   }
   override def transform(dataset: DataFrame): DataFrame = {
     val schema = dataset.schema
@@ -164,17 +181,30 @@ class LuceneAnalyzer(override val uid: String)
 
   @transient private var analyzer: Option[SchemaAnalyzer] = None
   private def analyze(colName: String, str: String): Seq[String] = {
-    val stream = analyzer.get.tokenStream(colName, str)
-    val charTermAttr = stream.addAttribute(classOf[CharTermAttribute])
-    stream.reset()
-    val builder = Seq.newBuilder[String]
-    while (stream.incrementToken()) {
-      builder += charTermAttr.toString
+    val inputStream = analyzer.get.tokenStream(colName, str)
+    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
+    inputStream.reset()
+    val outputBuilder = Seq.newBuilder[String]
+    if ($(prefixTokensWithInputCol)) {
+      val tokenBuilder = new StringBuilder(colName + LuceneAnalyzer.OutputTokenSeparator)
+      val prefixLength = tokenBuilder.length
+      while (inputStream.incrementToken) {
+        tokenBuilder.setLength(prefixLength)
+        tokenBuilder.appendAll(charTermAttr.buffer(), 0, charTermAttr.length())
+        outputBuilder += tokenBuilder.toString
+      }
+    } else {
+      while (inputStream.incrementToken)
+        outputBuilder += charTermAttr.toString
     }
-    stream.end()
-    stream.close()
-    builder.result()
+    inputStream.end()
+    inputStream.close()
+    outputBuilder.result()
   }
+}
+private object LuceneAnalyzer {
+  /** Used to separate the input column name and the token when prefixTokensWithInputCol = true */
+  val OutputTokenSeparator = "="
 }
 
 private case class AnalyzerConfig(name: String,
@@ -336,7 +366,7 @@ private class SchemaAnalyzer (analysisSchema: String)
       if (analyzer.isEmpty) {
         if (isValid) {
           analyzer = luceneAnalyzerSchema.getAnalyzer(fieldName)
-          if (! isValid) {
+          if ( ! isValid) {
             throw new IllegalArgumentException(invalidMessages)
           }
         } else {
