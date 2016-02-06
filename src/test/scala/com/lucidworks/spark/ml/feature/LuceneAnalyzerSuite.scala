@@ -219,6 +219,27 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
     testLuceneAnalyzer(analyzer, dataset)
   }
 
+  test("PrebuiltAnalyzer") {
+    val analyzerConfig = """
+                           |{
+                           |  "schemaType": "LuceneAnalyzerSchema.v1",
+                           |  "inputColumns": [{
+                           |    "regex": ".+",
+                           |    "analyzer": "org.apache.lucene.analysis.core.WhitespaceAnalyzer"
+                           |  }]
+                           |}""".stripMargin
+    val analyzer = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig)
+      .setInputCol("rawText")
+      .setOutputCol("tokens")
+
+    val dataset1 = sqlContext.createDataFrame(Seq(
+      TokenizerTestData("Test for tokenization.", Array("Test", "for", "tokenization.")),
+      TokenizerTestData("Te,st. punct", Array("Te,st.", "punct"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset1)
+  }
+
   test("MultivaluedInputCol") {
     val analyzer = new LuceneAnalyzer()
       .setInputCols(Array("rawText"))

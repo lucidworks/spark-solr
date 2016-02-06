@@ -227,6 +227,24 @@ public class JavaLuceneAnalyzerTest {
   }
 
   @Test
+  public void testPrebuiltAnalyzer() {
+    String analyzerConfig = json("{\n" +
+        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
+        "'inputColumns': [{\n" +
+        "  'regex': '.+',\n" +
+        "  'analyzer': 'org.apache.lucene.analysis.core.WhitespaceAnalyzer'\n" +
+        "}]}\n");
+    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+        .setAnalysisSchema(analyzerConfig)
+        .setInputCol("rawText")
+        .setOutputCol("tokens");
+
+    assertExpectedTokens(analyzer, Arrays.asList(
+        new TokenizerTestData("Test for tokenization.", new String[] { "Test", "for", "tokenization." }),
+        new TokenizerTestData("Te,st. punct", new String[] { "Te,st.", "punct" })));
+  }
+
+  @Test
   public void testMultivaluedInputCol() {
     LuceneAnalyzer analyzer = new LuceneAnalyzer()
         .setInputCols(new String[]{"rawText"})
