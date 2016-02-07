@@ -2,16 +2,15 @@ package com.lucidworks.spark
 
 import java.io.File
 
-import com.lucidworks.spark.util.{SolrSupport, SolrJsonSupport}
+import com.lucidworks.spark.util.SolrJsonSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
-import org.apache.solr.client.solrj.request.QueryRequest
+import org.apache.solr.client.solrj.request.{UpdateRequest, QueryRequest}
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.solr.common.SolrInputDocument
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.params.{CollectionParams, CoreAdminParams, ModifiableSolrParams}
-import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkContext, Logging}
 import org.junit.Assert._
 import org.noggit.{JSONWriter, CharArr}
@@ -216,11 +215,14 @@ object SolrCloudUtil extends Logging{
 
     // index some docs in to the new collection
     if (inputDocs != null) {
-      val numDocsIndexed: Int = indexDocs(zkHost, collection, inputDocs, sc)
+      val numDocsIndexed: Int = indexDocs(zkHost, collection, inputDocs, cloudClient)
       Thread.sleep(1000L)
       // verify docs got indexed .. relies on soft auto-commits firing frequently
-      val solrRDD: SolrScalaRDD = new SolrScalaRDD(zkHost, collection, sc)
-      val numFound = solrRDD.count()
+      val solrParams = new ModifiableSolrParams()
+      solrParams.set("q", "*:*")
+      val response: QueryResponse = cloudClient.query(collection, solrParams)
+      assert(response.getStatus == 0)
+      val numFound = response.getResults.getNumFound
       assertTrue("expected " + numDocsIndexed + " docs in query results from " + collection + ", but got " + numFound, numFound == numDocsIndexed)
     }
   }
@@ -228,9 +230,10 @@ object SolrCloudUtil extends Logging{
   def indexDocs(zkHost: String,
                 collection: String,
                 inputDocs: Array[String],
-                sc: SparkContext): Int = {
-    val input : RDD[String] = sc.parallelize(inputDocs, 1)
-    val docs: RDD[SolrInputDocument] = input.map(row => {
+                cloudClient: CloudSolrClient): Int = {
+    val updateRequest = new UpdateRequest()
+
+    inputDocs.foreach(row => {
       val fields = row.split(",")
       if (fields.length < 6)
         throw new IllegalArgumentException("Each test input doc should have 6 fields! invalid doc: " + row)
@@ -247,9 +250,11 @@ object SolrCloudUtil extends Logging{
       list = fields(5).substring(1, fields(5).length-1).split(";")
       list.foreach(s => doc.addField("field5_ii", s.toInt))
 
+      updateRequest.add(doc)
       doc
     })
-    SolrSupport.indexDocs(zkHost, collection, 1, docs)
+
+    updateRequest.process(cloudClient, collection)
     inputDocs.length
   }
 }

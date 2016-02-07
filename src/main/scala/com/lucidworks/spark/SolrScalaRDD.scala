@@ -1,22 +1,15 @@
 package com.lucidworks.spark
 
-import java.util.Random
-
 import com.lucidworks.spark.query.StreamingResultsIterator
+import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrIndexSupport, SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.cloud._
-import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark._
+import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
 
 import scala.collection.JavaConverters
-import scala.collection.JavaConversions._
-import com.lucidworks.spark.util.QueryConstants._
-
-import scala.collection.mutable.ListBuffer
 
 /**
  * TODO: Add support for filter queries and be able to pass in SolrQuery object
@@ -57,6 +50,19 @@ class SolrScalaRDD(
     JavaConverters.asScalaIteratorConverter(documentIterator).asScala
   }
 
+  override protected def getPartitions: Array[Partition] = {
+    val shards = SolrIndexSupport.buildShardList(cloudClient, collection)
+    val partitioner : ShardPartitioner = new ShardPartitioner(buildQuery, shards)
+    partitioner.getPartitions
+  }
+
+  //TODO: Implement this and return the list of replicas. How to co-ordinate the shard url between this and compute method
+    override def getPreferredLocations(split: Partition): Seq[String] = {
+    val urls: Seq[String] = Seq.empty
+    split.asInstanceOf[SolrRDDPartition].solrShard.replicas.foreach(f => urls + f.replicaHostName)
+    urls
+  }
+
   def query(q: String): SolrScalaRDD = {
     copy(query = Option(q))
   }
@@ -77,12 +83,6 @@ class SolrScalaRDD(
     copy(splitsPerShard = Option(splitsPerShard))
   }
 
-  override protected def getPartitions: Array[Partition] = {
-    val shards = SolrIndexSupport.buildShardList(cloudClient, collection)
-    val partitioner : ShardPartitioner = new ShardPartitioner(buildQuery, shards)
-    partitioner.getPartitions
-  }
-
   protected def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0)
@@ -99,11 +99,6 @@ class SolrScalaRDD(
 
     solrQuery
   }
-
-  //TODO: Implement this and return the list of replicas. How to co-ordinate the shard url between this and compute method
-//  override def getPreferredLocations(split: Partition): Seq[String] = ???
-//    split.asInstanceOf[SolrRDDPartition].solrShard.replicas
-
 
 }
 

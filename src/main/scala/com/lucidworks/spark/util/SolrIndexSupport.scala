@@ -39,7 +39,7 @@ object SolrIndexSupport {
           if (r.getState == Replica.State.ACTIVE) {
             val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
             if (liveNodes.contains(replicaCoreProps.getNodeName))
-              replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl)
+              replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName)
           }
         }
         val numReplicas: Int = replicas.size

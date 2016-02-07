@@ -1,7 +1,7 @@
 package com.lucidworks.spark
 
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.spark.{SparkException, Partition, Logging, Partitioner}
+import org.apache.spark.{Partition, Logging, Partitioner}
 
 class ShardPartitioner(
   solrQuery: SolrQuery,
@@ -36,4 +36,5 @@ case class SolrShard(
 case class SolrReplica(
   replicaNumber: Int,
   replicaName: String,
-  replicaLocation: String)
+  replicaLocation: String,
+  replicaHostName: String)
