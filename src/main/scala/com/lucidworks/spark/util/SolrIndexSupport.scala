@@ -1,16 +1,18 @@
 package com.lucidworks.spark.util
 
+import java.net.{URL, InetAddress}
 import java.util.Random
 
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.common.cloud._
+import org.apache.spark.Logging
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import scala.collection.JavaConverters._
 
-object SolrIndexSupport {
+object SolrIndexSupport extends Logging {
 
   def buildShardList(solrClient: CloudSolrClient,
                                collection: String): List[SolrShard] = {
@@ -38,8 +40,17 @@ object SolrIndexSupport {
         for (r: Replica <- slice.getReplicas.asScala) {
           if (r.getState == Replica.State.ACTIVE) {
             val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
-            if (liveNodes.contains(replicaCoreProps.getNodeName))
-              replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName)
+            if (liveNodes.contains(replicaCoreProps.getNodeName)) {
+              try {
+                val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
+                replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
+              } catch {
+                case e : Exception => log.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
+                  replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
+              }
+
+            }
+
           }
         }
         val numReplicas: Int = replicas.size

@@ -1,5 +1,7 @@
 package com.lucidworks.spark
 
+import java.net.InetAddress
+
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrIndexSupport, SolrQuerySupport, SolrSupport}
@@ -10,6 +12,7 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
 
 import scala.collection.JavaConverters
+import scala.util.Random
 
 /**
  * TODO: Add support for filter queries and be able to pass in SolrQuery object
@@ -40,9 +43,22 @@ class SolrScalaRDD(
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     val rddPartition = split.asInstanceOf[SolrRDDPartition]
-    log.info("Computing the partition " + rddPartition + "' for task" + context)
-    //TODO: Add backup mechanism by being able to query any replica
-    val shardUrl = rddPartition.solrShard.replicas(0).replicaLocation
+    val taskHostName = context.taskMetrics().hostname
+    log.info("Computing the partition " + rddPartition.index + "' on host name " + taskHostName)
+
+    var replicaUrl: Option[String] = None
+    val addresses: Array[InetAddress] = getAllAddresses(taskHostName)
+    log.info("InetAddresses of host name " + addresses.mkString(" "))
+    rddPartition.solrShard.replicas.foreach(f => {
+      log.info("Replica InetAddresses " + f.locations.mkString(" "))
+      if (addresses.intersect(f.locations).length > 0) {
+        log.info("Found a replica on the same node as executor. Location " + addresses.intersect(f.locations).mkString(" "))
+        replicaUrl = Some(f.replicaLocation)
+      }
+    })
+    //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
+    val shardUrl = replicaUrl.getOrElse(randomReplicaLocation(rddPartition))
+    log.info("Using the shard url " + shardUrl + " for getting partition data")
     val streamingIterator = new StreamingResultsIterator(
       SolrSupport.getHttpSolrClient(shardUrl),
       rddPartition.query,
@@ -65,6 +81,19 @@ class SolrScalaRDD(
     val urls: Seq[String] = Seq.empty
     split.asInstanceOf[SolrRDDPartition].solrShard.replicas.foreach(f => urls + f.replicaHostName)
     urls
+  }
+
+  private def getAllAddresses(hostName: String): Array[InetAddress] = {
+    try {
+      return InetAddress.getAllByName(hostName)
+    } catch {
+      case e: Exception => log.info("Exception while resolving IP address for host name '" + hostName + "' with exception " + e)
+    }
+    Array.empty[InetAddress]
+  }
+
+  private def randomReplicaLocation(partition: SolrRDDPartition): String = {
+    partition.solrShard.replicas(Random.nextInt(partition.solrShard.replicas.size)).replicaLocation
   }
 
   def query(q: String): SolrScalaRDD = {

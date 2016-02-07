@@ -1,6 +1,9 @@
 package com.lucidworks.spark
 
+import java.net.InetAddress
+
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.spark.scheduler.TaskLocality.TaskLocality
 import org.apache.spark.{Partition, Logging, Partitioner}
 
 class ShardPartitioner(
@@ -24,7 +27,7 @@ class ShardPartitioner(
   }
 
   private def getRDDPartition(shard: SolrShard): Partition = {
-    new SolrRDDPartition("*", shard, solrQuery)
+    new SolrRDDPartition(shard.shardNumber, "*", shard, solrQuery)
   }
 }
 
@@ -37,4 +40,5 @@ case class SolrReplica(
   replicaNumber: Int,
   replicaName: String,
   replicaLocation: String,
-  replicaHostName: String)
+  replicaHostName: String,
+  locations: Array[InetAddress])
