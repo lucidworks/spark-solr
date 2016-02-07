@@ -1,7 +1,9 @@
 package com.lucidworks.spark.example
 
+import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.{SolrScalaRDD, SparkApp}
 import org.apache.commons.cli.{CommandLine, Option}
+import org.apache.solr.client.solrj.request.CollectionAdminRequest
 import org.apache.spark.{Logging, SparkConf, SparkContext}
 
 class RDDExample extends SparkApp.RDDProcessor with Logging {
@@ -16,6 +18,13 @@ class RDDExample extends SparkApp.RDDProcessor with Logging {
     val zkHost = cli.getOptionValue("zkHost", "localhost:9983")
     val collection = cli.getOptionValue("collection", "collection1")
     val queryStr = cli.getOptionValue("query", "*:*")
+
+    // IMPORTANT: reload the collection to flush caches
+    println(s"\nReloading collection $collection to flush caches!\n")
+    val cloudSolrClient = SolrSupport.getSolrServer(zkHost)
+    val req = new CollectionAdminRequest.Reload()
+    req.setCollectionName(collection)
+    cloudSolrClient.request(req)
 
     val sc = new SparkContext(conf)
     val rdd = new SolrScalaRDD(zkHost, collection, sc)

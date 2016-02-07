@@ -43,11 +43,15 @@ class SolrScalaRDD(
     log.info("Computing the partition " + rddPartition + "' for task" + context)
     //TODO: Add backup mechanism by being able to query any replica
     val shardUrl = rddPartition.solrShard.replicas(0).replicaLocation
-    val documentIterator = new StreamingResultsIterator(
+    val streamingIterator = new StreamingResultsIterator(
       SolrSupport.getHttpSolrClient(shardUrl),
       rddPartition.query,
-      rddPartition.cursorMark).iterator()
-    JavaConverters.asScalaIteratorConverter(documentIterator).asScala
+      rddPartition.cursorMark)
+
+    context.addTaskCompletionListener { (context) =>
+      logInfo(f"Fetched ${streamingIterator.getNumDocs} rows from shard $shardUrl for partition ${split.index}")
+    }
+    JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
   }
 
   override protected def getPartitions: Array[Partition] = {

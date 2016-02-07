@@ -37,6 +37,10 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
 
   private CountDownLatch docListInfoLatch = new CountDownLatch(1);
 
+  public long getNumDocs() {
+    return numDocs;
+  }
+
   public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
     this(solrServer, solrQuery, null);
   }
