@@ -1,12 +1,12 @@
 package com.lucidworks.spark.example
 
 import com.lucidworks.spark.{SolrScalaRDD, SparkApp}
-import org.apache.commons.cli.{Option, CommandLine}
-import org.apache.spark.{Logging, SparkContext, SparkConf}
+import org.apache.commons.cli.{CommandLine, Option}
+import org.apache.spark.{Logging, SparkConf, SparkContext}
 
-class NewRDDExample extends SparkApp.RDDProcessor with Logging{
+class RDDExample extends SparkApp.RDDProcessor with Logging {
 
-  override def getName: String = "new-rdd-example"
+  override def getName: String = "old-rdd-example"
 
   override def getOptions: Array[Option] = Array(
     Option.builder().longOpt("query").hasArg.required(true).desc("Query to field").build()
