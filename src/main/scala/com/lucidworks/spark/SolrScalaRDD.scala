@@ -4,7 +4,7 @@ import java.net.InetAddress
 
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{SolrIndexSupport, SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrSupportScala, SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -46,18 +46,20 @@ class SolrScalaRDD(
     val taskHostName = context.taskMetrics().hostname
     log.info("Computing the partition " + rddPartition.index + "' on host name " + taskHostName)
 
+    // Use taskHostName to see if any of the Solr replicas are available on this machine
     var replicaUrl: Option[String] = None
     val addresses: Array[InetAddress] = getAllAddresses(taskHostName)
-    log.info("InetAddresses of host name " + addresses.mkString(" "))
+    log.debug("InetAddresses of host name for partition '" + split.index + "' are " + addresses.mkString(" "))
     rddPartition.solrShard.replicas.foreach(f => {
-      log.info("Replica InetAddresses " + f.locations.mkString(" "))
+      log.debug("Replica addresses for partition '" + "' are " + f.locations.mkString(" "))
       if (addresses.intersect(f.locations).length > 0) {
-        log.info("Found a replica on the same node as executor. Location " + addresses.intersect(f.locations).mkString(" "))
+        log.info("Found a replica on the same node as executor for partition '" + split.index + " '. Location " + addresses.intersect(f.locations).mkString(" "))
         replicaUrl = Some(f.replicaLocation)
       }
     })
+
     //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
-    val shardUrl = replicaUrl.getOrElse(randomReplicaLocation(rddPartition))
+    val shardUrl = replicaUrl.getOrElse(SolrScalaRDD.randomReplicaLocation(rddPartition.solrShard))
     log.info("Using the shard url " + shardUrl + " for getting partition data")
     val streamingIterator = new StreamingResultsIterator(
       SolrSupport.getHttpSolrClient(shardUrl),
@@ -65,15 +67,18 @@ class SolrScalaRDD(
       rddPartition.cursorMark)
 
     context.addTaskCompletionListener { (context) =>
-      logInfo(f"Fetched ${streamingIterator.getNumDocs} rows from shard $shardUrl for partition ${split.index}")
+      log.info(f"Fetched ${streamingIterator.getNumDocs} rows from shard $shardUrl for partition ${split.index}")
     }
     JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
   }
 
   override protected def getPartitions: Array[Partition] = {
-    val shards = SolrIndexSupport.buildShardList(cloudClient, collection)
-    val partitioner : ShardPartitioner = new ShardPartitioner(buildQuery, shards)
-    partitioner.getPartitions
+    val shards = SolrSupportScala.buildShardList(cloudClient, collection)
+    val query = buildQuery
+    if (splitField.isDefined)
+      ShardPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
+    else
+      ShardPartitioner.getShardPartitions(shards, query)
   }
 
   //TODO: Implement this and return the list of replicas. How to co-ordinate the shard url between this and compute method
@@ -92,9 +97,7 @@ class SolrScalaRDD(
     Array.empty[InetAddress]
   }
 
-  private def randomReplicaLocation(partition: SolrRDDPartition): String = {
-    partition.solrShard.replicas(Random.nextInt(partition.solrShard.replicas.size)).replicaLocation
-  }
+
 
   def query(q: String): SolrScalaRDD = {
     copy(query = Option(q))
@@ -116,7 +119,7 @@ class SolrScalaRDD(
     copy(splitsPerShard = Option(splitsPerShard))
   }
 
-  protected def buildQuery: SolrQuery = {
+  def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0)
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
@@ -133,5 +136,12 @@ class SolrScalaRDD(
     solrQuery
   }
 
+}
+
+object SolrScalaRDD {
+
+  def randomReplicaLocation(solrShard: SolrShard): String = {
+    solrShard.replicas(Random.nextInt(solrShard.replicas.size)).replicaLocation
+  }
 }
 

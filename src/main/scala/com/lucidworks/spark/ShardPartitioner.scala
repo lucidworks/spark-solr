@@ -2,37 +2,57 @@ package com.lucidworks.spark
 
 import java.net.InetAddress
 
+import com.lucidworks.spark.query.ShardSplit
+import com.lucidworks.spark.util.SolrSupportScala
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.spark.scheduler.TaskLocality.TaskLocality
-import org.apache.spark.{Partition, Logging, Partitioner}
+import org.apache.spark.Partition
 
-class ShardPartitioner(
-  solrQuery: SolrQuery,
-  shards: List[SolrShard])
-  extends Partitioner with Logging {
-  override def numPartitions: Int = shards.length
+import scala.collection.mutable.ArrayBuffer
 
-  override def getPartition(key: Any): Int = {
-    key match {
-      case partition: SolrRDDPartition =>
-        partition.solrShard.shardNumber
-      case _ =>
-        //     throw new SparkException("Unknown partition '" + key + "' of type '" + key.asInstanceOf[AnyRef].getClass) + "'")
-        0
-    }
+trait SolrRDDPartition extends Partition {
+  def cursorMark: String
+  def solrShard: SolrShard
+  def query: SolrQuery
+}
+
+case class ShardRDDPartition(
+  index: Int,
+  cursorMark: String,
+  solrShard: SolrShard,
+  query: SolrQuery) extends SolrRDDPartition
+
+case class SplitRDDPartition(
+  index: Int,
+  cursorMark: String,
+  solrShard: SolrShard,
+  query: SolrQuery,
+  shardSplit: ShardSplit) extends SolrRDDPartition
+
+// Is there a need to override {@code Partitioner.scala} and define our own partition id's
+object ShardPartitioner {
+
+  def getShardPartitions(shards: List[SolrShard], query: SolrQuery) : Array[Partition] = {
+    shards.zipWithIndex.map{case (shard, i) => new ShardRDDPartition(i, "*", shard, query)}.toArray
   }
 
-  def getPartitions: Array[Partition] = {
-    shards.map(f => getRDDPartition(f)).toArray
-  }
-
-  private def getRDDPartition(shard: SolrShard): Partition = {
-    new SolrRDDPartition(shard.shardNumber, "*", shard, solrQuery)
+  def getSplitPartitions(shards: List[SolrShard],
+                         query: SolrQuery,
+                         splitFieldName: String,
+                         splitsPerShard: Int): Array[Partition] = {
+    var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
+    var counter = 0
+    shards.foreach(shard => {
+      val splits = SolrSupportScala.splitShards(query, shard, splitFieldName, splitsPerShard)
+      splits.foreach(split => {
+        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getQuery, split)
+        counter = counter + 1
+      })
+    })
+    splitPartitions.toArray
   }
 }
 
 case class SolrShard(
-  shardNumber: Int,
   shardName: String,
   replicas: List[SolrReplica])
 
