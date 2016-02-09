@@ -6,17 +6,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.types.*;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.mllib.classification.LogisticRegressionModel;
-import org.apache.spark.mllib.classification.LogisticRegressionWithLBFGS;
-import org.apache.spark.mllib.classification.NaiveBayes;
-import org.apache.spark.mllib.classification.NaiveBayesModel;
-import org.apache.spark.sql.*;
-import org.apache.spark.mllib.regression.LabeledPoint;
-import org.apache.spark.mllib.linalg.Vectors;
-import org.apache.commons.io.FileUtils;
 import solr.DefaultSource;
 
 import java.io.*;
@@ -30,9 +20,6 @@ import static com.lucidworks.spark.util.ConfigurationConstants.*;
  */
 public class SolrRelationTest extends RDDProcessorTestBase {
 
-  protected transient SQLContext sqlContext;
-
-  //@Ignore
   @Test
   public void testEventsDataFrame() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
@@ -75,6 +62,39 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
     validateDataFrameStoreLoad(sqlContext, testCollection, aggDF);
     deleteCollection(testCollection);
+  }
+
+  @Test
+  public void testMVDateHandling() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String testCollection = "testMVDateHandling";
+
+    int numShards = 1;
+    String zkHost = cluster.getZkServer().getZkAddress();
+
+    String[] testData = new String[] {
+            "1,a,x,1000,[a;x],[1000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "2,b,y,2000,[b;y],[2000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "3,c,z,3000,[c;z],[3000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "4,a,x,4000,[a;x],[4000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]"
+    };
+    buildCollection(zkHost, testCollection, testData, numShards);
+
+    SolrQuery q = new SolrQuery("*:*");
+    q.setRows(100);
+    q.addSort("id", SolrQuery.ORDER.asc);
+    dumpSolrCollection(testCollection, q);
+
+    Map<String, String> options = new HashMap<String, String>();
+    options.put(SOLR_ZK_HOST_PARAM, zkHost);
+    options.put(SOLR_COLLECTION_PARAM, testCollection);
+    // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
+    DataFrame fromSolr = sqlContext.read().format(DefaultSource.SOLR_FORMAT).options(options).load();
+    fromSolr = fromSolr.sort("id");
+    fromSolr.printSchema();
+
+    Row[] docsFromSolr = fromSolr.collect();
+    assertTrue(docsFromSolr.length == 4);
   }
   
   protected static String array2cdl(String[] arr) {

@@ -303,7 +303,14 @@ public class SolrSchemaUtil implements Serializable{
           Object fieldValue = isMultiValued ? doc.getFieldValues(field.name()) : doc.getFieldValue(field.name());
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {
-              vals[f] = ((Collection) fieldValue).toArray();
+              // need to unpack the collection to convert Date to Timestamp
+              Collection c = (Collection) fieldValue;
+              Object[] arr = new Object[c.size()];
+              int i = 0;
+              for (Object next : c) {
+                arr[i++] = (next instanceof Date) ? new java.sql.Timestamp(((Date) next).getTime()) : next;
+              }
+              vals[f] = arr;
             } else if (fieldValue instanceof Date) {
               vals[f] = new java.sql.Timestamp(((Date) fieldValue).getTime());
             } else {
