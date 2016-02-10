@@ -1,6 +1,6 @@
 package solr;
 
-import com.lucidworks.spark.SolrRelation;
+import com.lucidworks.spark.SolrJavaRelation;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
@@ -16,9 +16,9 @@ public class DefaultSource implements RelationProvider, CreatableRelationProvide
   public static final String SOLR_FORMAT = "solr";
 
   public BaseRelation createRelation(SQLContext sqlContext, Map<String, String> config) {
-    SolrRelation solrRelation = null;
+    SolrJavaRelation solrRelation = null;
     try {
-      solrRelation = new SolrRelation(sqlContext, config);
+      solrRelation = new SolrJavaRelation(sqlContext, config);
     } catch (Exception e) {
       if (e instanceof RuntimeException) {
         throw (RuntimeException)e;
@@ -30,9 +30,9 @@ public class DefaultSource implements RelationProvider, CreatableRelationProvide
   }
 
   public BaseRelation createRelation(SQLContext sqlContext, SaveMode saveMode, Map<String, String> config, DataFrame dataFrame) {
-    SolrRelation solrRelation = null;
+    SolrJavaRelation solrRelation = null;
     try {
-      solrRelation = new SolrRelation(sqlContext, config, dataFrame);
+      solrRelation = new SolrJavaRelation(sqlContext, config, dataFrame);
       solrRelation.insert(dataFrame, true);
     } catch (Exception e) {
       if (e instanceof RuntimeException) {

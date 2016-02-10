@@ -12,20 +12,6 @@ class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with L
   override def beforeAll(): Unit = {
     super.beforeAll()
     zkHost = cluster.getZkServer.getZkAddress
-
-    // Cloud client for tests on external Solr Clusters
-//    zkHost = "172.17.0.2:2181"
-//    cloudClient = new CloudSolrClient("172.17.0.2:2181", true)
-//    cloudClient.connect()
-//    sc = new SparkContext(new SparkConf()
-//                            .setMaster("spark://172.17.0.3:7077")
-//                            .setAppName("RDD Test")
-//                            .set("spark.default.parallelism", "2")
-//                            .set("spark.cores.max", "2")
-//                            .set("spark.eventLog.enabled", "true")
-//                            .setJars(Array("/Users/kiran/Git/spark-solr/target/spark-solr-1.2.0-SNAPSHOT-shaded.jar"))
-//                            .set("spark.ui.enabled", "true")
-//    )
   }
 
   test("Test Simple Query") {

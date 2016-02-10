@@ -1,14 +1,11 @@
 package com.lucidworks.spark.util
 
 import java.net.{URL, InetAddress}
-import java.util.Random
 
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
-import com.lucidworks.spark.util.SolrQuerySupport.SolrFieldMeta
-import com.lucidworks.spark.{SolrScalaRDD, SplitRDDPartition, SolrReplica, SolrShard}
+import com.lucidworks.spark.{SolrScalaRDD, SolrReplica, SolrShard}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
-import org.apache.solr.client.solrj.request.CollectionAdminRequest.SplitShard
 import org.apache.solr.common.cloud._
 import org.apache.spark.Logging
 import org.apache.spark.sql.types.{DataTypes, DataType}
@@ -69,7 +66,7 @@ object SolrSupportScala extends Logging {
   def splitShards(query: SolrQuery,
                   solrShard: SolrShard,
                   splitFieldName: String,
-                  splitsPerShard: Int): List[ShardSplit] = {
+                  splitsPerShard: Int): List[ShardSplit[_]] = {
     // Get the field type of split field
     var fieldDataType: Option[DataType] = None
     if ("_version_".equals(splitFieldName)) {
@@ -91,7 +88,7 @@ object SolrSupportScala extends Logging {
     getSplits(fieldDataType.get, splitFieldName, splitsPerShard, query, solrShard)
   }
 
-  def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit] = {
+  def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit[_]]= {
     var splitStrategy: Option[ShardSplitStrategy] = None
     if (fd.equals(DataTypes.LongType) || fd.equals(DataTypes.IntegerType)) {
       splitStrategy = Some(new NumberFieldShardSplitStrategy)
@@ -100,7 +97,10 @@ object SolrSupportScala extends Logging {
     } else {
       throw new IllegalArgumentException("Can only split shards on fields of type: long, int or String!")
     }
-    splitStrategy.get.getSplits(SolrScalaRDD.randomReplicaLocation(shard), query, sF, sPS)
+    if (splitStrategy.isDefined)
+      splitStrategy.get.getSplits(SolrScalaRDD.randomReplicaLocation(shard), query, sF, sPS).asScala.toList
+    else
+      throw new IllegalArgumentException("No split strategy found for datatype " + fd)
   }
 
 }

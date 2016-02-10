@@ -2,7 +2,6 @@ package com.lucidworks.spark
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.ShardSplit
 import com.lucidworks.spark.util.SolrSupportScala
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.Partition
@@ -25,8 +24,7 @@ case class SplitRDDPartition(
   index: Int,
   cursorMark: String,
   solrShard: SolrShard,
-  query: SolrQuery,
-  shardSplit: ShardSplit) extends SolrRDDPartition
+  query: SolrQuery) extends SolrRDDPartition
 
 // Is there a need to override {@code Partitioner.scala} and define our own partition id's
 object ShardPartitioner {
@@ -44,7 +42,7 @@ object ShardPartitioner {
     shards.foreach(shard => {
       val splits = SolrSupportScala.splitShards(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getQuery, split)
+        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getQuery)
         counter = counter + 1
       })
     })

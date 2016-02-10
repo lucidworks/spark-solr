@@ -22,10 +22,11 @@ class SolrScalaRDD(
     val collection: String,
     @transient val sc: SparkContext,
     val query : Option[String] = Option(DEFAULT_QUERY),
-    val fields: Option[Array[String]] = Option(null),
+    val fields: Option[Array[String]] = None,
     val rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
-    val splitField: Option[String] = Option(null),
-    val splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD))
+    val splitField: Option[String] = None,
+    val splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
+    val solrQuery: Option[SolrQuery] = None)
   extends RDD[SolrDocument](sc, Seq.empty) with Logging{ //TODO: Do we need to pass any deps on parent RDDs for Solr?
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
@@ -36,8 +37,9 @@ class SolrScalaRDD(
     fields: Option[Array[String]] = fields,
     rows: Option[Int] = rows,
     splitField: Option[String] = splitField,
-    splitsPerShard: Option[Int] = splitsPerShard): SolrScalaRDD = {
-    new SolrScalaRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard)
+    splitsPerShard: Option[Int] = splitsPerShard,
+    solrQuery: Option[SolrQuery] = solrQuery): SolrScalaRDD = {
+    new SolrScalaRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard, solrQuery)
   }
 
   @DeveloperApi
@@ -74,7 +76,7 @@ class SolrScalaRDD(
 
   override protected def getPartitions: Array[Partition] = {
     val shards = SolrSupportScala.buildShardList(cloudClient, collection)
-    val query = buildQuery
+    val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     if (splitField.isDefined)
       ShardPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
     else
@@ -97,30 +99,37 @@ class SolrScalaRDD(
     Array.empty[InetAddress]
   }
 
-
-
   def query(q: String): SolrScalaRDD = {
     copy(query = Option(q))
   }
 
+  def query(solrQuery: SolrQuery): SolrScalaRDD = {
+    copy(solrQuery = Option(solrQuery))
+  }
+
+  def select(fl: String): SolrScalaRDD = {
+    copy(fields = Some(fl.split(",")))
+  }
+
   def select(fl: Array[String]): SolrScalaRDD = {
-    copy(fields = Option(fl))
+    copy(fields = Some(fl))
   }
 
   def rows(rows: Int): SolrScalaRDD = {
-    copy(rows = Option(rows))
+    copy(rows = Some(rows))
   }
 
   def splitField(field: String): SolrScalaRDD = {
-    copy(splitField = Option(field))
+    copy(splitField = Some(field))
   }
 
   def splitsPerShard(splitsPerShard: Int): SolrScalaRDD = {
-    copy(splitsPerShard = Option(splitsPerShard))
+    copy(splitsPerShard = Some(splitsPerShard))
   }
 
   def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
+    //TODO: Remove null and replace with Option and None
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0)
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     if (!solrQuery.getRows.eq(null))
