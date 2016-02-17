@@ -1,8 +1,8 @@
-package com.lucidworks.spark
+package com.lucidworks.spark.port
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.util.SolrSupportScala
+import com.lucidworks.spark.port.util.SolrSupportScala
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.Partition
 

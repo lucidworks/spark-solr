@@ -59,7 +59,7 @@ public class SolrQuerySupport implements Serializable {
     boolean isMultiValued;
     boolean isDocValues;
     boolean isStored;
-    String fieldTypeClass;
+    public String fieldTypeClass;
   }
 
   public static String getUniqueKey(String zkHost, String collection) {

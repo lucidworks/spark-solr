@@ -15,7 +15,7 @@ import org.apache.spark.{SparkContext, Logging}
 import org.junit.Assert._
 import org.noggit.{JSONWriter, CharArr}
 
-import scala.collection.JavaConverters._
+import port.collection.JavaConverters._
 
 object SolrCloudUtil extends Logging{
 
@@ -169,7 +169,7 @@ object SolrCloudUtil extends Logging{
       val qr: QueryResponse = cloudClient.query(collectionName, solrQuery)
       log.info("Found " + qr.getResults.getNumFound + " docs in " + collectionName)
       var i = 0
-      import scala.collection.JavaConverters._
+      import port.collection.JavaConverters._
       for (doc <- qr.getResults.asScala) {
         log.info(i + ":" + doc)
         i += 1

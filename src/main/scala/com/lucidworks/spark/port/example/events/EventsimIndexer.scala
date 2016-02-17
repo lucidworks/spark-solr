@@ -1,4 +1,4 @@
-package com.lucidworks.spark.example.events
+package com.lucidworks.spark.port.example.events
 
 import java.util.Calendar
 import java.util.TimeZone

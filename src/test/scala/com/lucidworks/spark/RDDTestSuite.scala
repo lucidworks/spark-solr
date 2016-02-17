@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.SolrSupport
+import com.lucidworks.spark.port.SolrRDD
 import org.apache.spark.Logging
 
 class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with Logging {
@@ -18,10 +18,10 @@ class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with L
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 3, 2, cloudClient, sc)
     try {
-      val newRDD = new SolrScalaRDD(zkHost, collectionName, sc)
+      val newRDD = new SolrRDD(zkHost, collectionName, sc)
       assert(newRDD.count() === 3)
     } finally {
-      SolrCloudUtil.deleteCollection(collectionName, SolrSupport.getSolrBaseUrl(zkHost))
+      SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
 
@@ -29,11 +29,11 @@ class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with L
     val collectionName = "testRDDPartitions" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 2, 4, cloudClient, sc)
     try {
-      val newRDD = new SolrScalaRDD(zkHost, collectionName, sc)
+      val newRDD = new SolrRDD(zkHost, collectionName, sc)
       val partitions = newRDD.partitions
       assert(partitions.length === 4)
     } finally {
-      SolrCloudUtil.deleteCollection(collectionName, SolrSupport.getSolrBaseUrl(zkHost))
+      SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
 

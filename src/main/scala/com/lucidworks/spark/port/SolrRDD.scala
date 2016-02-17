@@ -1,10 +1,11 @@
-package com.lucidworks.spark
+package com.lucidworks.spark.port
 
 import java.net.InetAddress
 
+import com.lucidworks.spark.port.util.SolrSupportScala
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{SolrSupportScala, SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -17,7 +18,7 @@ import scala.util.Random
 /**
  * TODO: Add support for filter queries and be able to pass in SolrQuery object
  */
-class SolrScalaRDD(
+class SolrRDD(
     val zkHost: String,
     val collection: String,
     @transient val sc: SparkContext,
@@ -30,7 +31,6 @@ class SolrScalaRDD(
   extends RDD[SolrDocument](sc, Seq.empty) with Logging{ //TODO: Do we need to pass any deps on parent RDDs for Solr?
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
-  @transient val cloudClient = SolrSupport.getSolrClient(zkHost)
 
   protected def copy(
     query: Option[String] = query,
@@ -38,8 +38,8 @@ class SolrScalaRDD(
     rows: Option[Int] = rows,
     splitField: Option[String] = splitField,
     splitsPerShard: Option[Int] = splitsPerShard,
-    solrQuery: Option[SolrQuery] = solrQuery): SolrScalaRDD = {
-    new SolrScalaRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard, solrQuery)
+    solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
+    new SolrRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard, solrQuery)
   }
 
   @DeveloperApi
@@ -47,6 +47,8 @@ class SolrScalaRDD(
     val rddPartition = split.asInstanceOf[SolrRDDPartition]
     val taskHostName = context.taskMetrics().hostname
     log.info("Computing the partition " + rddPartition.index + "' on host name " + taskHostName)
+
+    // TODO: Define primary, backups as a definition for getting data locality instead of relying on taskHostName
 
     // Use taskHostName to see if any of the Solr replicas are available on this machine
     var replicaUrl: Option[String] = None
@@ -61,7 +63,7 @@ class SolrScalaRDD(
     })
 
     //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
-    val shardUrl = replicaUrl.getOrElse(SolrScalaRDD.randomReplicaLocation(rddPartition.solrShard))
+    val shardUrl = replicaUrl.getOrElse(SolrRDD.randomReplicaLocation(rddPartition.solrShard))
     log.info("Using the shard url " + shardUrl + " for getting partition data")
     val streamingIterator = new StreamingResultsIterator(
       SolrSupport.getHttpSolrClient(shardUrl),
@@ -75,7 +77,7 @@ class SolrScalaRDD(
   }
 
   override protected def getPartitions: Array[Partition] = {
-    val shards = SolrSupportScala.buildShardList(cloudClient, collection)
+    val shards = SolrSupportScala.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     if (splitField.isDefined)
       ShardPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
@@ -99,31 +101,31 @@ class SolrScalaRDD(
     Array.empty[InetAddress]
   }
 
-  def query(q: String): SolrScalaRDD = {
+  def query(q: String): SolrRDD = {
     copy(query = Option(q))
   }
 
-  def query(solrQuery: SolrQuery): SolrScalaRDD = {
+  def query(solrQuery: SolrQuery): SolrRDD = {
     copy(solrQuery = Option(solrQuery))
   }
 
-  def select(fl: String): SolrScalaRDD = {
+  def select(fl: String): SolrRDD = {
     copy(fields = Some(fl.split(",")))
   }
 
-  def select(fl: Array[String]): SolrScalaRDD = {
+  def select(fl: Array[String]): SolrRDD = {
     copy(fields = Some(fl))
   }
 
-  def rows(rows: Int): SolrScalaRDD = {
+  def rows(rows: Int): SolrRDD = {
     copy(rows = Some(rows))
   }
 
-  def splitField(field: String): SolrScalaRDD = {
+  def splitField(field: String): SolrRDD = {
     copy(splitField = Some(field))
   }
 
-  def splitsPerShard(splitsPerShard: Int): SolrScalaRDD = {
+  def splitsPerShard(splitsPerShard: Int): SolrRDD = {
     copy(splitsPerShard = Some(splitsPerShard))
   }
 
@@ -147,7 +149,7 @@ class SolrScalaRDD(
 
 }
 
-object SolrScalaRDD {
+object SolrRDD {
 
   def randomReplicaLocation(solrShard: SolrShard): String = {
     solrShard.replicas(Random.nextInt(solrShard.replicas.size)).replicaLocation

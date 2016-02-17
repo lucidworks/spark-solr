@@ -28,9 +28,9 @@ import java.util.Iterator;
 import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_COLLECTION_PARAM;
 import static com.lucidworks.spark.util.ConfigurationConstants.SOLR_ZK_HOST_PARAM;
 
-public class SolrJavaRelation extends BaseRelation implements Serializable, TableScan, PrunedFilteredScan, InsertableRelation {
+public class SolrRelation extends BaseRelation implements Serializable, TableScan, PrunedFilteredScan, InsertableRelation {
 
-  public static Logger log = Logger.getLogger(SolrJavaRelation.class);
+  public static Logger log = Logger.getLogger(SolrRelation.class);
 
   protected transient SolrQuery solrQuery;
   protected SolrRDD solrRDD;
@@ -40,11 +40,11 @@ public class SolrJavaRelation extends BaseRelation implements Serializable, Tabl
   protected transient SparkContext sc;
   protected transient final SolrConf solrConf;
 
-  public SolrJavaRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config) throws Exception {
     this(sqlContext, config, null);
   }
 
-  public SolrJavaRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config, DataFrame dataFrame) throws Exception {
+  public SolrRelation(SQLContext sqlContext, scala.collection.immutable.Map<String, String> config, DataFrame dataFrame) throws Exception {
     if (sqlContext == null)
       throw new IllegalArgumentException("SQLContext cannot be null!");
 

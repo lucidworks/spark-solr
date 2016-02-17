@@ -1,4 +1,4 @@
-package com.lucidworks.spark.example.query
+package com.lucidworks.spark.port.example.query
 
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport

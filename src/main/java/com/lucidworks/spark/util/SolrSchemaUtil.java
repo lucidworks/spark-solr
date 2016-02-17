@@ -300,6 +300,7 @@ public class SolrSchemaUtil implements Serializable{
           StructField field = fields[f];
           Metadata meta = field.metadata();
           Boolean isMultiValued = meta.contains("multiValued") ? meta.getBoolean("multiValued") : false;
+          //TODO: Check the guessing here and assume everything is single valued unless user specified the multi-valued fields
           Object fieldValue = isMultiValued ? doc.getFieldValues(field.name()) : doc.getFieldValue(field.name());
           if (fieldValue != null) {
             if (fieldValue instanceof Collection) {

@@ -36,7 +36,7 @@ import org.noggit.{JSONWriter, CharArr}
 import org.restlet.ext.servlet.ServerServlet
 import org.scalatest.{Suite, BeforeAndAfterAll, Outcome, FunSuite}
 
-import scala.collection.JavaConverters._
+import port.collection.JavaConverters._
 
 /**
  * Base abstract class for all Scala unit tests in spark-solr for handling common functionality.

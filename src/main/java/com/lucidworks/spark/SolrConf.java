@@ -2,7 +2,6 @@ package com.lucidworks.spark;
 
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkContext;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 
