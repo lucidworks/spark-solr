@@ -119,24 +119,19 @@ class LuceneAnalyzer(override val uid: String)
   }
   override def transformSchema(schema: StructType): StructType = {
     val fieldNames = schema.fieldNames.toSet
-    var inputColExists = false
     $(inputCols).foreach { colName =>
       if (fieldNames.contains(colName)) {
         schema(colName).dataType match {
-          case StringType | ArrayType(StringType, _) => inputColExists = true
+          case StringType | ArrayType(StringType, _) =>
           case other => throw new IllegalArgumentException(
             s"Input column $colName : data type $other is not supported.")
         }
       }
     }
-    if (inputColExists) {
-      if (schema.fieldNames.contains($(outputCol))) {
-        throw new IllegalArgumentException(s"Output column ${$(outputCol)} already exists.")
-      }
-      StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
-    } else {
-      schema
+    if (schema.fieldNames.contains($(outputCol))) {
+      throw new IllegalArgumentException(s"Output column ${$(outputCol)} already exists.")
     }
+    StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
   }
   override def transform(dataset: DataFrame): DataFrame = {
     val schema = dataset.schema
@@ -151,9 +146,12 @@ class LuceneAnalyzer(override val uid: String)
       row.toSeq foreach { column: Any =>
         val field = colNameIter.next()
         column match {
+          case null => // skip missing values
           case value: String => seqBuilder ++= analyze(field, value)
           case values: Seq[String @unchecked] =>
-            values.foreach { value => seqBuilder ++= analyze(field, value) }
+            values.foreach { case null => // skip missing values
+              case value => seqBuilder ++= analyze(field, value)
+            }
         }
       }
       seqBuilder.result()

@@ -347,10 +347,28 @@ public class JavaLuceneAnalyzerTest {
         new MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)));
   }
 
+  @Test
+  public void testMissingValues() {
+    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+        .setInputCol("rawText")
+        .setOutputCol("tokens");
+    assertExpectedTokens(analyzer, Arrays.asList(new TokenizerTestData(null, new String[]{})));
+    assertExpectedTokens(analyzer, Arrays.asList(new TokenizerTestData("", new String[]{})));
+    assertExpectedTokens(analyzer, Collections.singletonList(
+        new MV_TokenizerTestData(new String[] {null, "Harold's not around.", null, "The dog's nose KNOWS!", ""},
+            new String[]{"harold's", "not", "around", "the", "dog's", "nose", "knows"})));
+
+    analyzer.setInputCols(new String[] {"rawText1", "rawText2", "rawText3"});
+    assertExpectedTokens(analyzer, Collections.singletonList(
+        new SV_SV_SV_TokenizerTestData(
+            "", "The dog's nose KNOWS!", null,
+            new String[]{"the", "dog's", "nose", "knows"})));
+  }
+
   private <T> void assertExpectedTokens(LuceneAnalyzer analyzer, List<T> testData) {
     JavaRDD<T> rdd = jsc.parallelize(testData);
     Row[] pairs = analyzer.transform(jsql.createDataFrame(rdd, testData.get(0).getClass()))
-        .select("tokens", "wantedTokens")
+        .select("wantedTokens", "tokens")
         .collect();
     for (Row r : pairs) {
       Assert.assertEquals(r.get(0), r.get(1));

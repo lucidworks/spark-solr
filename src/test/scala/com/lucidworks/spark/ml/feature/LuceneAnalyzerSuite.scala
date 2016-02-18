@@ -345,6 +345,30 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       Seq(MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)))
     testLuceneAnalyzer(analyzer, prefixedDataset)
   }
+
+  test("MissingValues") {
+    val analyzer = new LuceneAnalyzer()
+      .setInputCols(Array("rawText"))
+      .setOutputCol("tokens")
+    val dataset1 = sqlContext.createDataFrame(Seq(TokenizerTestData(null, Array())))
+    testLuceneAnalyzer(analyzer, dataset1)
+
+    val dataset2 = sqlContext.createDataFrame(Seq(TokenizerTestData("", Array())))
+    testLuceneAnalyzer(analyzer, dataset2)
+
+    val dataset3 = sqlContext.createDataFrame(Seq(
+      MV_TokenizerTestData(Array(null, "Harold's not around.", null, "The dog's nose KNOWS!", ""),
+        Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset3)
+
+    analyzer.setInputCols(Array("rawText1", "rawText2", "rawText3"))
+    val dataset4 = sqlContext.createDataFrame(Seq(
+      SV_SV_SV_TokenizerTestData("", "The dog's nose KNOWS!", null,
+        Array("the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset4)
+  }
 }
 
 object LuceneAnalyzerSuite extends SparkSolrFunSuite {
