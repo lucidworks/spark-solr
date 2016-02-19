@@ -244,7 +244,7 @@ object SolrSchemaUtil extends Logging {
           val fieldValue = solrDocument.getFieldValue(field.name)
           fieldValue match {
             case f: String => values.add(f)
-            case f: Iterable =>
+            case f: Iterable[_] =>
               val iterableValues = f.iterator.map {
                 case d: Date =>
                   new Timestamp(d.getTime)

@@ -25,7 +25,7 @@ class WordCount extends RDDProcessor{
     Option.builder()
           .argName("QUERY")
           .longOpt("query")
-          .hasArg()
+          .hasArg
           .required(false)
           .desc("URL encoded Solr query to send to Solr")
           .build()

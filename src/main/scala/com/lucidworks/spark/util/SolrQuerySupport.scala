@@ -237,7 +237,7 @@ object SolrQuerySupport extends Logging {
 
     fieldDefinitionsFromSchema.foreach{ case(name, payloadRef) =>
       payloadRef match {
-        case payload: Map[String, Object] =>
+        case payload: Map[String, Any] =>
           // No valid checks for name and value :(
           val name = payload.get("name").get.asInstanceOf[String]
           val fieldType = payload.get("type").get.asInstanceOf[String]

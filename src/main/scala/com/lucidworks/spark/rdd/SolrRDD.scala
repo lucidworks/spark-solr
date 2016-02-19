@@ -4,7 +4,7 @@ import java.net.InetAddress
 
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
-import com.lucidworks.spark.{ShardPartitioner, SolrRDDPartition, SolrShard}
+import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
@@ -44,51 +44,42 @@ class SolrRDD(
 
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
-    val rddPartition = split.asInstanceOf[SolrRDDPartition]
-    val taskHostName = context.taskMetrics().hostname
-    log.info("Computing the partition " + rddPartition.index + "' on host name " + taskHostName)
+    split match {
+      case partition: SolrRDDPartition =>
+        log.info("Computing the partition " + partition.index + "' on host name " + context.taskMetrics().hostname)
 
-    // TODO: Define primary, backups as a definition for getting data locality instead of relying on taskHostName
+        //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
+        val url = partition.preferredReplica.replicaUrl
+        log.info("Using the shard url " + url + " for getting partition data")
+        val streamingIterator = new StreamingResultsIterator(
+          SolrSupport.getHttpSolrClient(url),
+          partition.query,
+          partition.cursorMark)
 
-    // Use taskHostName to see if any of the Solr replicas are available on this machine
-    var replicaUrl: Option[String] = None
-    val addresses: Array[InetAddress] = getAllAddresses(taskHostName)
-    log.debug("InetAddresses of host name for partition '" + split.index + "' are " + addresses.mkString(" "))
-    rddPartition.solrShard.replicas.foreach(f => {
-      log.debug("Replica addresses for partition '" + "' are " + f.locations.mkString(" "))
-      if (addresses.intersect(f.locations).length > 0) {
-        log.info("Found a replica on the same node as executor for partition '" + split.index + " '. Location " + addresses.intersect(f.locations).mkString(" "))
-        replicaUrl = Some(f.replicaLocation)
-      }
-    })
+        context.addTaskCompletionListener { (context) =>
+          log.info(f"Fetched ${streamingIterator.getNumDocs} rows from shard $url for partition ${split.index}")
+        }
+        JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
 
-    //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
-    val shardUrl = replicaUrl.getOrElse(SolrRDD.randomReplicaLocation(rddPartition.solrShard))
-    log.info("Using the shard url " + shardUrl + " for getting partition data")
-    val streamingIterator = new StreamingResultsIterator(
-      SolrSupport.getHttpSolrClient(shardUrl),
-      rddPartition.query,
-      rddPartition.cursorMark)
-
-    context.addTaskCompletionListener { (context) =>
-      log.info(f"Fetched ${streamingIterator.getNumDocs} rows from shard $shardUrl for partition ${split.index}")
+      case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
-    JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
   }
 
   override protected def getPartitions: Array[Partition] = {
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     if (splitField.isDefined)
-      ShardPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
+      SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
     else
-      ShardPartitioner.getShardPartitions(shards, query)
+      SolrPartitioner.getShardPartitions(shards, query)
   }
 
-  //TODO: Implement this and return the list of replicas. How to co-ordinate the shard url between this and compute method
-    override def getPreferredLocations(split: Partition): Seq[String] = {
+  override def getPreferredLocations(split: Partition): Seq[String] = {
     val urls: Seq[String] = Seq.empty
-    split.asInstanceOf[SolrRDDPartition].solrShard.replicas.foreach(f => urls + f.replicaHostName)
+    split match {
+      case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
+      case partition: AnyRef => log.warn("Unknown partition type '" + partition.getClass)
+    }
     urls
   }
 
@@ -119,6 +110,10 @@ class SolrRDD(
 
   def rows(rows: Int): SolrRDD = {
     copy(rows = Some(rows))
+  }
+
+  def doSplits(): SolrRDD = {
+    copy(splitField = Some(DEFAULT_SPLIT_FIELD))
   }
 
   def splitField(field: String): SolrRDD = {
@@ -152,7 +147,11 @@ class SolrRDD(
 object SolrRDD {
 
   def randomReplicaLocation(solrShard: SolrShard): String = {
-    solrShard.replicas(Random.nextInt(solrShard.replicas.size)).replicaLocation
+    randomReplica(solrShard).replicaUrl
+  }
+
+  def randomReplica(solrShard: SolrShard): SolrReplica = {
+    solrShard.replicas(Random.nextInt(solrShard.replicas.size))
   }
 }
 

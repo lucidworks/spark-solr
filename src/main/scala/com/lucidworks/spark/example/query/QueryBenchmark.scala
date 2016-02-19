@@ -1,4 +1,4 @@
-package com.lucidworks.spark.port.example.query
+package com.lucidworks.spark.example.query
 
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
@@ -37,7 +37,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     val fields = cli.getOptionValue("fields", "")
     if (!fields.isEmpty)
-      fields.split(",").foreach(solrQuery.addField(_))
+      fields.split(",").foreach(solrQuery.addField)
 
     solrQuery.addSort(new SolrQuery.SortClause("id", "asc"))
     solrQuery.setRows(rows)
@@ -53,7 +53,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     // IMPORTANT: reload the collection to flush caches
     println(s"\nReloading collection $collection to flush caches!\n")
-    var cloudSolrClient = SolrSupport.getSolrServer(zkHost)
+    var cloudSolrClient = SolrSupport.getSolrCloudClient(zkHost)
     var req = new CollectionAdminRequest.Reload()
     req.setCollectionName(collection)
     cloudSolrClient.request(req)

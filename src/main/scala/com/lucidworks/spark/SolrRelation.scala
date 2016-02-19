@@ -1,6 +1,6 @@
 package com.lucidworks.spark
 
-import com.lucidworks.spark.util.SolrSchemaUtil
+import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport, SolrSchemaUtil}
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrInputDocument
@@ -8,9 +8,11 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.Logging
 
 import scala.util.control.Breaks._
+import com.lucidworks.spark.util.QueryConstants._
+import com.lucidworks.spark.util.ConfigurationConstants._
 
 class SolrRelation(val parameters: Map[String, String],
                    override val sqlContext: SQLContext,
@@ -23,9 +25,24 @@ class SolrRelation(val parameters: Map[String, String],
   }
 
   checkRequiredParams()
-  val sc: SparkContext = sqlContext.sparkContext
-  val solrRDD: SolrRDD = new SolrRDD(conf.getZKHost, conf.getCollection, sc)
-  val baseSchema: StructType = SolrSchemaUtil.getBaseSchema(conf.getZKHost, conf.getCollection, conf.escapeFieldNames())
+  val sc = sqlContext.sparkContext
+  val solrRDD = {
+    var rdd = new SolrRDD(conf.getZkHost.get, conf.getCollection.get, sc)
+
+    if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined)
+      rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
+    else if (conf.splits.isDefined)
+      rdd = rdd.doSplits()
+
+    if (conf.getSplitField.isDefined && conf.getSplitsPerShard.isDefined)
+      rdd = rdd.splitField(conf.getSplitField.get).splitsPerShard(conf.getSplitsPerShard.get)
+    else if (conf.getSplitField.isDefined)
+      rdd = rdd.splitField(conf.getSplitField.get)
+
+    rdd
+  }
+
+  val baseSchema: StructType = SolrSchemaUtil.getBaseSchema(conf.getZkHost.get, conf.getCollection.get, conf.escapeFieldNames.getOrElse(false))
   val query: SolrQuery = buildQuery
   val querySchema: StructType = if (dataFrame.isDefined) dataFrame.get.schema else SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
 
@@ -40,7 +57,7 @@ class SolrRelation(val parameters: Map[String, String],
       query.setFields(fields:_*)
     }
 
-    // Add aliasing to the fields. Why ?? TODO: Examples and tests on how this works
+    // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
     if (query.getFields != null && query.getFields.length > 0) {
       SolrSchemaUtil.setAliases(query.getFields.split(","), query, baseSchema)
     }
@@ -79,7 +96,7 @@ class SolrRelation(val parameters: Map[String, String],
           val value = fieldValue.get
           value match {
             //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
-            case v: Iterable[AnyRef] => {
+            case v: Iterable[Any] => {
               val it = v.iterator
               while (it.hasNext) doc.addField(fname, it.next())
             }
@@ -93,27 +110,25 @@ class SolrRelation(val parameters: Map[String, String],
   }
 
   private def buildQuery: SolrQuery = {
-    val query = SolrQuerySupport.toQuery(conf.getQuery)
-    val fields = conf.getFieldList
+    val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
+    val fields = conf.getFields
 
     if (fields.nonEmpty) {
       query.setFields(fields:_*)
     } else {
-      // TODO: Is this really necessary?
+      // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       SolrSchemaUtil.applyDefaultFields(baseSchema, query)
     }
 
-    query.setRows(conf.getRows)
-    query.add(conf.getSolrParams)
-    query.set("collection", conf.getCollection)
+    query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
+    query.add(conf.solrConfigParams)
+    query.set("collection", conf.getCollection.get)
     query
   }
 
   private def checkRequiredParams(): Unit = {
-    if (conf.getZKHost == null)
-      throw new IllegalArgumentException("Param '" + SOLR_ZK_HOST_PARAM + "' is required")
-    if (conf.getCollection == null)
-      throw new IllegalArgumentException("Param '" + SOLR_COLLECTION_PARAM + "' is required")
+    require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
+    require(conf.getCollection.isDefined, "Param '" + SOLR_COLLECTION_PARAM + "' is required")
   }
 }
 

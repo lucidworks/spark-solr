@@ -11,7 +11,6 @@ import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
-import com.lucidworks.spark.util.SolrQuerySupport
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
@@ -26,7 +25,7 @@ import org.apache.spark.streaming.dstream.DStream
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import util.control.Breaks._
 
 /**
@@ -80,7 +79,7 @@ object SolrSupport extends Logging {
 
   def sendDStreamOfDocsToFusion(fusionUrl: String,
                                  fusionCredentials: String,
-                                 docs: DStream,
+                                 docs: DStream[_],
                                  batchSize: Int): Unit = ???
 
 
@@ -121,7 +120,7 @@ object SolrSupport extends Logging {
     if (log.isDebugEnabled)
       log.debug("Sending batch of " + batch.size + " to collection " + collection)
 
-    req.add(batch.asJavaCollection)
+    req.add(asJavaCollection(batch))
 
     try {
       solrClient.request(req)
@@ -141,8 +140,8 @@ object SolrSupport extends Logging {
             case ex: Exception => {
               log.error("Send batch to collection " + collection + " failed due to: " + e, e)
               ex match {
-                case RuntimeException => throw ex
-                case Exception => throw new RuntimeException(ex)
+                case re: RuntimeException => throw re
+                case e: Exception => throw new RuntimeException(e)
               }
 
             }
@@ -150,8 +149,8 @@ object SolrSupport extends Logging {
         } else {
           log.error("Send batch to collection " + collection + " failed due to: " + e, e)
           e match {
-            case RuntimeException => throw e
-            case Exception => throw new RuntimeException(e)
+            case re: RuntimeException => throw re
+            case ex: Exception => throw new RuntimeException(ex)
           }
         }
 
@@ -378,9 +377,9 @@ object SolrSupport extends Logging {
 
       val shards = new ListBuffer[SolrShard]()
       for (coll <- collections) {
-        for (slice: Slice <- clusterState.getSlices(coll).asScala) {
+        for (slice: Slice <- clusterState.getSlices(coll)) {
           var replicas  =  new ListBuffer[SolrReplica]()
-          for (r: Replica <- slice.getReplicas.asScala) {
+          for (r: Replica <- slice.getReplicas) {
             if (r.getState == Replica.State.ACTIVE) {
               val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
               if (liveNodes.contains(replicaCoreProps.getNodeName)) {
@@ -418,11 +417,15 @@ object SolrSupport extends Logging {
     if ("_version_".equals(splitFieldName)) {
       fieldDataType = Some(DataTypes.LongType)
     } else {
-      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Array(splitFieldName), solrShard)
+
+      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Set(splitFieldName), SolrRDD.randomReplicaLocation(solrShard))
       val solrFieldMeta = fieldMetaMap.get(splitFieldName)
-      if (solrFieldMeta != null) {
-        val fieldTypeClass = solrFieldMeta.fieldTypeClass
-        fieldDataType = Some(SolrQuerySupport.SOLR_DATA_TYPES.get(fieldTypeClass))
+      if (solrFieldMeta.isDefined) {
+        val fieldTypeClass  = solrFieldMeta.get.fieldTypeClass
+        if (fieldTypeClass.isDefined)
+          fieldDataType = SolrQuerySupport.SOLR_DATA_TYPES.get(fieldTypeClass.get)
+        else
+          fieldDataType = Some(DataTypes.StringType)
       } else {
         log.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
         fieldDataType = Some(DataTypes.StringType)
@@ -444,7 +447,7 @@ object SolrSupport extends Logging {
       throw new IllegalArgumentException("Can only split shards on fields of type: long, int or String!")
     }
     if (splitStrategy.isDefined)
-      splitStrategy.get.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).asScala.toList
+      splitStrategy.get.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
     else
       throw new IllegalArgumentException("No split strategy found for datatype " + fd)
   }

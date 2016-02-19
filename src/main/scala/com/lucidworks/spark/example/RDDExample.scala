@@ -1,4 +1,4 @@
-package com.lucidworks.spark.port.example
+package com.lucidworks.spark.example
 
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
@@ -22,14 +22,14 @@ class RDDExample extends SparkApp.RDDProcessor with Logging {
 
     // IMPORTANT: reload the collection to flush caches
     println(s"\nReloading collection $collection to flush caches!\n")
-    val cloudSolrClient = SolrSupport.getSolrServer(zkHost)
+    val cloudSolrClient = SolrSupport.getSolrCloudClient(zkHost)
     val req = new CollectionAdminRequest.Reload()
     req.setCollectionName(collection)
     cloudSolrClient.request(req)
 
     val sc = new SparkContext(conf)
     val rdd = new SolrRDD(zkHost, collection, sc)
-    val count = rdd.query(queryStr).count
+    val count = rdd.query(queryStr).count()
 
     log.info("Count is " + count)
     sc.stop()

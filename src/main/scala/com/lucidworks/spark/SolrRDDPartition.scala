@@ -7,4 +7,5 @@ trait SolrRDDPartition extends Partition {
   def cursorMark: String
   def solrShard: SolrShard
   def query: SolrQuery
+  def preferredReplica: SolrReplica // Preferred replica to query
 }
