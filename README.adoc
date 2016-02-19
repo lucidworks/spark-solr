@@ -253,7 +253,7 @@ You can set the "parallel_shards" option to "false" to disable this feature to s
 
 == Reading data from Solr as a Spark RDD
 
-The `com.lucidworks.spark.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
+The `com.lucidworks.spark.rdd.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
 
 [source]
 SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());

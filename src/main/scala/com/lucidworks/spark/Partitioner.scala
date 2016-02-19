@@ -1,18 +1,12 @@
-package com.lucidworks.spark.port
+package com.lucidworks.spark
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.port.util.SolrSupportScala
+import com.lucidworks.spark.util.SolrSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.Partition
 
 import scala.collection.mutable.ArrayBuffer
-
-trait SolrRDDPartition extends Partition {
-  def cursorMark: String
-  def solrShard: SolrShard
-  def query: SolrQuery
-}
 
 case class ShardRDDPartition(
   index: Int,
@@ -40,7 +34,7 @@ object ShardPartitioner {
     var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
     var counter = 0
     shards.foreach(shard => {
-      val splits = SolrSupportScala.splitShards(query, shard, splitFieldName, splitsPerShard)
+      val splits = SolrSupport.splitShards(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
         splitPartitions += SplitRDDPartition(counter, "*", shard, split.getQuery)
         counter = counter + 1

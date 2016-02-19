@@ -1,6 +1,6 @@
 package com.lucidworks.spark.port.example
 
-import com.lucidworks.spark.port.SolrScalaRDD
+import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.SparkApp
 import org.apache.commons.cli.{CommandLine, Option}
@@ -28,8 +28,8 @@ class RDDExample extends SparkApp.RDDProcessor with Logging {
     cloudSolrClient.request(req)
 
     val sc = new SparkContext(conf)
-    val rdd = new SolrScalaRDD(zkHost, collection, sc)
-    val count = rdd.count()
+    val rdd = new SolrRDD(zkHost, collection, sc)
+    val count = rdd.query(queryStr).count
 
     log.info("Count is " + count)
     sc.stop()

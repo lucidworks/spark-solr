@@ -1,16 +1,14 @@
-package com.lucidworks.spark.port
+package com.lucidworks.spark
 
-import com.lucidworks.spark.SolrConf
-import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport, SolrSchemaUtil}
+import com.lucidworks.spark.util.SolrSchemaUtil
+import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrInputDocument
-import org.apache.spark.{Logging, SparkContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{SQLContext, Row, DataFrame}
 import org.apache.spark.sql.sources._
-import com.lucidworks.spark.util.ConfigurationConstants.SOLR_COLLECTION_PARAM
-import com.lucidworks.spark.util.ConfigurationConstants.SOLR_ZK_HOST_PARAM
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.{Logging, SparkContext}
 
 import scala.util.control.Breaks._
 
@@ -81,8 +79,8 @@ class SolrRelation(val parameters: Map[String, String],
           val value = fieldValue.get
           value match {
             //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
-            case Iterable => {
-              val it = value.asInstanceOf[Iterable[Any]].iterator
+            case v: Iterable[AnyRef] => {
+              val it = v.iterator
               while (it.hasNext) doc.addField(fname, it.next())
             }
             case _ => doc.setField(fname, value)

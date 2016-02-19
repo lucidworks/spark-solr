@@ -1,8 +1,7 @@
 package com.lucidworks.spark
 
 import java.util.UUID
-
-import com.lucidworks.spark.port.SolrRDD
+import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.spark.Logging
 
 class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with Logging {

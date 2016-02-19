@@ -1,4 +1,4 @@
-package com.lucidworks.spark.port.util
+package com.lucidworks.spark.util
 
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
 import java.lang.reflect.Modifier
@@ -7,10 +7,11 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
-import com.lucidworks.spark.port.{SolrRDD, SolrReplica, SolrShard}
-import com.lucidworks.spark.util.{EmbeddedSolrServerFactory, SolrQuerySupport}
+import com.lucidworks.spark.util.SolrQuerySupport
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
@@ -28,7 +29,10 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.JavaConverters._
 import util.control.Breaks._
 
-object SolrSupportScala extends Logging {
+/**
+ * TODO: Use Solr schema API to index field names
+ */
+object SolrSupport extends Logging {
 
   def setupKerberosIfNeeded(): Unit = synchronized {
    val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
@@ -193,7 +197,7 @@ object SolrSupportScala extends Logging {
             try {
               value = Some(f.get(obj))
             } catch {
-              case e: IllegalAccessException => _
+              case e: IllegalAccessException => log.error("Exception during reflection ", e)
             }
 
             if (value.isDefined) {
@@ -414,7 +418,7 @@ object SolrSupportScala extends Logging {
     if ("_version_".equals(splitFieldName)) {
       fieldDataType = Some(DataTypes.LongType)
     } else {
-      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Array(splitFieldName), "")
+      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Array(splitFieldName), solrShard)
       val solrFieldMeta = fieldMetaMap.get(splitFieldName)
       if (solrFieldMeta != null) {
         val fieldTypeClass = solrFieldMeta.fieldTypeClass

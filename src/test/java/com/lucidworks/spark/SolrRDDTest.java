@@ -10,7 +10,6 @@ import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;

@@ -1,11 +1,11 @@
-package com.lucidworks.spark.port
+package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.port.util.SolrSupportScala
 import com.lucidworks.spark.query.StreamingResultsIterator
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.{ShardPartitioner, SolrRDDPartition, SolrShard}
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -77,7 +77,7 @@ class SolrRDD(
   }
 
   override protected def getPartitions: Array[Partition] = {
-    val shards = SolrSupportScala.buildShardList(zkHost, collection)
+    val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     if (splitField.isDefined)
       ShardPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)

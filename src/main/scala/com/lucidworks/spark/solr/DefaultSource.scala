@@ -1,6 +1,6 @@
-package com.lucidworks.spark.port.solr
+package com.lucidworks.spark.solr
 
-import com.lucidworks.spark.port.SolrRelation
+import com.lucidworks.spark.SolrRelation
 import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
 import org.apache.spark.sql.sources.{DataSourceRegister, BaseRelation, CreatableRelationProvider, RelationProvider}
 
