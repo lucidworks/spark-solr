@@ -39,8 +39,7 @@ class WordCount extends RDDProcessor{
 
     val sc = SparkContext.getOrCreate(conf)
     val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
-    val solrQuery: SolrQuery = SolrQuerySupport.toQuery(queryStr)
-    val rdd: RDD[SolrDocument]  = solrRDD.queryShards(solrQuery).rdd
+    val rdd: RDD[SolrDocument]  = solrRDD.query(queryStr)
 
     val words: RDD[String] = rdd.map(doc => scala.Option.apply(doc.get("text_t")).getOrElse("").toString)
     val pWords: RDD[String] = words.flatMap(s => s.toLowerCase.replaceAll("[.,!?\n]", " ").trim().split(" "))

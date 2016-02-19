@@ -46,7 +46,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     var startMs: Long = System.currentTimeMillis
 
-    var count = solrRDD.queryShards(solrQuery, splitField, splitsPerShard).count()
+    var count = solrRDD.query(solrQuery).splitField(splitField).splitsPerShard(splitsPerShard).count()
 
     var tookMs: Long = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards with $splitsPerShard splits")
@@ -60,7 +60,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     startMs = System.currentTimeMillis
 
-    count = solrRDD.queryShards(solrQuery).count()
+    count = solrRDD.query(solrQuery).count()
 
     tookMs = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards")

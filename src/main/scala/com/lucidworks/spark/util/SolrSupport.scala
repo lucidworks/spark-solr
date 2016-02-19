@@ -59,6 +59,15 @@ object SolrSupport extends Logging {
     solrClient
   }
 
+  // Use getSolrCloudClient
+  @Deprecated
+  def getSolrServer(zkHost: String): CloudSolrClient =  {
+    setupKerberosIfNeeded()
+    val solrClient = new CloudSolrClient(zkHost)
+    solrClient.connect()
+    solrClient
+  }
+
   def getSolrBaseUrl(zkHost: String) = {
     val solrClient = getSolrCloudClient(zkHost)
     val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
