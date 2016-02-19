@@ -21,13 +21,13 @@ import scala.util.Random
 class SolrRDD(
     val zkHost: String,
     val collection: String,
-    @transient val sc: SparkContext,
-    val query : Option[String] = Option(DEFAULT_QUERY),
-    val fields: Option[Array[String]] = None,
-    val rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
-    val splitField: Option[String] = None,
-    val splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
-    val solrQuery: Option[SolrQuery] = None)
+    @transient sc: SparkContext,
+    query : Option[String] = Option(DEFAULT_QUERY),
+    fields: Option[Array[String]] = None,
+    rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
+    splitField: Option[String] = None,
+    splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
+    solrQuery: Option[SolrQuery] = None)
   extends RDD[SolrDocument](sc, Seq.empty) with Logging{ //TODO: Do we need to pass any deps on parent RDDs for Solr?
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
@@ -153,5 +153,9 @@ object SolrRDD {
   def randomReplica(solrShard: SolrShard): SolrReplica = {
     solrShard.replicas(Random.nextInt(solrShard.replicas.size))
   }
+
+  def apply(zkHost: String, collection: String, sc: SparkContext) =
+    new SolrRDD(zkHost, collection, sc)
+
 }
 
