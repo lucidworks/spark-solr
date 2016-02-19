@@ -13,6 +13,7 @@ import org.apache.spark.api.java.function.Function;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.apache.spark.streaming.dstream.DStream;
 import org.apache.spark.streaming.twitter.TwitterUtils;
 import twitter4j.Status;
 
@@ -96,8 +97,8 @@ public class DocumentFilteringStreamProcessor extends SparkApp.StreamProcessor {
 
     // run each doc through a list of filters pulled from our DocFilterContext
     String filterCollection = cli.getOptionValue("filterCollection", collection);
-    JavaDStream<SolrInputDocument> enriched =
-      SolrSupport.filterDocuments(docFilterContext, zkHost, filterCollection, docs);
+    DStream<SolrInputDocument> enriched =
+      SolrSupport.filterDocuments(docFilterContext, zkHost, filterCollection, docs.dstream());
 
     // now index the enriched docs into Solr (or do whatever after the matching process runs)
     SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, enriched);

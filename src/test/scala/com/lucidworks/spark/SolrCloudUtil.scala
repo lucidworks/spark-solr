@@ -5,17 +5,17 @@ import java.io.File
 import com.lucidworks.spark.util.SolrJsonSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
-import org.apache.solr.client.solrj.request.{UpdateRequest, QueryRequest}
+import org.apache.solr.client.solrj.request.{QueryRequest, UpdateRequest}
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.solr.common.SolrInputDocument
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.params.{CollectionParams, CoreAdminParams, ModifiableSolrParams}
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.{Logging, SparkContext}
 import org.junit.Assert._
-import org.noggit.{JSONWriter, CharArr}
+import org.noggit.{CharArr, JSONWriter}
 
-import port.collection.JavaConverters._
+import scala.collection.JavaConversions._
 
 object SolrCloudUtil extends Logging{
 
@@ -23,7 +23,7 @@ object SolrCloudUtil extends Logging{
     try {
       cluster.deleteCollection(collectionName)
     } catch {
-      case e => log.error("Failed to delete collection " + collectionName + " due to: " + e)
+      case e: Exception => log.error("Failed to delete collection " + collectionName + " due to: " + e)
     }
   }
 
@@ -32,7 +32,7 @@ object SolrCloudUtil extends Logging{
       val deleteUrl = baseUrl + "admin/collections?action=DELETE&name=" + collectionName
       SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, deleteUrl)
     } catch {
-      case e => log.error("Failed when deleting collection " + collectionName + " due to :" + e)
+      case e: Exception => log.error("Failed when deleting collection " + collectionName + " due to :" + e)
     }
   }
 
@@ -99,7 +99,7 @@ object SolrCloudUtil extends Logging{
       cs = cloudClient.getZkStateReader.getClusterState
       assertNotNull(cs)
       allReplicasUp = true // assume true
-      for (shard: Slice <- cs.getActiveSlices(collectionName).asScala) {
+      for (shard: Slice <- cs.getActiveSlices(collectionName)) {
         val shardId: String = shard.getName
         assertNotNull("No Slice for " + shardId, shard)
         val replicas = shard.getReplicas
@@ -109,7 +109,7 @@ object SolrCloudUtil extends Logging{
         log.info("Found " + replicas.size() + " replicas and leader on " + leader.getNodeName + " for " + shardId + " in " + collectionName)
 
         // ensure all replicas are "active"
-        for (replica: Replica <- replicas.asScala) {
+        for (replica: Replica <- replicas) {
           val replicaState = replica.getStr(ZkStateReader.STATE_PROP)
           if (!"active".equals(replicaState)) {
             log.info("Replica " + replica.getName + " for shard " + shardId + " is currently " + replicaState)
@@ -122,7 +122,7 @@ object SolrCloudUtil extends Logging{
         try {
           Thread.sleep(500L)
         } catch {
-          case _ => // Do nothing
+          case _: Exception => // Do nothing
         }
         waitMs = waitMs + 500L
       }
@@ -144,7 +144,7 @@ object SolrCloudUtil extends Logging{
       cs = clusterState.getCollection(collectionName).toString
     } else {
       val map = Map.empty[String, DocCollection]
-      clusterState.getCollections.asScala.foreach(coll => {
+      clusterState.getCollections.foreach(coll => {
         map + (coll -> clusterState.getCollection(coll))
       })
       val out: CharArr = new CharArr()
@@ -169,8 +169,7 @@ object SolrCloudUtil extends Logging{
       val qr: QueryResponse = cloudClient.query(collectionName, solrQuery)
       log.info("Found " + qr.getResults.getNumFound + " docs in " + collectionName)
       var i = 0
-      import port.collection.JavaConverters._
-      for (doc <- qr.getResults.asScala) {
+      for (doc <- qr.getResults) {
         log.info(i + ":" + doc)
         i += 1
       }

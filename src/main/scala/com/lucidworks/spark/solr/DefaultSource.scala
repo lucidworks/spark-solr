@@ -1,6 +1,7 @@
 package com.lucidworks.spark.solr
 
 import com.lucidworks.spark.SolrRelation
+import com.lucidworks.spark.util.Constants
 import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
 import org.apache.spark.sql.sources.{DataSourceRegister, BaseRelation, CreatableRelationProvider, RelationProvider}
 
@@ -20,7 +21,7 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
                               mode: SaveMode,
                               parameters: Map[String, String], df: DataFrame): BaseRelation = {
     try {
-      // TODO: How to use the saveMode?
+      // TODO: What to do with the saveMode?
       val solrRelation: SolrRelation = new SolrRelation(parameters, sqlContext, Some(df))
       solrRelation.insert(df, overwrite = true)
       solrRelation
@@ -30,5 +31,5 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
     }
   }
 
-  override def shortName(): String = "solr"
+  override def shortName(): String = Constants.SOLR_FORMAT
 }

@@ -40,9 +40,9 @@ public class SolrSqlTest extends RDDProcessorTestBase{
     SQLContext sqlContext = new SQLContext(jsc.sc());
     HashMap<String, String> options = new HashMap<>();
 
-    options.put(SOLR_ZK_HOST_PARAM, zkHost);
-    options.put(SOLR_COLLECTION_PARAM, testCollectionName);
-    options.put(SOLR_QUERY_PARAM, "*:*");
+    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+    options.put(SOLR_COLLECTION_PARAM(), testCollectionName);
+    options.put(SOLR_QUERY_PARAM(), "*:*");
 
     {
       DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
@@ -76,8 +76,8 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
     // Configure the sql query to do splits using an int type field. TODO: Assert the number of partitions based on the field values
     {
-      options.put(SOLR_SPLIT_FIELD_PARAM, "sessionId");
-      options.put(SOLR_SPLITS_PER_SHARD_PARAM, "10");
+      options.put(SOLR_SPLIT_FIELD_PARAM(), "sessionId");
+      options.put(SOLR_SPLITS_PER_SHARD_PARAM(), "10");
       DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
       eventsim.registerTempTable("eventsim");
 

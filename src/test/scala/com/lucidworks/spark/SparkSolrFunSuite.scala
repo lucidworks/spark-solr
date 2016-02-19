@@ -17,26 +17,8 @@
 
 package com.lucidworks.spark
 
-import java.io.File
-
-import com.lucidworks.spark.util.SolrSupport
-import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.client.solrj.impl.CloudSolrClient
-import org.apache.solr.client.solrj.request.QueryRequest
-import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.cloud.MiniSolrCloudCluster
-import org.apache.solr.common.SolrInputDocument
-import org.apache.solr.common.cloud._
-import org.apache.solr.common.params.{CollectionParams, CoreAdminParams, ModifiableSolrParams}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.{SparkConf, SparkContext, Logging}
-import org.eclipse.jetty.servlet.ServletHolder
-import org.junit.Assert._
-import org.noggit.{JSONWriter, CharArr}
-import org.restlet.ext.servlet.ServerServlet
-import org.scalatest.{Suite, BeforeAndAfterAll, Outcome, FunSuite}
-
-import port.collection.JavaConverters._
+import org.apache.spark.Logging
+import org.scalatest.{FunSuite, Outcome}
 
 /**
  * Base abstract class for all Scala unit tests in spark-solr for handling common functionality.

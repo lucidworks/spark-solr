@@ -125,12 +125,16 @@ public class EmbeddedSolrServerFactory implements Serializable {
       if (isr != null) {
         try {
           isr.close();
-        } catch (Exception ignoreMe){}
+        } catch (Exception ignoreMe){
+          ignoreMe.printStackTrace();
+        }
       }
       if (osw != null) {
         try {
           osw.close();
-        } catch (Exception ignoreMe){}
+        } catch (Exception ignoreMe){
+          ignoreMe.printStackTrace();
+        }
       }
     }
     return destFile;

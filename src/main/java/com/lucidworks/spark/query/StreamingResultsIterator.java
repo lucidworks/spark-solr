@@ -9,6 +9,7 @@ import org.apache.solr.client.solrj.StreamingResponseCallback;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import scala.Option;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -80,7 +81,7 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     if (!hasNext && closeAfterIterating) {
       try {
         solrServer.shutdown();
-      } catch (Exception exc) {}
+      } catch (Exception exc) { exc.printStackTrace(); }
     }
 
     return hasNext;
@@ -95,24 +96,29 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
     this.cursorMarkOfCurrentPage = nextCursorMark;
-    QueryResponse resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
+    Option<QueryResponse> resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
 
-    if (usingCursors) {
-      nextCursorMark = resp.getNextCursorMark();
-    }
+    if (resp.isDefined()) {
+      if (usingCursors) {
+        nextCursorMark = resp.get().getNextCursorMark();
+      }
 
-    iterPos = 0;
-    if (usingCursors) {
-      if (nextCursorMark != null) {
-        docListInfoLatch.await(); // wait until the callback receives notification from Solr in streamDocListInfo
-        return totalDocs > 0;
+      iterPos = 0;
+      if (usingCursors) {
+        if (nextCursorMark != null) {
+          docListInfoLatch.await(); // wait until the callback receives notification from Solr in streamDocListInfo
+          return totalDocs > 0;
+        } else {
+          return false;
+        }
       } else {
-        return false;
+        docListInfoLatch.await();
+        return totalDocs > 0;
       }
     } else {
-      docListInfoLatch.await();
-      return totalDocs > 0;
+      throw new SolrServerException("No response found for query '" + solrQuery + "'");
     }
+
   }
 
   public SolrDocument next() {

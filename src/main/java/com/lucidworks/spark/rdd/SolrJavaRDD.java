@@ -1,13 +1,10 @@
 package com.lucidworks.spark.rdd;
 
-import akka.japi.Option;
 import com.lucidworks.spark.util.JavaApiHelper;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Some;
-import scala.reflect.ClassTag;
 
 //TODO: Add all other methods from SolrRDD here
 public class SolrJavaRDD extends JavaRDD<SolrDocument> {

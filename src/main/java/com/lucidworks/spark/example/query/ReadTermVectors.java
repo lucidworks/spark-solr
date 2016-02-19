@@ -1,6 +1,7 @@
 package com.lucidworks.spark.example.query;
 
 import com.lucidworks.spark.SparkApp;
+import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
@@ -82,21 +83,22 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
     sorts.add(new SolrQuery.SortClause("created_at_tdt", "asc"));
     solrQuery.setSorts(sorts);
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
+    SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
 
-    // query Solr for term vectors
-    JavaRDD<Vector> termVectorsFromSolr =
-      solrRDD.queryTermVectors(solrQuery, field, numFeatures);
-    termVectorsFromSolr.cache();
-
-    // Cluster the data using KMeans
-    KMeansModel clusters = KMeans.train(termVectorsFromSolr.rdd(), numClusters, numIterations);
-
-    // TODO: do something interesting with the clusters
-
-    // Evaluate clustering by computing Within Set Sum of Squared Errors
-    double WSSSE = clusters.computeCost(termVectorsFromSolr.rdd());
-    System.out.println("Within Set Sum of Squared Errors = " + WSSSE);
+    //TODO: Commented out until we implement term vectors in Base RDD
+//    // query Solr for term vectors
+//    JavaRDD<Vector> termVectorsFromSolr =
+//      solrRDD.queryTermVectors(solrQuery, field, numFeatures);
+//    termVectorsFromSolr.cache();
+//
+//    // Cluster the data using KMeans
+//    KMeansModel clusters = KMeans.train(termVectorsFromSolr.rdd(), numClusters, numIterations);
+//
+//    // TODO: do something interesting with the clusters
+//
+//    // Evaluate clustering by computing Within Set Sum of Squared Errors
+//    double WSSSE = clusters.computeCost(termVectorsFromSolr.rdd());
+//    System.out.println("Within Set Sum of Squared Errors = " + WSSSE);
 
     jsc.stop();
 

@@ -160,7 +160,7 @@ public class TestSolrCloudClusterSupport {
       if (!allReplicasUp) {
         try {
           Thread.sleep(500L);
-        } catch (Exception ignoreMe) {}
+        } catch (Exception ignoreMe) { ignoreMe.printStackTrace(); }
         waitMs += 500L;
       }
     } // end while

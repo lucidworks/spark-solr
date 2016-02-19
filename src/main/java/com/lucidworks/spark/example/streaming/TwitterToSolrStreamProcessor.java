@@ -39,7 +39,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
     String fusionUrl = cli.getOptionValue("fusion");
     if (fusionUrl != null) {
       // just send JSON directly to Fusion
-      SolrSupport.sendDStreamOfDocsToFusion(fusionUrl, cli.getOptionValue("fusionCredentials"), tweets, batchSize);
+      SolrSupport.sendDStreamOfDocsToFusion(fusionUrl, cli.getOptionValue("fusionCredentials"), tweets.dstream(), batchSize);
     } else {
       // map incoming tweets into PipelineDocument objects for indexing in Solr
       JavaDStream<SolrInputDocument> docs = tweets.map(
@@ -65,7 +65,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
       );
 
       // when ready, send the docs into a SolrCloud cluster
-      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
+      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs.dstream());
     }
   }
 

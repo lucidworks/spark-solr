@@ -1,7 +1,9 @@
 package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.RDDProcessorTestBase;
+import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.rdd.SolrRDD$;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
@@ -10,6 +12,8 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.junit.Test;
+import scala.Option;
+import scala.collection.JavaConversions;
 
 import java.util.HashMap;
 import java.util.List;
@@ -82,22 +86,22 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
     assertTrue(minFromSort.longValue() == minFromStats.longValue());
     assertTrue(maxFromSort.longValue() == maxFromStats.longValue());
 
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
-    List<String> shardList = SolrSupport.buildShardList(cloudSolrServer, collection);
+    SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+
+    String shardUrl = SolrRDD$.MODULE$.randomReplicaLocation(SolrSupport.buildShardList(zkHost, collection).head());
 
     SolrQuery solrQuery = new SolrQuery("*:*");
     solrQuery.addFilterQuery("id:[* TO *]");
     solrQuery.addFilterQuery("field2_s:bar");
-    String shardUrl = shardList.get(0);
 
     // try various split sizes
     for (int i=1; i <= 9; i++) {
       // split on _version_ field
       int desiredSplits = i*3;
-      verifySplits(solrRDD, inputDocs.length, shardUrl, new NumberFieldShardSplitStrategy(), "_version_", desiredSplits, solrQuery);
+      verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new NumberFieldShardSplitStrategy(), "_version_", desiredSplits, solrQuery);
 
       // split on string field
-      verifySplits(solrRDD, inputDocs.length, shardUrl, new StringFieldShardSplitStrategy(), "field1_s", desiredSplits, solrQuery);
+      verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new StringFieldShardSplitStrategy(), "field1_s", desiredSplits, solrQuery);
     }
   }
 
@@ -141,13 +145,18 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
         }
       }
 
-      QueryResponse qr = SolrQuerySupport.querySolr(SolrSupport.getHttpSolrClient(ss.getShardUrl()), splitQuery, 0, null);
-      SolrDocumentList docList = qr.getResults();
-      numDocs += docList.getNumFound();
-      for (SolrDocument doc : docList) {
-        String docId = (String)doc.getFirstValue("id");
-        docIdSet.put(docId, String.valueOf(doc.getFirstValue(splitField)));
+      Option<QueryResponse> qr = SolrQuerySupport.querySolr(SolrSupport.getHttpSolrClient(ss.getShardUrl()), splitQuery, 0, null);
+      if (qr.isDefined()) {
+        SolrDocumentList docList = qr.get().getResults();
+        numDocs += docList.getNumFound();
+        for (SolrDocument doc : docList) {
+          String docId = (String)doc.getFirstValue("id");
+          docIdSet.put(docId, String.valueOf(doc.getFirstValue(splitField)));
+        }
+      } else {
+        throw new Exception("No response found for query " + splitQuery);
       }
+
     }
 
     for (int d=0; d < expNumDocs; d++) {

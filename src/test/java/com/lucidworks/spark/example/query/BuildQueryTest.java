@@ -1,6 +1,5 @@
 package com.lucidworks.spark.example.query;
 
-import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.junit.Test;
@@ -22,18 +21,19 @@ public class BuildQueryTest {
 
     q = SolrQuerySupport.toQuery(null);
     assertEquals("*:*", q.getQuery());
-    assertEquals(new Integer(DEFAULT_PAGE_SIZE), q.getRows());
+    assertEquals(new Integer(DEFAULT_PAGE_SIZE()), q.getRows());
 
     q = SolrQuerySupport.toQuery("q=*:*") ;
     assertEquals("*:*", q.getQuery());
-    assertEquals(new Integer(DEFAULT_PAGE_SIZE), q.getRows());
+    assertEquals(new Integer(DEFAULT_PAGE_SIZE()), q.getRows());
+
 
     String qs = "text:hello";
     String fq = "price:[100 TO *]";
     String sort = "id";
     q = SolrQuerySupport.toQuery("q="+encode(qs)+"&fq="+encode(fq)+"&sort="+sort);
     assertEquals(qs, q.getQuery());
-    assertEquals(new Integer(DEFAULT_PAGE_SIZE), q.getRows());
+    assertEquals(new Integer(DEFAULT_PAGE_SIZE()), q.getRows());
     assertTrue(q.getFilterQueries().length == 1);
     assertEquals(fq, q.getFilterQueries()[0]);
     List<SolrQuery.SortClause> sorts = q.getSorts();
