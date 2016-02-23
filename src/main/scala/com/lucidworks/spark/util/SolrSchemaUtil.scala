@@ -238,11 +238,16 @@ object SolrSchemaUtil extends Logging {
 
         if (isMultiValued) {
           val fieldValues = solrDocument.getFieldValues(field.name)
-          val iterableValues = fieldValues.iterator().map {
-            case d: Date => new Timestamp(d.getTime)
-            case a => a
+          if (fieldValues != null) {
+            val iterableValues = fieldValues.iterator().map {
+              case d: Date => new Timestamp(d.getTime)
+              case a => a
+            }
+            values.add(iterableValues.toArray)
+          } else {
+            values.add(null)
           }
-          values.add(iterableValues.toArray)
+
         } else {
           val fieldValue = solrDocument.getFieldValue(field.name)
           fieldValue match {
