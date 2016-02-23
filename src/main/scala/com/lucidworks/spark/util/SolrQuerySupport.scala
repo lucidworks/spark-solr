@@ -111,7 +111,7 @@ object SolrQuerySupport extends Logging {
           if (value != null && value.length > 0) {
             val name = nvp.getName
             if ("sort".equals(name)) {
-              if (value.contains(" ")) {
+              if (!value.contains(" ")) {
                 solrQuery.addSort(SolrQuery.SortClause.asc(value))
               } else {
                 val split = value.split(" ")
@@ -215,6 +215,7 @@ object SolrQuerySupport extends Logging {
     solrQuery.setStart(0)
     if (solrQuery.getRows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
+
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 

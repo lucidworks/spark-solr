@@ -139,9 +139,6 @@ class SolrRelation(val parameters: Map[String, String],
         SolrSchemaUtil.applyDefaultFields(baseSchema, query)
     }
 
-    if (query.getSortField == null || query.getSortField.isEmpty)
-      query = query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey))
-
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
     query.add(conf.solrConfigParams)
     query.set("collection", conf.getCollection.get)
