@@ -1,4 +1,4 @@
-package com.lucidworks.spark.solr
+package solr
 
 import com.lucidworks.spark.SolrRelation
 import com.lucidworks.spark.util.Constants

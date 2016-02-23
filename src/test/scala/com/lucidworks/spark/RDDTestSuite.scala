@@ -2,16 +2,10 @@ package com.lucidworks.spark
 
 import java.util.UUID
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.SolrCloudUtil
 import org.apache.spark.Logging
 
 class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with Logging {
-
-  var zkHost: String = _
-
-  override def beforeAll(): Unit = {
-    super.beforeAll()
-    zkHost = cluster.getZkServer.getZkAddress
-  }
 
   test("Test Simple Query") {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString

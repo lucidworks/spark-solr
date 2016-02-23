@@ -15,6 +15,7 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite 
 
   @transient var cluster: MiniSolrCloudCluster = _
   @transient var cloudClient: CloudSolrClient = _
+  var zkHost: String = _
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -35,10 +36,11 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite 
     cloudClient.connect()
 
     assertTrue(!cloudClient.getZkStateReader.getClusterState.getLiveNodes.isEmpty)
+    zkHost = cluster.getZkServer.getZkAddress
   }
 
   override def afterAll(): Unit = {
-    cloudClient.shutdown()
+    cloudClient.close()
     cluster.shutdown()
     super.afterAll()
   }

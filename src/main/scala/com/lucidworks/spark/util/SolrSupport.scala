@@ -11,6 +11,8 @@ import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
+import io.netty.channel.ConnectTimeoutException
+import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
@@ -169,7 +171,12 @@ object SolrSupport extends Logging {
 
   def shouldRetry(exc: Exception): Boolean = {
     val rootCause = SolrException.getRootCause(exc)
-    rootCause.isInstanceOf[ConnectException] || rootCause.isInstanceOf[SocketException]
+    rootCause match {
+      case e: ConnectException => true
+      case e: NoHttpResponseException => true
+      case e: SocketException => true
+      case _ => false
+    }
   }
 
   /**

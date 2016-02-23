@@ -1,8 +1,7 @@
-package com.lucidworks.spark
+package com.lucidworks.spark.util
 
 import java.io.File
 
-import com.lucidworks.spark.util.SolrJsonSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.request.{QueryRequest, UpdateRequest}

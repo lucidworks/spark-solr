@@ -21,6 +21,10 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 
+import com.lucidworks.spark.util.JsonUtil._
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
+
 // Should we support all other additional Solr field tags?
 case class SolrFieldMeta(
   fieldType: String,
@@ -73,7 +77,8 @@ object SolrQuerySupport extends Logging {
       val schemaUrl: String = solrBaseUrl + collection + "/schema"
       try {
         val schemaMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, schemaUrl, 2)
-        return SolrJsonSupport.asString("/schema/uniqueKey", schemaMeta)
+        if (schemaMeta.has("schema") && (schemaMeta \ "schema").has("uniqueKey"))
+          return compact(schemaMeta \ "schema" \ "uniqueKey")
       }
       catch {
         case solrExc: SolrException => {
@@ -314,7 +319,7 @@ object SolrQuerySupport extends Logging {
     fieldTypeMap.toMap
   }
 
-  def getFieldDefinitionsFromSchema(solrUrl: String, fieldNames: Set[String]): Map[String, AnyRef] = {
+  def getFieldDefinitionsFromSchema(solrUrl: String, fieldNames: Set[String]): Map[String, Any] = {
     val fl: Option[String] = if (fieldNames.nonEmpty) {
       val sb = new StringBuilder
       sb.append("&fl=")
@@ -327,25 +332,28 @@ object SolrQuerySupport extends Logging {
     val fieldsUrl = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true" + fl.getOrElse("")
 
     try {
-      val schemaPayload = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, fieldsUrl, 2)
-      val fieldInfoMap = new mutable.HashMap[String, AnyRef]()
-      schemaPayload.get("fields") match {
-        case fieldsInfoList: List[Map[String, AnyRef]] =>
-          fieldsInfoList.foreach(fieldInfo => {
-            if (fieldInfo.contains("name")) {
-              val fieldName = fieldInfo.get("name")
-              if (fieldName.isDefined) {
-                fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
-              } else {
-                log.info("value for key 'name' is not defined in the payload " + fieldInfo)
+      SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, fieldsUrl, 2).values match {
+        case payload: Map[String, Any] =>
+          if (payload.contains("fields")) {
+            if (payload.get("fields").isDefined) {
+              payload.get("fields").get match {
+                case fields: List[Any] =>
+                  constructFieldInfoMap(fields)
               }
             } else {
-              log.info("'name' is not defined in the payload " + fieldInfo)
+              throw new Exception("No fields payload inside the response: " + payload)
             }
-          })
-          fieldInfoMap.toMap
-        case somethingElse: AnyRef => throw new Exception("Unknown type from schema object " + somethingElse)
+          } else {
+            throw new Exception("No fields payload inside the response: " + payload)
+          }
+        case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass + "' from schema object " + somethingElse)
       }
+
+//      schemaPayload.get("fields") match {
+//
+//        case fieldInfoList: util.ArrayList[AnyRef] => constructFieldInfoMap(fieldInfoList.toList)
+//       case somethingElse: AnyRef => throw new Exception("Unknown type '" + somethingElse.getClass + "' from schema object " + somethingElse)
+//      }
     } catch {
       case e: Exception =>
         log.error("Can't get field metadata from Solr using request '" + fieldsUrl + "' due to exception " + e)
@@ -356,18 +364,43 @@ object SolrQuerySupport extends Logging {
     }
   }
 
+  def constructFieldInfoMap(fieldsInfoList: List[Any]): Map[String, Any] = {
+    val fieldInfoMap = new mutable.HashMap[String, AnyRef]()
+    fieldsInfoList.foreach {
+      case fieldInfo: Map[String, Any] =>
+        if (fieldInfo.contains("name")) {
+          val fieldName = fieldInfo.get("name")
+          if (fieldName.isDefined) {
+            fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
+          } else {
+            log.info("value for key 'name' is not defined in the payload " + fieldInfo)
+          }
+        } else {
+          log.info("'name' is not defined in the payload " + fieldInfo)
+        }
+      case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass)
+    }
+    fieldInfoMap.toMap
+
+  }
   def getFieldsFromLuke(solrUrl: String): Set[String] = {
     val lukeUrl: String = solrUrl + "admin/luke?numTerms=0"
     try {
       val adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, lukeUrl, 2)
-      val fieldsRef = SolrJsonSupport.asMap("/fields", adminMeta)
-      fieldsRef.keySet().toSet
+      if (!adminMeta.has("fields"))
+        throw new Exception("Cannot find 'fields' payload inside Schema: " + compact(adminMeta))
+      val fieldsRef = adminMeta \ "fields"
+      fieldsRef.values match {
+        case values: Map[String, Any] => values.keySet
+        case somethingElse: Any =>  throw new Exception("Unknown type '" + somethingElse.getClass)
+      }
     } catch {
       case e1: Exception =>
         log.warn("Can't get schema fields from url " + solrUrl + " due to: " + e1)
         throw e1
     }
   }
+
   /*
     Return solr field types along with their actual class types.
     E.g. { "binary": "solr.BinaryField",
@@ -379,27 +412,35 @@ object SolrQuerySupport extends Logging {
     val fieldTypeUrl = solrUrl + "schema/fieldtypes"
     try {
       val fieldTypeMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, fieldTypeUrl, 2)
-      val rawTypes = fieldTypeMeta.get("fieldTypes")
-      rawTypes match {
-        case types: List[Map[String, Object]] =>
-          if (types.nonEmpty) {
-            // Get the name, type and add them to the map
-            types.foreach(fieldTypePayload => {
-              if (fieldTypePayload.contains("name") && fieldTypePayload.contains("class")) {
-                val fieldTypeName = fieldTypePayload.get("name")
-                val fieldTypeClass = fieldTypePayload.get("class")
-                if (fieldTypeName.isDefined) {
-                  if (fieldTypeClass.isDefined) {
-                    fieldTypeToClassMap.put(fieldTypeName.get.asInstanceOf[String], fieldTypeClass.get.asInstanceOf[String])
-                  }
-                }
-              }
-            })
-          } else {
-            log.warn("No field types found in Solr schema")
-          }
-        case t: AnyRef => log.warn("Found unexpected object type '" + t + "' when parsing field types json")
+      if (fieldTypeMeta.has("fieldTypes")) {
+        (fieldTypeMeta \ "fieldTypes").values match {
+          case types: List[Any] =>
+            if (types.nonEmpty) {
+
+            }
+        }
       }
+//      val rawTypes = fieldTypeMeta.get("fieldTypes")
+//      rawTypes match {
+//        case types: List[Map[String, Object]] =>
+//          if (types.nonEmpty) {
+//            // Get the name, type and add them to the map
+//            types.foreach(fieldTypePayload => {
+//              if (fieldTypePayload.contains("name") && fieldTypePayload.contains("class")) {
+//                val fieldTypeName = fieldTypePayload.get("name")
+//                val fieldTypeClass = fieldTypePayload.get("class")
+//                if (fieldTypeName.isDefined) {
+//                  if (fieldTypeClass.isDefined) {
+//                    fieldTypeToClassMap.put(fieldTypeName.get.asInstanceOf[String], fieldTypeClass.get.asInstanceOf[String])
+//                  }
+//                }
+//              }
+//            })
+//          } else {
+//            log.warn("No field types found in Solr schema")
+//          }
+//        case t: AnyRef => log.warn("Found unexpected object type '" + t + "' when parsing field types json")
+//      }
     } catch {
       case e: Exception =>
         log.error("Can't get field type metadata from Solr url " + fieldTypeUrl)

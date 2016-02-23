@@ -1,6 +1,5 @@
 package com.lucidworks.spark;
 
-import com.lucidworks.spark.solr.DefaultSource;
 import com.lucidworks.spark.util.Constants;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.spark.sql.DataFrame;
