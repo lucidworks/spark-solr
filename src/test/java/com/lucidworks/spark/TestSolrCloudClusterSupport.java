@@ -93,6 +93,9 @@ public class TestSolrCloudClusterSupport {
       assertTrue("Specified Solr config directory '"+
         confDir.getAbsolutePath()+"' not found!", confDir.isDirectory());
 
+      // Aggressively kill any existing collections
+      deleteCollection(collectionName);
+
       // upload the test configs
       SolrZkClient zkClient = cloudSolrServer.getZkStateReader().getZkClient();
       ZkConfigManager zkConfigManager =

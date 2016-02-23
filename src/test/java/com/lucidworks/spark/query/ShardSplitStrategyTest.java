@@ -39,69 +39,70 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
 
   @Test
   public void testSplitStrategy() throws Exception {
-
-    String zkHost = cluster.getZkServer().getZkAddress();
-
     String collection = "testStringSplit";
+    try {
+      String zkHost = cluster.getZkServer().getZkAddress();
+      Random rand = new Random(5150);
 
-    Random rand = new Random(5150);
+      String[] inputDocs = new String[2000];
+      for (int d=0; d < inputDocs.length; d++) {
+        String word = createTestWord(rand);
+        inputDocs[d] = "d"+d+","+word+",bar,1,[a;b],[1;2]";
+        inputDocs[++d] = "d"+d+","+word.substring(0,2)+",bar,1,[a;b],[1;2]";
+      }
+      buildCollection(zkHost, collection, inputDocs, 1);
 
-    String[] inputDocs = new String[2000];
-    for (int d=0; d < inputDocs.length; d++) {
-      String word = createTestWord(rand);
-      inputDocs[d] = "d"+d+","+word+",bar,1,[a;b],[1;2]";
-      inputDocs[++d] = "d"+d+","+word.substring(0,2)+",bar,1,[a;b],[1;2]";
-    }
-    buildCollection(zkHost, collection, inputDocs, 1);
+      // verify the _version_ field is sane
+      SolrQuery q = new SolrQuery("*:*");
+      q.set("collection", collection);
+      q.set("distrib", false);
+      q.setRows(1); // top 1
+      q.addSort("_version_", SolrQuery.ORDER.asc);
+      q.setGetFieldStatistics("_version_");
+      QueryResponse qr = cloudSolrServer.query(q);
+      SolrDocument doc = qr.getResults().get(0);
+      Long minFromSort = (Long)doc.getFirstValue("_version_");
+      Long minFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMin()).longValue();
+      Long maxFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMax()).longValue();
+      Long numFoundFromStats = qr.getFieldStatsInfo().get("_version_").getCount();
 
-    // verify the _version_ field is sane
-    SolrQuery q = new SolrQuery("*:*");
-    q.set("collection", collection);
-    q.set("distrib", false);
-    q.setRows(1); // top 1
-    q.addSort("_version_", SolrQuery.ORDER.asc);
-    q.setGetFieldStatistics("_version_");
-    QueryResponse qr = cloudSolrServer.query(q);
-    SolrDocument doc = qr.getResults().get(0);
-    Long minFromSort = (Long)doc.getFirstValue("_version_");
-    Long minFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMin()).longValue();
-    Long maxFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMax()).longValue();
-    Long numFoundFromStats = qr.getFieldStatsInfo().get("_version_").getCount();
+      q.removeSort("_version_");
+      q.addSort("_version_", SolrQuery.ORDER.desc);
+      qr = cloudSolrServer.query(collection, q);
+      doc = qr.getResults().get(0);
+      Long maxFromSort = (Long)doc.getFirstValue("_version_");
 
-    q.removeSort("_version_");
-    q.addSort("_version_", SolrQuery.ORDER.desc);
-    qr = cloudSolrServer.query(q);
-    doc = qr.getResults().get(0);
-    Long maxFromSort = (Long)doc.getFirstValue("_version_");
+      q = new SolrQuery("*:*");
+      q.addFilterQuery("_version_:[" + minFromStats + " TO " + maxFromStats + "]");
+      q.set("collection", collection);
+      q.set("distrib", false);
+      qr = cloudSolrServer.query(collection, q);
+      Long numFoundFromQuery = qr.getResults().getNumFound();
 
-    q = new SolrQuery("*:*");
-    q.addFilterQuery("_version_:[" + minFromStats + " TO " + maxFromStats + "]");
-    q.set("collection", collection);
-    q.set("distrib", false);
-    qr = cloudSolrServer.query(q);
-    Long numFoundFromQuery = qr.getResults().getNumFound();
+      assertTrue(numFoundFromStats == inputDocs.length);
+      assertTrue(numFoundFromStats.longValue() == numFoundFromQuery.longValue());
+      assertTrue(minFromSort.longValue() == minFromStats.longValue());
+      assertTrue(maxFromSort.longValue() == maxFromStats.longValue());
 
-    assertTrue(numFoundFromStats == inputDocs.length);
-    assertTrue(numFoundFromStats.longValue() == numFoundFromQuery.longValue());
-    assertTrue(minFromSort.longValue() == minFromStats.longValue());
-    assertTrue(maxFromSort.longValue() == maxFromStats.longValue());
+      SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
 
-    SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+      String shardUrl = SolrRDD$.MODULE$.randomReplicaLocation(SolrSupport.buildShardList(zkHost, collection).head());
 
-    String shardUrl = SolrRDD$.MODULE$.randomReplicaLocation(SolrSupport.buildShardList(zkHost, collection).head());
+      SolrQuery solrQuery = new SolrQuery("*:*");
+      solrQuery.addFilterQuery("id:[* TO *]");
+      solrQuery.addFilterQuery("field2_s:bar");
 
-    SolrQuery solrQuery = new SolrQuery("*:*");
-    solrQuery.addFilterQuery("id:[* TO *]");
-    solrQuery.addFilterQuery("field2_s:bar");
+      // try various split sizes
+      for (int i=1; i <= 9; i++) {
+        // split on _version_ field
+        int desiredSplits = i*3;
+        verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new NumberFieldShardSplitStrategy(), "_version_", desiredSplits, solrQuery);
 
-    // try various split sizes
-    for (int i=1; i <= 9; i++) {
-      // split on _version_ field
-      int desiredSplits = i*3;
-      verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new NumberFieldShardSplitStrategy(), "_version_", desiredSplits, solrQuery);
-
-      // split on string field
-      verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new StringFieldShardSplitStrategy(), "field1_s", desiredSplits, solrQuery);
+        // split on string field
+        verifySplits(solrRDD.rdd(), inputDocs.length, shardUrl, new StringFieldShardSplitStrategy(), "field1_s", desiredSplits, solrQuery);
+      }
+    } finally {
+      deleteCollection(collection);
     }
   }
 
