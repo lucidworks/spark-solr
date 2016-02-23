@@ -108,7 +108,7 @@ object SolrSchemaUtil extends Logging {
        solrQuery.addFilterQuery(fq(f.left, baseSchema))
        solrQuery.addFilterQuery(fq(f.right, baseSchema))
      case f: Or =>
-       solrQuery.addFilterQuery("(" + fq(f.left, baseSchema) + " OR " + fq(f.right, baseSchema))
+       solrQuery.addFilterQuery("(" + fq(f.left, baseSchema) + " OR " + fq(f.right, baseSchema) + ")")
      case f: Not =>
        solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
      case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
@@ -116,7 +116,7 @@ object SolrSchemaUtil extends Logging {
   }
 
   def fq(filter: Filter, baseSchema: StructType): String = {
-    val negate = ""
+    var negate = ""
     var crit : Option[String] = None
     var attr: Option[String] = None
 
@@ -153,6 +153,10 @@ object SolrSchemaUtil extends Logging {
       case f: IsNotNull =>
         attr = Some(f.attribute)
         crit = Some("[* TO *]")
+      case f: IsNull =>
+        attr = Some(f.attribute)
+        crit = Some("[* TO *]")
+        negate = "-"
       case f: StringContains =>
         attr = Some(f.attribute)
         crit = Some("*" + f.value + "*")

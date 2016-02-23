@@ -28,46 +28,53 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   //@Ignore
   @Test
   public void testEventsDataFrame() throws Exception {
-    SQLContext sqlContext = new SQLContext(jsc);
-
-    // load test data from json file to index into Solr
-    DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
-    eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
-
     String testCollection = "testEventsDataFrame";
-    deleteCollection(testCollection);
-    String confName = "testConfig";
-    File confDir = new File("src/test/resources/conf");
-    int numShards = 1;
-    int replicationFactor = 1;
-    createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
-    validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
-    deleteCollection(testCollection);
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      // load test data from json file to index into Solr
+      DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
+      eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
+
+
+      deleteCollection(testCollection);
+      String confName = "testConfig";
+      File confDir = new File("src/test/resources/conf");
+      int numShards = 1;
+      int replicationFactor = 1;
+      createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+      validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+    } finally {
+      deleteCollection(testCollection);
+    }
   }
 
   @Test
   public void testAggDataFrame() throws Exception {
-    SQLContext sqlContext = new SQLContext(jsc);
+    String testCollection = "testAggDataFrame";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
 
-    // load test data from json file to index into Solr
-    DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
-    aggDF = aggDF.select("id","aggr_count_l","aggr_id_s","aggr_job_id_s","aggr_type_s",
+      // load test data from json file to index into Solr
+      DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
+      aggDF = aggDF.select("id","aggr_count_l","aggr_id_s","aggr_job_id_s","aggr_type_s",
         "co_occurring_docIds_counts_ls","co_occurring_docIds_ss","entity_id_s","entity_type_s",
         "flag_s","grouping_key_s","in_session_ids_counts_ls","in_session_ids_ss","in_user_id_s",
         "in_user_id_s_counts_ls","in_user_ids_counts_ls","in_user_ids_ss","out_clicks_counts_ls",
         "out_clicks_ss","out_session_ids_counts_ls","out_session_ids_ss");
 
-    aggDF.printSchema();
+      aggDF.printSchema();
 
-    String testCollection = "testAggDataFrame";
-    deleteCollection(testCollection);
-    String confName = "testConfig";
-    File confDir = new File("src/test/resources/conf");
-    int numShards = 1;
-    int replicationFactor = 1;
-    createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
-    validateDataFrameStoreLoad(sqlContext, testCollection, aggDF);
-    deleteCollection(testCollection);
+      deleteCollection(testCollection);
+      String confName = "testConfig";
+      File confDir = new File("src/test/resources/conf");
+      int numShards = 1;
+      int replicationFactor = 1;
+      createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+      validateDataFrameStoreLoad(sqlContext, testCollection, aggDF);
+    } finally {
+      deleteCollection(testCollection);
+    }
   }
   
   protected static String array2cdl(String[] arr) {
@@ -125,97 +132,97 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   //@Ignore
   @Test
   public void testFilterSupport() throws Exception {
-
-    SQLContext sqlContext = new SQLContext(jsc);
-
-    String[] testData = new String[] {
-      "1,a,x,1000,[a;x],[1000]",
-      "2,b,y,2000,[b;y],[2000]",
-      "3,c,z,3000,[c;z],[3000]",
-      "4,a,x,4000,[a;x],[4000]"
-    };
-
-    String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "testFilterSupport";
-    deleteCollection(testCollection);
-    deleteCollection("testFilterSupport2");
-    buildCollection(zkHost, testCollection, testData, 2);
+    String testCollection2 = "testFilterSupport2";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
 
-    Map<String, String> options = new HashMap<String, String>();
-    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-    options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      String[] testData = new String[] {
+        "1,a,x,1000,[a;x],[1000]",
+        "2,b,y,2000,[b;y],[2000]",
+        "3,c,z,3000,[c;z],[3000]",
+        "4,a,x,4000,[a;x],[4000]"
+      };
 
-    DataFrame df = sqlContext.read().format("solr").options(options).load();
-    df.show();
-    validateSchema(df);
-    //df.show();
+      String zkHost = cluster.getZkServer().getZkAddress();
+      buildCollection(zkHost, testCollection, testData, 2);
 
-    long count = df.count();
-    assertCount(testData.length, count, "*:*");
+      Map<String, String> options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection);
 
-    Row[] rows = df.collect();
-    for (int r=0; r < rows.length; r++) {
-      Row row = rows[r];
-      List val = row.getList(row.fieldIndex("field4_ss"));
-      assertNotNull(val);
+      DataFrame df = sqlContext.read().format("solr").options(options).load();
+      df.show();
+      validateSchema(df);
+      //df.show();
 
-      List list = new ArrayList();
-      list.addAll(val); // clone since we need to sort the entries for testing only
-      Collections.sort(list);
-      assertTrue(list.size() == 2);
-      assertEquals(list.get(0), row.getString(row.fieldIndex("field1_s")));
-      assertEquals(list.get(1), row.getString(row.fieldIndex("field2_s")));
+      long count = df.count();
+      assertCount(testData.length, count, "*:*");
+
+      Row[] rows = df.collect();
+      for (int r=0; r < rows.length; r++) {
+        Row row = rows[r];
+        List val = row.getList(row.fieldIndex("field4_ss"));
+        assertNotNull(val);
+
+        List list = new ArrayList();
+        list.addAll(val); // clone since we need to sort the entries for testing only
+        Collections.sort(list);
+        assertTrue(list.size() == 2);
+        assertEquals(list.get(0), row.getString(row.fieldIndex("field1_s")));
+        assertEquals(list.get(1), row.getString(row.fieldIndex("field2_s")));
+      }
+
+      count = df.filter(df.col("field1_s").equalTo("a")).count();
+      assertCount(2, count, "field1_s == a");
+
+      count = df.filter(df.col("field1_s").equalTo("a")).count();
+      assertCount(2, count, "field1_s <=> a");
+
+      count = df.filter(df.col("field3_i").gt(3000)).count();
+      assertCount(1, count, "field3_i > 3000");
+
+      count = df.filter(df.col("field3_i").geq(3000)).count();
+      assertCount(2, count, "field3_i >= 3000");
+
+      count = df.filter(df.col("field3_i").lt(2000)).count();
+      assertCount(1, count, "field3_i < 2000");
+
+      count = df.filter(df.col("field3_i").leq(1000)).count();
+      assertCount(1, count, "field3_i <= 1000");
+
+      count = df.filter(df.col("field3_i").gt(2000).and(df.col("field2_s").equalTo("z"))).count();
+      assertCount(1, count, "field3_i > 2000 AND field2_s == z");
+
+      count = df.filter(df.col("field3_i").lt(2000).or(df.col("field1_s").equalTo("a"))).count();
+      assertCount(2, count, "field3_i < 2000 OR field1_s == a");
+
+      count = df.filter(df.col("field1_s").isNotNull()).count();
+      assertCount(4, count, "field1_s IS NOT NULL");
+
+      count = df.filter(df.col("field1_s").isNull()).count();
+      assertCount(0, count, "field1_s IS NULL");
+
+      // write to another collection to test writes
+      String confName = "testConfig";
+      File confDir = new File("src/test/resources/conf");
+      int numShards = 2;
+      int replicationFactor = 1;
+      createCollection(testCollection2, numShards, replicationFactor, 2, confName, confDir);
+
+      options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection2);
+
+      df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+      Thread.sleep(1000);
+
+      DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+      df2.show();
+    } finally {
+      deleteCollection(testCollection);
+      deleteCollection(testCollection2);
     }
-
-    count = df.filter(df.col("field1_s").equalTo("a")).count();
-    assertCount(2, count, "field1_s == a");
-
-    count = df.filter(df.col("field1_s").equalTo("a")).count();
-    assertCount(2, count, "field1_s <=> a");
-
-    count = df.filter(df.col("field3_i").gt(3000)).count();
-    assertCount(1, count, "field3_i > 3000");
-
-    count = df.filter(df.col("field3_i").geq(3000)).count();
-    assertCount(2, count, "field3_i >= 3000");
-
-    count = df.filter(df.col("field3_i").lt(2000)).count();
-    assertCount(1, count, "field3_i < 2000");
-
-    count = df.filter(df.col("field3_i").leq(1000)).count();
-    assertCount(1, count, "field3_i <= 1000");
-
-    count = df.filter(df.col("field3_i").gt(2000).and(df.col("field2_s").equalTo("z"))).count();
-    assertCount(1, count, "field3_i > 2000 AND field2_s == z");
-
-    count = df.filter(df.col("field3_i").lt(2000).or(df.col("field1_s").equalTo("a"))).count();
-    assertCount(2, count, "field3_i < 2000 OR field1_s == a");
-
-    count = df.filter(df.col("field1_s").isNotNull()).count();
-    assertCount(4, count, "field1_s IS NOT NULL");
-
-    count = df.filter(df.col("field1_s").isNull()).count();
-    assertCount(0, count, "field1_s IS NULL");
-
-    // write to another collection to test writes
-    String confName = "testConfig";
-    File confDir = new File("src/test/resources/conf");
-    int numShards = 2;
-    int replicationFactor = 1;
-    createCollection("testFilterSupport2", numShards, replicationFactor, 2, confName, confDir);
-
-    options = new HashMap<String, String>();
-    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-    options.put(SOLR_COLLECTION_PARAM(), "testFilterSupport2");
-
-    df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
-    Thread.sleep(1000);
-
-    DataFrame df2 = sqlContext.read().format("solr").options(options).load();
-    df2.show();
-
-    deleteCollection(testCollection);
-    deleteCollection("testFilterSupport2");
   }
 
   protected void assertCount(long expected, long actual, String expr) {
