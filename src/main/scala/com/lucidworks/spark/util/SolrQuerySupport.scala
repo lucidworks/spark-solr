@@ -96,9 +96,9 @@ object SolrQuerySupport extends Logging {
 
   def toQuery(queryString: String): SolrQuery = {
 
-    val solrQuery: SolrQuery = new SolrQuery
+    var solrQuery: SolrQuery = new SolrQuery
     if (queryString == null || queryString.isEmpty) {
-      solrQuery.setQuery("*:*")
+      solrQuery = solrQuery.setQuery("*:*")
     } else {
       // Check to see if the query contains additional parameters. E.g., q=*:*&fl=id&sort=id asc
       if (!queryString.contains("=")) {
@@ -124,11 +124,10 @@ object SolrQuerySupport extends Logging {
         }
         solrQuery.add(SolrParams.toSolrParams(params))
       }
-
-      val rows = solrQuery.getRows
-      if (rows == null)
-        solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
     }
+    val rows = solrQuery.getRows
+    if (rows == null)
+      solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
     solrQuery
   }
 
