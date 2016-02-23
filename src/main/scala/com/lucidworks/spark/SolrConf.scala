@@ -53,6 +53,13 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def docValues: Option[Boolean] = {
+    if (config.contains(SOLR_DOC_VALUES)) {
+      if (config.get(SOLR_DOC_VALUES).isDefined)
+        return Some(config.get(SOLR_DOC_VALUES).get.toBoolean)
+    }
+    None
+  }
 
   def getSplitField: Option[String] = {
     if (config.contains(SOLR_SPLIT_FIELD_PARAM))

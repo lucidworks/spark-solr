@@ -7,7 +7,7 @@ import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{RowFactory, Row}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 
@@ -22,7 +22,7 @@ object SolrSchemaUtil extends Logging {
     val fieldTypeMap = SolrQuerySupport.getFieldTypes(Set.empty[String], solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
 
-    fieldTypeMap.foreach{case(fieldName, fieldMeta) =>
+    fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
         if (fieldMeta.fieldTypeClass.isDefined)
@@ -58,7 +58,7 @@ object SolrSchemaUtil extends Logging {
 
       val name = if (escapeFields) fieldName.replaceAll("\\.", "_") else fieldName
 
-        structFields.add(DataTypes.createStructField(name, dataType, fieldMeta.isRequired.getOrElse(false), metadata.build()))
+      structFields.add(DataTypes.createStructField(name, dataType, !fieldMeta.isRequired.getOrElse(false), metadata.build()))
    }
 
     DataTypes.createStructType(structFields.toList)
@@ -226,8 +226,8 @@ object SolrSchemaUtil extends Logging {
   def toRows(schema: StructType, docs: RDD[SolrDocument]): RDD[Row] = {
     val fields = schema.fields
 
-    docs.map(solrDocument => {
-      val values = new ArrayBuffer[AnyRef]
+    val rows = docs.map(solrDocument => {
+      val values = new ListBuffer[AnyRef]
       for (field <- fields) {
         val metadata = field.metadata
         val isMultiValued = if (metadata.contains("multiValued")) metadata.getBoolean("multiValued") else false
@@ -235,8 +235,7 @@ object SolrSchemaUtil extends Logging {
         if (isMultiValued) {
           val fieldValues = solrDocument.getFieldValues(field.name)
           val iterableValues = fieldValues.iterator().map {
-            case d: Date =>
-              new Timestamp(d.getTime)
+            case d: Date => new Timestamp(d.getTime)
             case a => a
           }
           values.add(iterableValues.toArray)
@@ -244,19 +243,20 @@ object SolrSchemaUtil extends Logging {
           val fieldValue = solrDocument.getFieldValue(field.name)
           fieldValue match {
             case f: String => values.add(f)
+            case f: Date => values.add(new Timestamp(f.getTime))
             case f: Iterable[_] =>
               val iterableValues = f.iterator.map {
-                case d: Date =>
-                  new Timestamp(d.getTime)
-                case a => a
+                case d: Date => new Timestamp(d.getTime)
+                case v: Any => v
               }
               values.add(iterableValues.toArray)
-            case f => values.add(String.valueOf(f))
-
+            case f: Any => values.add(f)
+            case f => values.add(f)
           }
         }
       }
-      Row.apply(values.toArray:_*)
+      Row(values.toArray:_*)
     })
+    rows
   }
 }

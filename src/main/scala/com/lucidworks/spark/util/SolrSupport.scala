@@ -424,10 +424,11 @@ object SolrSupport extends Logging {
     }
  }
 
-  def splitShards(query: SolrQuery,
-                  solrShard: SolrShard,
-                  splitFieldName: String,
-                  splitsPerShard: Int): List[ShardSplit[_]] = {
+  def splitShards(
+    query: SolrQuery,
+    solrShard: SolrShard,
+    splitFieldName: String,
+    splitsPerShard: Int): List[ShardSplit[_]] = {
     // Get the field type of split field
     var fieldDataType: Option[DataType] = None
     if ("_version_".equals(splitFieldName)) {

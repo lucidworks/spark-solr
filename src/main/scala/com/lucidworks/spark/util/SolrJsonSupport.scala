@@ -1,9 +1,9 @@
 package com.lucidworks.spark.util
 
-import java.io.{InputStreamReader, BufferedReader}
+import java.io.{InputStream, InputStreamReader, BufferedReader}
 import java.net.URL
 
-import org.apache.http.HttpResponse
+import org.apache.http.{HttpEntity, HttpResponse}
 import org.apache.http.client.HttpClient
 import org.apache.http.client.methods.{HttpGet, HttpUriRequest, HttpPost}
 import org.apache.solr.client.solrj.SolrServerException
@@ -61,7 +61,7 @@ object SolrJsonSupport extends Logging {
     val queryString = url.getQuery
     if (queryString != null) {
       if (!queryString.contains("wt=json")) {
-        newGetUrl += "?wt=json"
+        newGetUrl += "&wt=json"
       }
     } else {
       newGetUrl += "?wt=json"
@@ -86,23 +86,7 @@ object SolrJsonSupport extends Logging {
 
     // Parse the error message in case of unsuccessful request
     if (statusCode != 200) {
-      val body = new StringBuilder
-      if (entity != null) {
-        val inStream = entity.getContent
-        var line: String = null
-        try {
-          val reader = new BufferedReader(new InputStreamReader(inStream, "UTF-8"))
-          line = reader.readLine()
-          while (line != null) {
-            body.append(line)
-            line = reader.readLine
-          }
-        } catch {
-          case ignore: Exception =>  // squelch it - just trying to compose an error message here
-        } finally {
-          inStream.close()
-        }
-      }
+      val body = getHttpResponseAsString(entity)
       throw new SolrException(SolrException.ErrorCode.getErrorCode(statusCode),
         "Request [" + url + "] failed due to: " + response.getStatusLine + ": " + body)
     }
@@ -143,13 +127,34 @@ object SolrJsonSupport extends Logging {
           request.abort()
           throw ex
         case ex: Exception =>
-          log.warn("Exception while parsing JSON stream")
+          log.error("Exception while parsing JSON stream for url '" + url + "'. The payload is " + getHttpResponseAsString(entity))
           throw ex
       }
     } else {
       throw new Exception("No entity found in the response")
     }
 
+  }
+
+  def getHttpResponseAsString(entity: HttpEntity): String = {
+    val body = new StringBuilder
+    if (entity != null) {
+      val inStream = entity.getContent
+      var line: String = null
+      try {
+        val reader = new BufferedReader(new InputStreamReader(inStream, "UTF-8"))
+        line = reader.readLine()
+        while (line != null) {
+          body.append(line)
+          line = reader.readLine
+        }
+      } catch {
+        case ignore: Exception =>  // squelch it - just trying to compose an error message here
+      } finally {
+        inStream.close()
+      }
+    }
+    body.toString()
   }
 
   def getHttpClient(): HttpClient = {

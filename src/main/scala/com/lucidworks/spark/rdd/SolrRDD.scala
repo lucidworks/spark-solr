@@ -16,7 +16,7 @@ import scala.collection.JavaConverters
 import scala.util.Random
 
 /**
- * TODO: Add support for filter queries and be able to pass in SolrQuery object
+ * TODO: Add support for filter queries
  */
 class SolrRDD(
     val zkHost: String,
@@ -68,6 +68,8 @@ class SolrRDD(
   override protected def getPartitions: Array[Partition] = {
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
+    // Add defaults for shards. TODO: Move this for different implementations (Streaming)
+    SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
     else
@@ -124,6 +126,10 @@ class SolrRDD(
     copy(splitsPerShard = Some(splitsPerShard))
   }
 
+  def solrCount: BigInt = {
+    SolrQuerySupport.getNumDocsFromLuke(collection, zkHost)
+  }
+
   def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
     //TODO: Remove null and replace with Option and None
@@ -133,12 +139,6 @@ class SolrRDD(
       solrQuery = solrQuery.setRows(rows.get)
 
     solrQuery.set("collection", collection)
-    solrQuery.set("distrib", "false")
-    solrQuery.setStart(0)
-
-    if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty)
-      solrQuery = solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey))
-
     solrQuery
   }
 

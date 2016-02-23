@@ -12,4 +12,5 @@ object ConfigurationConstants {
   val SOLR_SPLIT_FIELD_PARAM: String = "split.field"
   val SOLR_SPLITS_PER_SHARD_PARAM: String = "splits.per.shard"
   val ESCAPE_FIELDNAMES_PARAM: String = "escape.fieldnames"
+  val SOLR_DOC_VALUES: String = "docValues"
 }

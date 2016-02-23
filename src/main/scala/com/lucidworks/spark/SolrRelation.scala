@@ -44,7 +44,15 @@ class SolrRelation(val parameters: Map[String, String],
 
   val baseSchema: StructType = SolrSchemaUtil.getBaseSchema(conf.getZkHost.get, conf.getCollection.get, conf.escapeFieldNames.getOrElse(false))
   val query: SolrQuery = buildQuery
-  val querySchema: StructType = if (dataFrame.isDefined) dataFrame.get.schema else SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
+  val querySchema: StructType = {
+    if (dataFrame.isDefined)
+      dataFrame.get.schema
+    else
+      if (query.getFields != null)
+        SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
+      else
+        baseSchema
+  }
 
   override def schema: StructType = querySchema
 
@@ -53,8 +61,17 @@ class SolrRelation(val parameters: Map[String, String],
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
     if (fields != null && fields.length > 0) {
-      fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "")})
-      query.setFields(fields:_*)
+      // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
+      if (this.baseSchema.size == fields.length) {
+        // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
+        if (conf.docValues.getOrElse(false)) {
+          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "")})
+          query.setFields(fields:_*)
+        }
+      } else {
+        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "")})
+        query.setFields(fields:_*)
+      }
     }
 
     // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
@@ -74,7 +91,8 @@ class SolrRelation(val parameters: Map[String, String],
     try {
       val querySchema = if (!fields.isEmpty) SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) else schema
       val docs = solrRDD.query(query)
-      SolrSchemaUtil.toRows(querySchema, docs)
+      val rows = SolrSchemaUtil.toRows(querySchema, docs)
+      rows
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
@@ -110,15 +128,19 @@ class SolrRelation(val parameters: Map[String, String],
   }
 
   private def buildQuery: SolrQuery = {
-    val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
+    var query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
     val fields = conf.getFields
 
     if (fields.nonEmpty) {
       query.setFields(fields:_*)
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
-      SolrSchemaUtil.applyDefaultFields(baseSchema, query)
+      if (conf.docValues.getOrElse(false))
+        SolrSchemaUtil.applyDefaultFields(baseSchema, query)
     }
+
+    if (query.getSortField == null || query.getSortField.isEmpty)
+      query = query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey))
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
     query.add(conf.solrConfigParams)

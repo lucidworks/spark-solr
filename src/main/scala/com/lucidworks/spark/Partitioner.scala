@@ -46,7 +46,7 @@ object SolrPartitioner {
       val replicaContinuousIterator: Iterator[SolrReplica] = Iterator.continually(shard.replicas).flatten
       val splits = SolrSupport.splitShards(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getQuery, replicaContinuousIterator.next())
+        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getSplitQuery, replicaContinuousIterator.next())
         counter = counter + 1
       })
     })
