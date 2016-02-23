@@ -68,16 +68,17 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
 
       q.removeSort("_version_");
       q.addSort("_version_", SolrQuery.ORDER.desc);
-      qr = cloudSolrServer.query(collection, q);
-      doc = qr.getResults().get(0);
-      Long maxFromSort = (Long)doc.getFirstValue("_version_");
+      QueryResponse qr1 = cloudSolrServer.query(collection, q);
+      SolrDocument doc1 = qr1.getResults().get(0);
+      Long maxFromSort = (Long)doc1.getFirstValue("_version_");
 
-      q = new SolrQuery("*:*");
-      q.addFilterQuery("_version_:[" + minFromStats + " TO " + maxFromStats + "]");
-      q.set("collection", collection);
-      q.set("distrib", false);
-      qr = cloudSolrServer.query(collection, q);
-      Long numFoundFromQuery = qr.getResults().getNumFound();
+      SolrQuery q1 = new SolrQuery("*:*");
+      q1.addFilterQuery("_version_:[" + minFromStats + " TO " + maxFromStats + "]");
+      q1.set("collection", collection);
+      q1.set("distrib", false);
+      q1.setRows(0);
+      QueryResponse qr2 = cloudSolrServer.query(collection, q1);
+      Long numFoundFromQuery = qr2.getResults().getNumFound();
 
       assertTrue(numFoundFromStats == inputDocs.length);
       assertTrue(numFoundFromStats.longValue() == numFoundFromQuery.longValue());
