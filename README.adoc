@@ -210,35 +210,35 @@ If you don't specify the "query" option, then all rows are read using the match 
 
 === fields
 
-You can use the "fields" option to specify a subset of fields to retrieve for each document in your results:
+You can use the "query.fields" option to specify a subset of fields to retrieve for each document in your results:
 
 [source]
-option("fields","id,author_s,favorited_b,...")
+option("query.fields","id,author_s,favorited_b,...")
 
 By default, all fields for each document are pulled back from Solr.
 
-=== rows
+=== query.rows
 
-You can use the "rows" option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implemenation uses deep paging cursors and response streaming, so it is usually safe to specify a large number of rows. By default, the implementation uses 1000 but if your documents are smaller, you can increase this to 5000. Using too large a value can put pressure on the Solr JVM's garbage collector.
+You can use the "query.rows" option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implemenation uses deep paging cursors and response streaming, so it is usually safe to specify a large number of rows. By default, the implementation uses 1000 but if your documents are smaller, you can increase this to 5000. Using too large a value can put pressure on the Solr JVM's garbage collector.
 
 [source]
-option("rows","5000")
+option("query.rows","5000")
 
-=== split_field
+=== query.split.field
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the `_version_` field that is attached to every document by the shard leader during indexing.
 
 [source]
-option("split_field","_version_")
+option("query.split.field","_version_")
 
 Behind the scenes, the DataSource implementation tries to split the shard into evenly sized splits using filter queries. You can also split on a string-based keyword field but it should have sufficient variance in the values to allow for creating enough splits to be useful. In other words, if your Spark cluster can handle 10 splits per shard, but there are only 3 unique values in a keyword field, then you will only get 3 splits.
 
-=== splits_per_shard
+=== query.splits.per.shard
 
-The "splits_per_shard" option provides a hint to the shard split planner on how many splits to create per shard. This should be based on the number of available executor slots in your Spark cluster divided by the number of shards in the collection you're querying. For instance, if you're querying into a 5 shard collection and your Spark cluster has 20 available executor slots to run the job, then you'll want to use:
+The "query.splits.per.shard" option provides a hint to the shard split planner on how many splits to create per shard. This should be based on the number of available executor slots in your Spark cluster divided by the number of shards in the collection you're querying. For instance, if you're querying into a 5 shard collection and your Spark cluster has 20 available executor slots to run the job, then you'll want to use:
 
 [source]
-option("splits_per_shard","4")
+option("query.splits.per.shard","4")
 
 Keep in mind that this is only a hint to the split calculator and you may end up with a slightly different number of splits than what was requested.
 
