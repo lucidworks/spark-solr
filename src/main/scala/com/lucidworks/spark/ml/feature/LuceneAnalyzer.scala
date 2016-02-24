@@ -17,127 +17,362 @@
 
 package com.lucidworks.spark.ml.feature
 
-import com.lucidworks.spark.ml.param.{StringStringMapParam, StringStringMapArrayParam}
-
-import collection.JavaConversions._
-import org.apache.lucene.analysis.custom.CustomAnalyzer
+import com.lucidworks.spark.util.Utils
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
+import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper}
+import org.apache.lucene.analysis.custom.CustomAnalyzer
+import org.apache.spark.Logging
+import org.apache.spark.ml.HasInputColsTransformer
+import org.apache.spark.ml.param.Param
+import org.apache.spark.ml.param.shared.{HasInputCols, HasOutputCol}
+import org.apache.spark.sql.types.ArrayType
+import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, DataFrame}
+import org.apache.spark.sql.functions._
 import org.apache.spark.annotation.Experimental
-import org.apache.spark.ml.UnaryTransformer
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.util.Identifiable
-import org.apache.spark.sql.types.{ArrayType, DataType, StringType}
+import org.apache.spark.sql.types._
 import org.apache.lucene.util.{Version => LuceneVersion}
+import org.json4s.jackson.JsonMethods.parse
+
+import java.io.{PrintWriter, StringWriter}
+import java.util.regex.Pattern
+
+import scala.collection.mutable
+import scala.util.control.Breaks._
+import scala.collection.JavaConversions._
+import scala.util.control.NonFatal
 
 
 /**
- * :: Experimental ::
- * Specify CharFilters, Tokenizer, and Filters to build a custom Lucene analyzer, which
- * transforms the input column string into a sequence of tokens in the output column.
- */
+  * :: Experimental ::
+  * Specify a schema as a JSON string to build a custom Lucene analyzer, which
+  * transforms the input column(s) into a sequence of tokens in the output column.
+  */
 @Experimental
 class LuceneAnalyzer(override val uid: String)
-  extends UnaryTransformer[String, Seq[String], LuceneAnalyzer] {
+  extends HasInputColsTransformer with Logging {
   def this() = this(Identifiable.randomUID("LuceneAnalyzer"))
-  /**
-   * Default Lucene match version, >= LUCENE_4_0_0
-   * Used by each analysis component when "luceneMatchVersion" is not specified explicitly for it.
-   * Default: LuceneVersion.LATEST
-   * @group param
-   */
-  val defaultLuceneMatchVersion: Param[String] = new Param(this, "defaultLuceneMatchVersion",
-    "Default Lucene version compatibility, applied to analysis components with specs that don't"
-      + " contain a luceneMatchVersion arg, must be 4.0 or later",
-    (version: String) => try {
-      LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_4_0_0)
-      true
-    } catch { case e: Throwable => false })
-  /** @group setParam */
-  def setDefaultLuceneMatchVersion(value: String): this.type = set(defaultLuceneMatchVersion, value)
-  /** @group getParam */
-  def getDefaultLuceneMatchVersion: String = $(defaultLuceneMatchVersion)
-  setDefault(defaultLuceneMatchVersion -> LuceneVersion.LATEST.toString)
 
-  val charFilters : StringStringMapArrayParam = new StringStringMapArrayParam(this, "charFilters",
-  "Array of CharFilter config maps: "
-    + "(CharFilter type (SPI name) and optional arg key/value pairs)",
-  { a => a.map(m => m.contains("type")).foldLeft(true)({ _ & _ }) }) // Each must have "type"
   /** @group setParam */
-  def setCharFilters(value: Array[Map[String,String]]): this.type = set(charFilters, value)
-  /** @group getParam */
-  def getCharFilters: Array[Map[String,String]] = $(charFilters)
-  setDefault(charFilters -> Array.empty[Map[String,String]])
-
-  val tokenizer : StringStringMapParam = new StringStringMapParam(this, "tokenizer",
-  "Tokenizer config map: Tokenizer type (SPI name) and optional arg key/value pairs",
-  { _.contains("type") }) // Must have "type"
+  def setInputCols(value: Array[String]): this.type = set(inputCols, value)
   /** @group setParam */
-  def setTokenizer(value: Map[String,String]): this.type = set(tokenizer, value)
-  /** @group getParam */
-  def getTokenizer: Map[String,String] = $(tokenizer)
-  setDefault(tokenizer -> Map("type" -> "standard")) // StandardTokenizer is the default
-
-  val filters : StringStringMapArrayParam
-  = new StringStringMapArrayParam(this, "filters",
-  "Array of Token Filter config maps: "
-    + " (Filter type (SPI name) and optional arg key/value pairs)",
-  { a => a.map(m => m.contains("type")).foldLeft(true)({ _ & _ }) }) // Each must have "type"
+  def setOutputCol(value: String): this.type = set(outputCol, value)
   /** @group setParam */
-  def setFilters(value: Array[Map[String,String]]): this.type = set(filters, value)
-  /** @group getParam */
-  def getFilters: Array[Map[String,String]] = $(filters)
-  setDefault(filters -> Array.empty[Map[String,String]])
+  def setInputCol(value: String): this.type = set(inputCols, Array(value))
 
+  val prefixTokensWithInputCol: Param[Boolean] = new Param(this, "prefixTokensWithInputCol",
+    s"If true, the input column name will be prepended to every output token, separated by "
+    + s""""${LuceneAnalyzer.OutputTokenSeparator}"; default: false.""")
+  /** @group setParam */
+  def setPrefixTokensWithInputCol(value: Boolean): this.type = set(prefixTokensWithInputCol, value)
+  /** @group getParam */
+  def getPrefixTokensWithInputCol: Boolean = $(prefixTokensWithInputCol)
+  setDefault(prefixTokensWithInputCol -> false)
+
+  val analysisSchema: Param[String] = new Param(this, "analysisSchema",
+    "JSON analysis schema: Analyzers (named analysis pipelines: charFilters, tokenizer, filters)"
+      + " and input column -> analyzer mappings",
+    validateAnalysisSchema _)
+  /** @group setParam */
+  def setAnalysisSchema(value: String): this.type = set(analysisSchema, value)
+  /** @group getParam */
+  def getAnalysisSchema: String = $(analysisSchema)
+  setDefault(analysisSchema -> s"""
+                                  |{
+                                  |  "schemaType": "${LuceneAnalyzerSchema.SchemaType_V1}",
+                                  |  "analyzers": [{
+                                  |    "name": "StdTok_LowerCase",
+                                  |    "charFilters": [],
+                                  |    "tokenizer": {
+                                  |      "type": "standard"
+                                  |    },
+                                  |    "filters": [{
+                                  |      "type": "lowercase"
+                                  |    }]
+                                  |  }],
+                                  |  "inputColumns": [{
+                                  |    "regex": ".+",
+                                  |    "analyzer": "StdTok_LowerCase"
+                                  |  }]
+                                  |}""".stripMargin)
+  @transient var analyzerInitFailure: Option[String] = None
+  def validateAnalysisSchema(analysisSchema: String): Boolean = {
+    analyzer = None
+    analyzerInitFailure = None
+    try {
+      analyzer = Some(new SchemaAnalyzer(analysisSchema))
+    } catch {
+      case NonFatal(e) => val writer = new StringWriter
+        writer.write("Exception initializing analysis schema: ")
+        e.printStackTrace(new PrintWriter(writer))
+        analyzerInitFailure = Some(writer.toString)
+    } finally {
+      analyzerInitFailure.foreach(logError(_))
+      if ( ! analyzer.exists(_.isValid)) {
+        analyzer.foreach(a => logError(a.invalidMessages))
+      }
+    }
+    analyzer.exists(_.isValid)
+  }
+  override def transformSchema(schema: StructType): StructType = {
+    val fieldNames = schema.fieldNames.toSet
+    $(inputCols).foreach { colName =>
+      if (fieldNames.contains(colName)) {
+        schema(colName).dataType match {
+          case StringType | ArrayType(StringType, _) =>
+          case other => throw new IllegalArgumentException(
+            s"Input column $colName : data type $other is not supported.")
+        }
+      }
+    }
+    if (schema.fieldNames.contains($(outputCol))) {
+      throw new IllegalArgumentException(s"Output column ${$(outputCol)} already exists.")
+    }
+    StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
+  }
+  override def transform(dataset: DataFrame): DataFrame = {
+    val schema = dataset.schema
+    val existingInputCols = $(inputCols).filter(schema.fieldNames.contains(_))
+    val outputSchema = transformSchema(schema)
+    val analysisFunc = udf { row: Row =>
+      if (analyzer == null || (analyzer.isEmpty && analyzerInitFailure.isEmpty)) {
+        validateAnalysisSchema($(analysisSchema)) // make sure analyzer has been instantiated
+      }
+      val seqBuilder = Seq.newBuilder[String]
+      val colNameIter = existingInputCols.iterator
+      row.toSeq foreach { column: Any =>
+        val field = colNameIter.next()
+        column match {
+          case null => // skip missing values
+          case value: String => seqBuilder ++= analyze(field, value)
+          case values: Seq[String @unchecked] =>
+            values.foreach { case null => // skip missing values
+              case value => seqBuilder ++= analyze(field, value)
+            }
+        }
+      }
+      seqBuilder.result()
+    }
+    val args = existingInputCols.map(dataset(_))
+    val metadata = outputSchema($(outputCol)).metadata
+    dataset.select(col("*"), analysisFunc(struct(args: _*)).as($(outputCol), metadata))
+  }
   override def validateParams(): Unit = {
     super.validateParams()
-    buildAnalyzer() // side-effect: building the analyzer will validate all params
-  }
-  private var analyzer: CustomAnalyzer = null
-  def buildAnalyzer(): Unit = {
-    var builder = CustomAnalyzer.builder()
-      .withDefaultMatchVersion(LuceneVersion.parseLeniently($(defaultLuceneMatchVersion)))
-    // Need to pass mutable Maps to the builder methods to enable put("luceneMatchVersion", ...)
-    for (charFilter <- $(charFilters)) {
-      val charFilterNoType = collection.mutable.Map() ++ (charFilter - "type")
-      builder = builder.addCharFilter(charFilter("type"), charFilterNoType)
+    if (analyzer.exists(_.isValid)) {
+      buildReferencedAnalyzers()
     }
-    val tokenizerNoType = collection.mutable.Map[String,String]() ++ ($(tokenizer) - "type")
-    builder = builder.withTokenizer($(tokenizer)("type"), tokenizerNoType)
-    for (filter <- $(filters)) {
-      val filterNoType = collection.mutable.Map() ++ (filter - "type")
-      builder = builder.addTokenFilter(filter("type"), filterNoType)
+    require(analyzer.exists(_.isValid),
+      analyzer.map(_.invalidMessages).getOrElse(analyzerInitFailure.get))
+  }
+  private def buildReferencedAnalyzers(): Unit = {
+    $(inputCols) foreach { inputCol =>
+      require(analyzer.get.luceneAnalyzerSchema.getAnalyzer(inputCol).isDefined,
+        s"Input column '$inputCol': no matching inputColumn name or regex in analysis schema.")
     }
-    analyzer = builder.build()
-    builtCharFilters = $(charFilters)
-    builtTokenizer = $(tokenizer)
-    builtFilters = $(filters)
   }
-  private var builtCharFilters: Array[Map[String,String]] = null
-  private var builtTokenizer: Map[String,String] = null
-  private var builtFilters: Array[Map[String,String]] = null
-  def shouldBuildAnalyzer: Boolean = {
-    analyzer == null                                 ||
-    ! (builtCharFilters sameElements $(charFilters)) ||
-    builtTokenizer != $(tokenizer)                   ||
-    ! (builtFilters sameElements $(filters))
-  }
-
-  override protected def createTransformFunc: String => Seq[String] = { str =>
-    if (shouldBuildAnalyzer) buildAnalyzer()
-    val stream = analyzer.tokenStream($(inputCol), str)
-    val charTermAttr = stream.addAttribute(classOf[CharTermAttribute])
-    stream.reset()
-    val builder = Seq.newBuilder[String]
-    while (stream.incrementToken()) {
-      builder += charTermAttr.toString
-    }
-    stream.end()
-    stream.close()
-    builder.result()
-  }
-  override protected def validateInputType(inputType: DataType): Unit = {
-    require(inputType == StringType, s"Input type must be string type but got $inputType.")
-  }
-  override protected def outputDataType: DataType = new ArrayType(StringType, true)
   override def copy(extra: ParamMap): LuceneAnalyzer = defaultCopy(extra)
+  def outputDataType: DataType = new ArrayType(StringType, true)
+
+  @transient private var analyzer: Option[SchemaAnalyzer] = None
+  private def analyze(colName: String, str: String): Seq[String] = {
+    val inputStream = analyzer.get.tokenStream(colName, str)
+    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
+    inputStream.reset()
+    val outputBuilder = Seq.newBuilder[String]
+    if ($(prefixTokensWithInputCol)) {
+      val tokenBuilder = new StringBuilder(colName + LuceneAnalyzer.OutputTokenSeparator)
+      val prefixLength = tokenBuilder.length
+      while (inputStream.incrementToken) {
+        tokenBuilder.setLength(prefixLength)
+        tokenBuilder.appendAll(charTermAttr.buffer(), 0, charTermAttr.length())
+        outputBuilder += tokenBuilder.toString
+      }
+    } else {
+      while (inputStream.incrementToken)
+        outputBuilder += charTermAttr.toString
+    }
+    inputStream.end()
+    inputStream.close()
+    outputBuilder.result()
+  }
+}
+private object LuceneAnalyzer {
+  /** Used to separate the input column name and the token when prefixTokensWithInputCol = true */
+  val OutputTokenSeparator = "="
+}
+
+private case class AnalyzerConfig(name: String,
+                                  charFilters: Option[List[Map[String, String]]],
+                                  tokenizer: Map[String, String],
+                                  filters: Option[List[Map[String, String]]])
+private case class InputColumnConfig(regex: Option[String],
+                                     name: Option[String],
+                                     analyzer: String) {
+  val pattern: Pattern = regex.map(_.r.pattern).orNull
+  val columnId: String = name.getOrElse(regex.get)
+}
+private case class SchemaConfig(schemaType: String,
+                                defaultLuceneMatchVersion: Option[String],
+                                analyzers: List[AnalyzerConfig],
+                                inputColumns: List[InputColumnConfig]) {
+  val namedAnalyzerConfigs: Map[String, AnalyzerConfig] = analyzers.map(a => a.name -> a).toMap
+  val namedInputColumns: Map[String, InputColumnConfig]
+  = inputColumns.filter(c => c.name.isDefined).map(c => c.name.get -> c).toMap
+}
+private object LuceneAnalyzerSchema {
+  val SchemaType_V1 = "LuceneAnalyzerSchema.v1"
+}
+private class LuceneAnalyzerSchema(val analysisSchema: String) {
+  implicit val formats = org.json4s.DefaultFormats
+  val schemaConfig = parse(analysisSchema).extract[SchemaConfig]
+  val analyzers = mutable.Map[String, Analyzer]()
+
+  // Validate the analysis schema
+  var isValid : Boolean = true
+  var invalidMessages : StringBuilder = new StringBuilder()
+  if (schemaConfig.schemaType != LuceneAnalyzerSchema.SchemaType_V1) {
+    isValid = false
+    invalidMessages.append(s"""Unknown schemaType "${schemaConfig.schemaType}".""")
+  }
+  try {
+    schemaConfig.defaultLuceneMatchVersion.foreach { version =>
+      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_4_0_0)) {
+        isValid = false
+        invalidMessages.append(
+          s"""defaultLuceneMatchVersion "${schemaConfig.defaultLuceneMatchVersion}"""")
+          .append(" is not on or after ").append(LuceneVersion.LUCENE_4_0_0)
+      }
+    }
+  } catch {
+    case NonFatal(e) => isValid = false
+      invalidMessages.append(e.getMessage).append("\n")
+  }
+  schemaConfig.inputColumns.foreach { inputColumn: InputColumnConfig =>
+    if (inputColumn.name.isDefined) {
+      if (inputColumn.regex.isDefined) {
+        isValid = false
+        invalidMessages.append("""Both "name" and "regex" keys are defined in an inputColumn,"""
+          + " but only one may be.\n")
+      }
+    } else if (inputColumn.regex.isEmpty) {
+      isValid = false
+      invalidMessages.append("""Neither "name" nor "regex" key is defined in an inputColumn,""").
+        append(" but one must be.\n")
+    }
+    if (schemaConfig.namedAnalyzerConfigs.get(inputColumn.analyzer).isEmpty) {
+      def badAnalyzerMessage(suffix: String): Unit = {
+        invalidMessages.append(s"""inputColumn "${inputColumn.columnId}": """)
+          .append(s""" analyzer "${inputColumn.analyzer}" """).append(suffix)
+      }
+      try { // Attempt to interpret the analyzer as a fully qualified class name
+        Utils.classForName(inputColumn.analyzer).asInstanceOf[Class[_ <: Analyzer]]
+      } catch {
+        case _: ClassNotFoundException => isValid = false
+          badAnalyzerMessage("not found.\n")
+        case _: ClassCastException => isValid = false
+          badAnalyzerMessage("is not a subclass of org.apache.lucene.analysis.Analyzer")
+      }
+    }
+  }
+  def getAnalyzer(fieldName: String): Option[Analyzer] = {
+    var analyzer: Option[Analyzer] = None
+    if (isValid) {
+      var inputColumnConfig = schemaConfig.namedInputColumns.get(fieldName)
+      if (inputColumnConfig.isEmpty) {
+        breakable {
+          schemaConfig.inputColumns.filter(c => c.regex.isDefined).foreach { column =>
+            if (column.pattern matcher fieldName matches()) {
+              inputColumnConfig = Some(column)
+              break
+            }
+          }
+        }
+      }
+      if (inputColumnConfig.isDefined) {
+        val analyzerConfig = schemaConfig.namedAnalyzerConfigs.get(inputColumnConfig.get.analyzer)
+        if (analyzerConfig.isDefined) {
+          analyzer = analyzers.get(analyzerConfig.get.name)
+          if (analyzer.isEmpty) try {
+            analyzer = Some(buildAnalyzer(analyzerConfig.get))
+            analyzers.put(analyzerConfig.get.name, analyzer.get)
+          } catch {
+            case NonFatal(e) => isValid = false
+              val writer = new StringWriter
+              writer.write(s"Exception initializing analyzer '${analyzerConfig.get.name}': ")
+              e.printStackTrace(new PrintWriter(writer))
+              invalidMessages.append(writer.toString).append("\n")
+          }
+        } else {
+          try {
+            val clazz = Utils.classForName(inputColumnConfig.get.analyzer)
+            analyzer = Some(clazz.newInstance.asInstanceOf[Analyzer])
+            schemaConfig.defaultLuceneMatchVersion foreach { version =>
+              analyzer.get.setVersion(LuceneVersion.parseLeniently(version))
+            }
+          } catch {
+            case NonFatal(e) => isValid = false
+              val writer = new StringWriter
+              writer.write(s"Exception initializing analyzer '${inputColumnConfig.get.analyzer}': ")
+              e.printStackTrace(new PrintWriter(writer))
+              invalidMessages.append(writer.toString).append("\n")
+          }
+        }
+      }
+    }
+    analyzer
+  }
+  private def buildAnalyzer(analyzerConfig: AnalyzerConfig): Analyzer = {
+    var builder = CustomAnalyzer.builder()
+    if (schemaConfig.defaultLuceneMatchVersion.isDefined) {
+      builder = builder.withDefaultMatchVersion(
+        LuceneVersion.parseLeniently(schemaConfig.defaultLuceneMatchVersion.get))
+    }
+    // Builder methods' param maps must be mutable to enable put("luceneMatchVersion", ...)
+    if (analyzerConfig.charFilters.isDefined) {
+      for (charFilter <- analyzerConfig.charFilters.get) {
+        val charFilterNoType = mutable.Map[String, String]() ++ (charFilter - "type")
+        builder = builder.addCharFilter(charFilter("type"), charFilterNoType)
+      }
+    }
+    val tokenizerNoType = mutable.Map[String, String]() ++ (analyzerConfig.tokenizer - "type")
+    builder = builder.withTokenizer(analyzerConfig.tokenizer("type"), tokenizerNoType)
+    if (analyzerConfig.filters.isDefined) {
+      for (filter <- analyzerConfig.filters.get) {
+        val filterNoType = mutable.Map[String, String]() ++ (filter - "type")
+        builder = builder.addTokenFilter(filter("type"), filterNoType)
+      }
+    }
+    builder.build()
+  }
+}
+
+private class SchemaAnalyzer (analysisSchema: String)
+  extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
+
+  val luceneAnalyzerSchema = new LuceneAnalyzerSchema(analysisSchema)
+  def isValid: Boolean = luceneAnalyzerSchema.isValid
+  def invalidMessages: String = luceneAnalyzerSchema.invalidMessages.result()
+  val analyzerCache = mutable.Map.empty[String, Analyzer]
+
+  override protected def getWrappedAnalyzer(fieldName: String): Analyzer = {
+    analyzerCache.synchronized {
+      var analyzer = analyzerCache.get(fieldName)
+      if (analyzer.isEmpty) {
+        if (isValid) {
+          analyzer = luceneAnalyzerSchema.getAnalyzer(fieldName)
+          if ( ! isValid) {
+            throw new IllegalArgumentException(invalidMessages)
+          }
+        } else {
+          throw new IllegalArgumentException(invalidMessages)
+        }
+        analyzerCache.put(fieldName, analyzer.get)
+      }
+      analyzer.get
+    }
+  }
 }

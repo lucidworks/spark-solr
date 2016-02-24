@@ -15,17 +15,14 @@ import org.junit.Test;
 import java.io.File;
 import java.util.*;
 
-import static org.junit.Assert.*;
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
+import static org.junit.Assert.*;
 
 /**
  * Tests for the SolrRelation implementation.
  */
 public class SolrRelationTest extends RDDProcessorTestBase {
 
-  protected transient SQLContext sqlContext;
-
-  //@Ignore
   @Test
   public void testEventsDataFrame() throws Exception {
     String testCollection = "testEventsDataFrame";
@@ -75,6 +72,39 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     } finally {
       deleteCollection(testCollection);
     }
+  }
+
+  @Test
+  public void testMVDateHandling() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+    String testCollection = "testMVDateHandling";
+
+    int numShards = 1;
+    String zkHost = cluster.getZkServer().getZkAddress();
+
+    String[] testData = new String[] {
+            "1,a,x,1000,[a;x],[1000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "2,b,y,2000,[b;y],[2000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "3,c,z,3000,[c;z],[3000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]",
+            "4,a,x,4000,[a;x],[4000],[2016-01-02T03:04:05.006Z,2016-02-02T03:04:05.006Z]"
+    };
+    buildCollection(zkHost, testCollection, testData, numShards);
+
+    SolrQuery q = new SolrQuery("*:*");
+    q.setRows(100);
+    q.addSort("id", SolrQuery.ORDER.asc);
+    dumpSolrCollection(testCollection, q);
+
+    Map<String, String> options = new HashMap<String, String>();
+    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+    options.put(SOLR_COLLECTION_PARAM(), testCollection);
+    // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
+    DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    fromSolr = fromSolr.sort("id");
+    fromSolr.printSchema();
+
+    Row[] docsFromSolr = fromSolr.collect();
+    assertTrue(docsFromSolr.length == 4);
   }
   
   protected static String array2cdl(String[] arr) {

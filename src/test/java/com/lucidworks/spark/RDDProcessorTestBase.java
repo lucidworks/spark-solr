@@ -5,6 +5,7 @@ import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.util.DateUtil;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -88,7 +89,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
       public SolrInputDocument call(String row) throws Exception {
         String[] fields = row.split(",");
         if (fields.length < 6)
-          throw new IllegalArgumentException("Each test input doc should have 6 fields! invalid doc: "+row);
+          throw new IllegalArgumentException("Each test input doc should have at least 6 fields! invalid doc: "+row);
 
         SolrInputDocument doc = new SolrInputDocument();
         doc.setField("id", fields[0]);
@@ -103,6 +104,12 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
         list = fields[5].substring(1,fields[5].length()-1).split(";");
         for (int i=0; i < list.length; i++)
           doc.addField("field5_ii", Integer.parseInt(list[i]));
+
+        if (fields.length > 6) {
+          list = fields[6].substring(1,fields[6].length()-1).split(";");
+          for (int i=0; i < list.length; i++)
+            doc.addField("field6_tdts", DateUtil.parseDate(list[i]));
+        }
 
         return doc;
       }

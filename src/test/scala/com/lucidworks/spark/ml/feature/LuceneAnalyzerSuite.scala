@@ -23,6 +23,8 @@ import org.apache.spark.ml.param.ParamsSuite
 import org.apache.spark.mllib.util.MLlibTestSparkContext
 import org.apache.spark.sql.{Row, DataFrame}
 
+import scala.beans.BeanInfo
+
 class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
   import com.lucidworks.spark.ml.feature.LuceneAnalyzerSuite._
 
@@ -31,86 +33,341 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
   }
 
   test("StandardTokenizer") {
-    val analyzer0 = new LuceneAnalyzer()
+    val analyzer1 = new LuceneAnalyzer()
       .setInputCol("rawText")
-      .setOutputCol("tokens")
-    val dataset0 = sqlContext.createDataFrame(Seq(
-      TokenizerTestData("Test for tokenization.", Array("Test", "for", "tokenization")),
-      TokenizerTestData("Te,st. punct", Array("Te", "st", "punct"))
-    ))
-    testLuceneAnalyzer(analyzer0, dataset0)
+      .setOutputCol("tokens")  // Default analysis schema: StandardTokenizer + LowerCaseFilter
 
     val dataset1 = sqlContext.createDataFrame(Seq(
+      TokenizerTestData("Test for tokenization.", Array("test", "for", "tokenization")),
+      TokenizerTestData("Te,st. punct", Array("te", "st", "punct"))
+    ))
+    testLuceneAnalyzer(analyzer1, dataset1)
+
+    val dataset2 = sqlContext.createDataFrame(Seq(
       TokenizerTestData("我是中国人。 １２３４ Ｔｅｓｔｓ ",
         Array("我", "是", "中", "国", "人", "１２３４", "Ｔｅｓｔｓ")),
       TokenizerTestData("some-dashed-phrase", Array("some", "dashed", "phrase"))
     ))
-    analyzer0.setTokenizer(Map("type" -> "standard", "maxTokenLength" -> "10"))
-    testLuceneAnalyzer(analyzer0, dataset1)
+    val analyzerConfig2 = """
+                            |{
+                            |  "schemaType": "LuceneAnalyzerSchema.v1",
+                            |  "analyzers": [{
+                            |    "name": "StdTok_max3",
+                            |    "tokenizer": {
+                            |      "type": "standard",
+                            |      "maxTokenLength": "10"
+                            |    }
+                            |  }],
+                            |  "inputColumns": [{
+                            |    "name": "rawText",
+                            |    "analyzer": "StdTok_max3"
+                            |  }]
+                            |}""".stripMargin
+    analyzer1.setAnalysisSchema(analyzerConfig2)
+    testLuceneAnalyzer(analyzer1, dataset2)
 
+    val analyzerConfig3 = """
+                            |{
+                            |  "schemaType": "LuceneAnalyzerSchema.v1",
+                            |  "defaultLuceneMatchVersion": "4.10.4",
+                            |  "analyzers": [{
+                            |    "name": "StdTok_max3",
+                            |    "tokenizer": {
+                            |      "type": "standard",
+                            |      "maxTokenLength": "3"
+                            |    }
+                            |  }],
+                            |  "inputColumns": [{
+                            |    "regex": ".+",
+                            |    "analyzer": "StdTok_max3"
+                            |  }]
+                            |}""".stripMargin
     val analyzer2 = new LuceneAnalyzer()
-      .setDefaultLuceneMatchVersion("4.10.4")
-      .setTokenizer(Map("type" -> "standard", "maxTokenLength" -> "3"))
+      .setAnalysisSchema(analyzerConfig3)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset2 = sqlContext.createDataFrame(Seq(
+    val dataset3 = sqlContext.createDataFrame(Seq(
       TokenizerTestData("Test for tokenization.",
         Array("Tes", "t", "for", "tok", "eni", "zat", "ion")),
       TokenizerTestData("Te,st.  punct", Array("Te", "st", "pun", "ct"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset2)
+    testLuceneAnalyzer(analyzer2, dataset3)
   }
 
   test("CharFilters") {
-    val analyzer0 = new LuceneAnalyzer()
-      .setCharFilters(Array(Map("type" -> "patternreplace",
-        "pattern" -> "[A-Za-z]+", "replacement" -> "")))
-      .setTokenizer(Map("type" -> "standard"))
+    val analyzerConfig1 = """
+                            |{
+                            |  "schemaType": "LuceneAnalyzerSchema.v1",
+                            |  "analyzers": [{
+                            |    "name": "strip_alpha_std_tok",
+                            |    "charFilters":[{
+                            |      "type": "patternreplace",
+                            |      "pattern": "[A-Za-z]+",
+                            |      "replacement": ""
+                            |    }],
+                            |    "tokenizer": {
+                            |      "type": "standard"
+                            |    }
+                            |  }],
+                            |  "inputColumns": [{
+                            |    "regex": ".+",
+                            |    "analyzer": "strip_alpha_std_tok"
+                            |  }]
+                            |}""".stripMargin
+    val analyzer = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig1)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset0 = sqlContext.createDataFrame(Seq(
+    val dataset1 = sqlContext.createDataFrame(Seq(
       TokenizerTestData("Test for 9983, tokenization.", Array("9983")),
       TokenizerTestData("Te,st. punct", Array())
     ))
-    testLuceneAnalyzer(analyzer0, dataset0)
+    testLuceneAnalyzer(analyzer, dataset1)
 
-    analyzer0.setCharFilters(Array(Map("type" -> "htmlstrip"),
-      Map("type" -> "patternreplace", "pattern" -> "removeme", "replacement" -> "")))
-    val dataset1 = sqlContext.createDataFrame(Seq(
-      TokenizerTestData("<html><body>remove<b>me</b> but leave<div>the&nbsp;rest.</div></body></html>",
+    val analyzerConfig2 = """
+                            |{
+                            |  "schemaType": "LuceneAnalyzerSchema.v1",
+                            |  "analyzers": [{
+                            |    "name": "htmlstrip_drop_removeme_std_tok",
+                            |    "charFilters":[{
+                            |        "type": "htmlstrip"
+                            |      }, {
+                            |        "type": "patternreplace",
+                            |        "pattern": "removeme",
+                            |        "replacement": ""
+                            |    }],
+                            |    "tokenizer": {
+                            |      "type": "standard"
+                            |    }
+                            |  }],
+                            |  "inputColumns": [{
+                            |    "name": "rawText",
+                            |    "analyzer": "htmlstrip_drop_removeme_std_tok"
+                            |  }]
+                            |}""".stripMargin
+    analyzer.setAnalysisSchema(analyzerConfig2)
+    val dataset2 = sqlContext.createDataFrame(Seq(
+      TokenizerTestData(
+        "<html><body>remove<b>me</b> but leave<div>the&nbsp;rest.</div></body></html>",
         Array("but", "leave", "the", "rest"))
     ))
-    testLuceneAnalyzer(analyzer0, dataset1)
+    testLuceneAnalyzer(analyzer, dataset2)
   }
 
   test("TokenFilters") {
-    val analyzer0 = new LuceneAnalyzer()
-      .setTokenizer(Map("type" -> "standard"))
-      .setFilters(Array(Map("type" -> "englishpossessive"),
-        Map("type" -> "stop", "ignoreCase" -> "true", "format" -> "snowball",
-          "words" -> "org/apache/lucene/analysis/snowball/english_stop.txt"),
-        Map("type" -> "lowercase")))
+    val analyzerConfig = """
+                           |{
+                           |  "schemaType": "LuceneAnalyzerSchema.v1",
+                           |  "analyzers": [{
+                           |    "name": "std_tok_possessive_stop_lower",
+                           |    "tokenizer": {
+                           |      "type": "standard"
+                           |    },
+                           |    "filters":[{
+                           |        "type": "englishpossessive"
+                           |      }, {
+                           |        "type": "stop",
+                           |        "ignoreCase": "true",
+                           |        "format": "snowball",
+                           |        "words": "org/apache/lucene/analysis/snowball/english_stop.txt"
+                           |      }, {
+                           |        "type": "lowercase"
+                           |    }]
+                           |  }],
+                           |  "inputColumns": [{
+                           |    "regex": ".+",
+                           |    "analyzer": "std_tok_possessive_stop_lower"
+                           |  }]
+                           |}""".stripMargin
+    val analyzer = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset0 = sqlContext.createDataFrame(Seq(
+    val dataset = sqlContext.createDataFrame(Seq(
       TokenizerTestData("Harold's not around.", Array("harold", "around")),
       TokenizerTestData("The dog's nose KNOWS!", Array("dog", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer0, dataset0)
+    testLuceneAnalyzer(analyzer, dataset)
   }
 
   test("UAX29URLEmailTokenizer") {
-    val analyzer0 = new LuceneAnalyzer()
-      .setTokenizer(Map("type" -> "uax29urlemail", "maxTokenLength" -> "2000"))
+    val analyzerConfig = """
+                           |{
+                           |  "schemaType": "LuceneAnalyzerSchema.v1",
+                           |  "analyzers": [{
+                           |    "name": "uax29urlemail_2000",
+                           |    "tokenizer": {
+                           |      "type": "uax29urlemail",
+                           |      "maxTokenLength": "2000"
+                           |    }
+                           |  }],
+                           |  "inputColumns": [{
+                           |    "regex": ".+",
+                           |    "analyzer": "uax29urlemail_2000"
+                           |  }]
+                           |}""".stripMargin
+    val analyzer = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset0 = sqlContext.createDataFrame(Seq(
+    val dataset = sqlContext.createDataFrame(Seq(
       TokenizerTestData("Click on https://www.google.com/#q=spark+lucene",
         Array("Click", "on", "https://www.google.com/#q=spark+lucene")),
       TokenizerTestData("Email caffeine@coffee.biz for tips on staying@alert",
         Array("Email", "caffeine@coffee.biz", "for", "tips", "on", "staying", "alert"))
     ))
-    testLuceneAnalyzer(analyzer0, dataset0)
+    testLuceneAnalyzer(analyzer, dataset)
+  }
+
+  test("PrebuiltAnalyzer") {
+    val analyzerConfig = """
+                           |{
+                           |  "schemaType": "LuceneAnalyzerSchema.v1",
+                           |  "inputColumns": [{
+                           |    "regex": ".+",
+                           |    "analyzer": "org.apache.lucene.analysis.core.WhitespaceAnalyzer"
+                           |  }]
+                           |}""".stripMargin
+    val analyzer = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig)
+      .setInputCol("rawText")
+      .setOutputCol("tokens")
+
+    val dataset1 = sqlContext.createDataFrame(Seq(
+      TokenizerTestData("Test for tokenization.", Array("Test", "for", "tokenization.")),
+      TokenizerTestData("Te,st. punct", Array("Te,st.", "punct"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset1)
+  }
+
+  test("MultivaluedInputCol") {
+    val analyzer = new LuceneAnalyzer()
+      .setInputCols(Array("rawText"))
+      .setOutputCol("tokens")
+    val dataset = sqlContext.createDataFrame(Seq(
+      MV_TokenizerTestData(Array("Harold's not around.", "The dog's nose KNOWS!"),
+        Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset)
+  }
+
+  test("MultipleInputCols") {
+    val analyzer1 = new LuceneAnalyzer()
+      .setInputCols(Array("rawText1", "rawText2"))
+      .setOutputCol("tokens")
+    val dataset1 = sqlContext.createDataFrame(Seq(
+      SV_SV_TokenizerTestData("Harold's not around.", "The dog's nose KNOWS!",
+        Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer1, dataset1)
+
+    val analyzerConfig = """
+                           |{
+                           |  "schemaType": "LuceneAnalyzerSchema.v1",
+                           |  "analyzers": [{
+                           |      "name": "std_tok_lower",
+                           |      "tokenizer": { "type": "standard" },
+                           |      "filters":[{ "type": "lowercase" }]
+                           |    }, {
+                           |      "name": "std_tok",
+                           |      "tokenizer": { "type": "standard" }
+                           |    }, {
+                           |      "name": "htmlstrip_std_tok_lower",
+                           |      "charFilters": [{ "type": "htmlstrip" }],
+                           |      "tokenizer": { "type": "standard" },
+                           |      "filters": [{ "type": "lowercase" }]
+                           |  }],
+                           |  "inputColumns": [{
+                           |      "name": "rawText1",
+                           |      "analyzer": "std_tok_lower"
+                           |    }, {
+                           |      "name": "rawText2",
+                           |      "analyzer": "std_tok"
+                           |    }, {
+                           |      "regex": ".+",
+                           |      "analyzer": "htmlstrip_std_tok_lower"
+                           |  }]
+                           |}""".stripMargin
+    val analyzer2 = new LuceneAnalyzer()
+      .setAnalysisSchema(analyzerConfig)
+      .setInputCols(Array("rawText1", "rawText2"))
+      .setOutputCol("tokens")
+    val dataset2 = sqlContext.createDataFrame(Seq(
+      SV_SV_TokenizerTestData("Harold's NOT around.", "The dog's nose KNOWS!",
+        Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS"))
+    ))
+    testLuceneAnalyzer(analyzer2, dataset2)
+
+    val dataset3 = sqlContext.createDataFrame(Seq(
+      SV_MV_TokenizerTestData("Harold's NOT around.", Array("The dog's nose KNOWS!", "Good, fine, great..."),
+        Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "Good", "fine", "great"))
+    ))
+    testLuceneAnalyzer(analyzer2, dataset3)
+
+    val dataset4 = sqlContext.createDataFrame(Seq(
+      MV_MV_TokenizerTestData(Array("Harold's NOT around.", "Anymore, I mean."),
+        Array("The dog's nose KNOWS!", "Good, fine, great..."),
+        Array("harold's", "not", "around", "anymore", "i", "mean",
+          "The", "dog's", "nose", "KNOWS", "Good", "fine", "great"))
+    ))
+    testLuceneAnalyzer(analyzer2, dataset4)
+
+    analyzer2.setInputCols(Array("rawText1", "rawText2", "rawText3"))
+    val dataset5 = sqlContext.createDataFrame(Seq(
+      SV_SV_SV_TokenizerTestData(
+        "Harold's NOT around.", "The dog's nose KNOWS!", "<html><body>Content</body></html>",
+        Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "content"))
+    ))
+    testLuceneAnalyzer(analyzer2, dataset5)
+  }
+
+  test("PrefixTokensWithInputCol") {
+    val rawText1 = Array("Harold's NOT around.", "Anymore, I mean.")
+    val tokens1 = Array("harold's", "not", "around", "anymore", "i", "mean")
+
+    val rawText2 = Array("The dog's nose KNOWS!", "Good, fine, great...")
+    val tokens2 = Array("the", "dog's", "nose", "knows", "good", "fine", "great")
+
+    val tokens = tokens1 ++ tokens2
+    val prefixedTokens = tokens1.map("rawText1=" + _) ++ tokens2.map("rawText2=" + _)
+
+    // First transform without token prefixes
+    val analyzer = new LuceneAnalyzer()
+      .setInputCols(Array("rawText1", "rawText2"))
+      .setOutputCol("tokens")
+    val dataset = sqlContext.createDataFrame(
+      Seq(MV_MV_TokenizerTestData(rawText1, rawText2, tokens)))
+    testLuceneAnalyzer(analyzer, dataset)
+
+    // Then transform with token prefixes
+    analyzer.setPrefixTokensWithInputCol(true)
+    val prefixedDataset = sqlContext.createDataFrame(
+      Seq(MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)))
+    testLuceneAnalyzer(analyzer, prefixedDataset)
+  }
+
+  test("MissingValues") {
+    val analyzer = new LuceneAnalyzer()
+      .setInputCols(Array("rawText"))
+      .setOutputCol("tokens")
+    val dataset1 = sqlContext.createDataFrame(Seq(TokenizerTestData(null, Array())))
+    testLuceneAnalyzer(analyzer, dataset1)
+
+    val dataset2 = sqlContext.createDataFrame(Seq(TokenizerTestData("", Array())))
+    testLuceneAnalyzer(analyzer, dataset2)
+
+    val dataset3 = sqlContext.createDataFrame(Seq(
+      MV_TokenizerTestData(Array(null, "Harold's not around.", null, "The dog's nose KNOWS!", ""),
+        Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset3)
+
+    analyzer.setInputCols(Array("rawText1", "rawText2", "rawText3"))
+    val dataset4 = sqlContext.createDataFrame(Seq(
+      SV_SV_SV_TokenizerTestData("", "The dog's nose KNOWS!", null,
+        Array("the", "dog's", "nose", "knows"))
+    ))
+    testLuceneAnalyzer(analyzer, dataset4)
   }
 }
 
@@ -125,3 +382,21 @@ object LuceneAnalyzerSuite extends SparkSolrFunSuite {
       }
   }
 }
+
+@BeanInfo
+case class SV_SV_TokenizerTestData(rawText1: String, rawText2: String, wantedTokens: Array[String])
+
+@BeanInfo
+case class MV_TokenizerTestData(rawText: Array[String], wantedTokens: Array[String])
+
+@BeanInfo
+case class SV_MV_TokenizerTestData
+(rawText1: String, rawText2: Array[String], wantedTokens: Array[String])
+
+@BeanInfo
+case class MV_MV_TokenizerTestData
+(rawText1: Array[String], rawText2: Array[String], wantedTokens: Array[String])
+
+@BeanInfo
+case class SV_SV_SV_TokenizerTestData
+(rawText1: String, rawText2: String, rawText3: String, wantedTokens: Array[String])
