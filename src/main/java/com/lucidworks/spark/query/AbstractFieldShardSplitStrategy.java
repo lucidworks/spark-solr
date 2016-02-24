@@ -1,12 +1,17 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.QueryConstants;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.response.FieldStatsInfo;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.util.NamedList;
 
 import java.io.IOException;
 import java.io.Serializable;

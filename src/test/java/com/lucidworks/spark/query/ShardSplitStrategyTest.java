@@ -4,17 +4,22 @@ import com.lucidworks.spark.RDDProcessorTestBase;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.rdd.SolrRDD$;
+import com.lucidworks.spark.util.SolrJsonSupport;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSupport;
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
+import org.json4s.JsonAST;
+import org.json4s.jackson.JsonMethods$;
 import org.junit.Test;
 import scala.Option;
 import scala.collection.JavaConversions;
 
+import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,19 +57,15 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
       }
       buildCollection(zkHost, collection, inputDocs, 1);
 
-      // verify the _version_ field is sane
+      // verify the _version_ field is sane. Get min and max from Solr queries using Top1 approach
       SolrQuery q = new SolrQuery("*:*");
       q.set("collection", collection);
       q.set("distrib", false);
       q.setRows(1); // top 1
       q.addSort("_version_", SolrQuery.ORDER.asc);
-      q.setGetFieldStatistics("_version_");
       QueryResponse qr = cloudSolrServer.query(q);
       SolrDocument doc = qr.getResults().get(0);
       Long minFromSort = (Long)doc.getFirstValue("_version_");
-      Long minFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMin()).longValue();
-      Long maxFromStats = ((Double)qr.getFieldStatsInfo().get("_version_").getMax()).longValue();
-      Long numFoundFromStats = qr.getFieldStatsInfo().get("_version_").getCount();
 
       q.removeSort("_version_");
       q.addSort("_version_", SolrQuery.ORDER.desc);
@@ -73,20 +74,16 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
       Long maxFromSort = (Long)doc1.getFirstValue("_version_");
 
       SolrQuery q1 = new SolrQuery("*:*");
-      q1.addFilterQuery("_version_:[" + minFromStats + " TO " + maxFromStats + "]");
+      q1.addFilterQuery("_version_:[" + minFromSort + " TO " + maxFromSort + "]");
       q1.set("collection", collection);
       q1.set("distrib", false);
       q1.setRows(0);
       QueryResponse qr2 = cloudSolrServer.query(collection, q1);
       Long numFoundFromQuery = qr2.getResults().getNumFound();
+      assert numFoundFromQuery == inputDocs.length;
 
-      assertTrue(numFoundFromStats == inputDocs.length);
-      assertTrue(numFoundFromStats.longValue() == numFoundFromQuery.longValue());
-      assertTrue(minFromSort.longValue() == minFromStats.longValue());
-      assertTrue(maxFromSort.longValue() == maxFromStats.longValue());
 
       SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
-
       String shardUrl = SolrRDD$.MODULE$.randomReplicaLocation(SolrSupport.buildShardList(zkHost, collection).head());
 
       SolrQuery solrQuery = new SolrQuery("*:*");
