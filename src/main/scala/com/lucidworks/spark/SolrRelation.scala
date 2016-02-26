@@ -128,7 +128,7 @@ class SolrRelation(val parameters: Map[String, String],
   }
 
   private def buildQuery: SolrQuery = {
-    var query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
+    val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
     val fields = conf.getFields
 
     if (fields.nonEmpty) {
