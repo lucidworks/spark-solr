@@ -157,7 +157,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     options.put("collection", aggCollection);
     sessionsAgg.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
 
-    SolrSupport.getSolrServer(zkHost).commit(aggCollection);
+    SolrSupport.getCachedCloudClient(zkHost).commit(aggCollection);
 
     // k-means clustering for finding anomalies
     

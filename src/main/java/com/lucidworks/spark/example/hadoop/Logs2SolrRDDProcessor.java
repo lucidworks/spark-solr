@@ -51,7 +51,7 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
     jsc.binaryFiles(cli.getOptionValue("hdfsPath")).foreach(
       new VoidFunction<Tuple2<String, PortableDataStream>>() {
         public void call(Tuple2<String, PortableDataStream> t2) throws Exception {
-          final SolrClient solrServer = SolrSupport.getSolrServer(zkHost);
+          final SolrClient solrServer = SolrSupport.getCachedCloudClient(zkHost);
           List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>(batchSize);
           String path = t2._1();
           BufferedReader br = null;

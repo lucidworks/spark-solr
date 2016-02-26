@@ -22,7 +22,7 @@ class RDDExample extends SparkApp.RDDProcessor with Logging {
 
     // IMPORTANT: reload the collection to flush caches
     println(s"\nReloading collection $collection to flush caches!\n")
-    val cloudSolrClient = SolrSupport.getSolrCloudClient(zkHost)
+    val cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost)
     val req = new CollectionAdminRequest.Reload()
     req.setCollectionName(collection)
     cloudSolrClient.request(req)

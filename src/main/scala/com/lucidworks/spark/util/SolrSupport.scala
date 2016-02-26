@@ -7,6 +7,7 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import com.google.common.cache._
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
@@ -29,6 +30,28 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import scala.collection.JavaConversions._
 import util.control.Breaks._
+
+
+object CacheSolrClient {
+  private val loader = new CacheLoader[String, CloudSolrClient]() {
+    def load(zkHost: String): CloudSolrClient = {
+      SolrSupport.getNewSolrCloudClient(zkHost)
+    }
+  }
+
+  private val listener = new RemovalListener[String, CloudSolrClient]() {
+    def onRemoval(rn: RemovalNotification[String, CloudSolrClient]): Unit = {
+      if (rn.wasEvicted()) {
+        rn.getValue.close()
+      }
+    }
+  }
+
+  val cache: LoadingCache[String, CloudSolrClient] = CacheBuilder
+    .newBuilder()
+    .removalListener(listener)
+    .build(loader)
+}
 
 /**
  * TODO: Use Solr schema API to index field names
@@ -53,25 +76,25 @@ object SolrSupport extends Logging {
     new HttpSolrClient(shardUrl)
   }
 
-  //TODO: Cache this SolrClient and move this code to a component so we can make sure the resource is closed after use
-  def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
+  // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
+  private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
     setupKerberosIfNeeded()
     val solrClient = new CloudSolrClient(zkHost)
     solrClient.connect()
     solrClient
   }
 
-  // Use getSolrCloudClient
-  @Deprecated
-  def getSolrServer(zkHost: String): CloudSolrClient =  {
-    setupKerberosIfNeeded()
-    val solrClient = new CloudSolrClient(zkHost)
-    solrClient.connect()
-    solrClient
+  // Use this only if you want a new SolrCloudClient instance. This new instance should be closed by the methods downstream
+  def getNewSolrCloudClient(zkHost: String): CloudSolrClient = {
+    getSolrCloudClient(zkHost)
+  }
+
+  def getCachedCloudClient(zkHost: String): CloudSolrClient = {
+    CacheSolrClient.cache.get(zkHost)
   }
 
   def getSolrBaseUrl(zkHost: String) = {
-    val solrClient = getSolrCloudClient(zkHost)
+    val solrClient = getCachedCloudClient(zkHost)
     val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
     if (liveNodes.isEmpty)
       throw new RuntimeException("No live nodes found for cluster: " + zkHost)
@@ -93,32 +116,24 @@ object SolrSupport extends Logging {
                                  docs: DStream[_],
                                  batchSize: Int): Unit = ???
 
-
   def indexDocs(zkHost: String,
                 collection: String,
                 batchSize: Int,
                 rdd: RDD[SolrInputDocument]) = {
-    var solrClient: Option[CloudSolrClient] = None
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
-      try {
-        solrClient = Some(getSolrCloudClient(zkHost))
-        val batch = new ArrayBuffer[SolrInputDocument]()
-        val indexedAt: Date = new Date()
-        while (solrInputDocumentIterator.hasNext) {
-          val doc = solrInputDocumentIterator.next()
-          doc.setField("_indexed_at_tdt", indexedAt)
-          batch += doc
-          if (batch.length >= batchSize)
-            sendBatchToSolr(solrClient.get, collection, batch)
-        }
-        if (batch.nonEmpty)
-          sendBatchToSolr(solrClient.get, collection, batch)
-      }
-      finally {
-        if (solrClient.isDefined)
-          solrClient.get.close()
-      }
+    val solrClient = getCachedCloudClient(zkHost)
+    val batch = new ArrayBuffer[SolrInputDocument]()
+    val indexedAt: Date = new Date()
+    while (solrInputDocumentIterator.hasNext) {
+      val doc = solrInputDocumentIterator.next()
+      doc.setField("_indexed_at_tdt", indexedAt)
+      batch += doc
+      if (batch.length >= batchSize)
+        sendBatchToSolr(solrClient, collection, batch)
+    }
+    if (batch.nonEmpty)
+      sendBatchToSolr(solrClient, collection, batch)
     })
   }
 
@@ -148,14 +163,12 @@ object SolrSupport extends Logging {
           try {
             solrClient.request(req)
           } catch {
-            case ex: Exception => {
+            case ex: Exception =>
               log.error("Send batch to collection " + collection + " failed due to: " + e, e)
               ex match {
                 case re: RuntimeException => throw re
                 case e: Exception => throw new RuntimeException(e)
               }
-
-            }
           }
         } else {
           log.error("Send batch to collection " + collection + " failed due to: " + e, e)
@@ -370,58 +383,51 @@ object SolrSupport extends Logging {
 
   def buildShardList(zkHost: String,
                      collection: String): List[SolrShard] = {
-    var solrClient: Option[CloudSolrClient] = None
 
-    try {
-      solrClient = Some(getSolrCloudClient(zkHost))
-      val zkStateReader: ZkStateReader = solrClient.get.getZkStateReader
+    val solrClient = getCachedCloudClient(zkHost)
+    val zkStateReader: ZkStateReader = solrClient.getZkStateReader
 
-      val clusterState: ClusterState = zkStateReader.getClusterState
+    val clusterState: ClusterState = zkStateReader.getClusterState
 
-      var collections: Array[String] = null
-      if (clusterState.hasCollection(collection)) {
-        collections = Array[String](collection)
-      }
-      else {
-        val aliases: Aliases = zkStateReader.getAliases
-        val aliasedCollections: String = aliases.getCollectionAlias(collection)
-        if (aliasedCollections == null) throw new IllegalArgumentException("Collection " + collection + " not found!")
-        collections = aliasedCollections.split(",")
-      }
+    var collections: Array[String] = null
+    if (clusterState.hasCollection(collection)) {
+      collections = Array[String](collection)
+    }
+    else {
+      val aliases: Aliases = zkStateReader.getAliases
+      val aliasedCollections: String = aliases.getCollectionAlias(collection)
+      if (aliasedCollections == null) throw new IllegalArgumentException("Collection " + collection + " not found!")
+      collections = aliasedCollections.split(",")
+    }
 
-      val liveNodes  = clusterState.getLiveNodes
+    val liveNodes  = clusterState.getLiveNodes
 
-      val shards = new ListBuffer[SolrShard]()
-      for (coll <- collections) {
-        for (slice: Slice <- clusterState.getSlices(coll)) {
-          var replicas  =  new ListBuffer[SolrReplica]()
-          for (r: Replica <- slice.getReplicas) {
-            if (r.getState == Replica.State.ACTIVE) {
-              val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
-              if (liveNodes.contains(replicaCoreProps.getNodeName)) {
-                try {
-                  val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
-                  replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
-                } catch {
-                  case e : Exception => log.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
-                    replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
-                }
-
+    val shards = new ListBuffer[SolrShard]()
+    for (coll <- collections) {
+      for (slice: Slice <- clusterState.getSlices(coll)) {
+        var replicas  =  new ListBuffer[SolrReplica]()
+        for (r: Replica <- slice.getReplicas) {
+          if (r.getState == Replica.State.ACTIVE) {
+            val replicaCoreProps: ZkCoreNodeProps = new ZkCoreNodeProps(r)
+            if (liveNodes.contains(replicaCoreProps.getNodeName)) {
+              try {
+                val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
+                replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
+              } catch {
+                case e : Exception => log.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
+                  replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
               }
 
             }
-          }
-          val numReplicas: Int = replicas.size
-          if (numReplicas == 0) throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
-          shards += new SolrShard(slice.getName, replicas.toList)
-        }
-      }
-      shards.toList
 
-    } finally {
-      if (solrClient.isDefined)
-        solrClient.get.close()
+          }
+        }
+        val numReplicas: Int = replicas.size
+        if (numReplicas == 0) throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
+        shards += new SolrShard(slice.getName, replicas.toList)
+      }
     }
+    shards.toList
  }
 
   def splitShards(

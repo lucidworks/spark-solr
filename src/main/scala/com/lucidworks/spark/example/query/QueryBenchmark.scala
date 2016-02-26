@@ -53,8 +53,8 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     // IMPORTANT: reload the collection to flush caches
     println(s"\nReloading collection $collection to flush caches!\n")
-    var cloudSolrClient = SolrSupport.getSolrCloudClient(zkHost)
-    var req = new CollectionAdminRequest.Reload()
+    val cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val req = new CollectionAdminRequest.Reload()
     req.setCollectionName(collection)
     cloudSolrClient.request(req)
 
