@@ -10,21 +10,6 @@ import org.apache.spark.Partition
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
-case class ShardRDDPartition(
-  index: Int,
-  cursorMark: String,
-  solrShard: SolrShard,
-  query: SolrQuery,
-  preferredReplica: SolrReplica
-) extends SolrRDDPartition
-
-case class SplitRDDPartition(
-  index: Int,
-  cursorMark: String,
-  solrShard: SolrShard,
-  query: SolrQuery,
-  preferredReplica: SolrReplica) extends SolrRDDPartition
-
 // Is there a need to override {@code Partitioner.scala} and define our own partition id's
 object SolrPartitioner {
 
