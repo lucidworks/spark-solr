@@ -402,23 +402,6 @@ object SolrQuerySupport extends Logging {
     }
   }
 
-  def getNumDocsFromLuke(collection: String, zkHost: String): BigInt = {
-    val lukeUrl = SolrSupport.getSolrBaseUrl(zkHost) + collection + "/admin/luke?numTerms=0"
-    try {
-      val adminMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, lukeUrl, 2)
-      if (!adminMeta.has("index"))
-        throw new Exception("Cannot find 'index' payload inside Luke response: " + compact(adminMeta))
-      if (!(adminMeta \ "index").has("numDocs"))
-        throw new Exception("Cannot find 'numDocs' inside Luke response: " + compact(adminMeta))
-      adminMeta \ "index" \ "numDocs" match {
-        case numDocs: JInt =>
-          numDocs.values
-        case numDocs: Any =>
-          throw new Exception("Unknown data type '" + numDocs.getClass.toString + "' for 'numDocs' field ")
-      }
-    }
-  }
-
   def getNumDocsFromSolr(collection: String, zkHost: String, query: Option[SolrQuery]): Long = {
     val solrQuery = if (query.isDefined) query.get else new SolrQuery().setQuery("*:*")
     val cloudClient = SolrSupport.getSolrCloudClient(zkHost)
