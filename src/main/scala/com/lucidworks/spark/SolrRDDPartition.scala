@@ -9,3 +9,17 @@ trait SolrRDDPartition extends Partition {
   def query: SolrQuery
   def preferredReplica: SolrReplica // Preferred replica to query
 }
+
+case class ShardRDDPartition(
+  index: Int,
+  cursorMark: String,
+  solrShard: SolrShard,
+  query: SolrQuery,
+  preferredReplica: SolrReplica) extends SolrRDDPartition
+
+case class SplitRDDPartition(
+  index: Int,
+  cursorMark: String,
+  solrShard: SolrShard,
+  query: SolrQuery,
+  preferredReplica: SolrReplica) extends SolrRDDPartition
