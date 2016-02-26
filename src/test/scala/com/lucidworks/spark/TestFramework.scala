@@ -78,7 +78,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, numShards, cloudClient, sc)
     EventsimUtil.defineSchemaForEventSim(zkHost, collectionName)
     EventsimUtil.loadEventSimDataSet(zkHost, collectionName)
   }
@@ -92,5 +92,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
   def eventSimCount: Int = 1000
 
   def fieldsCount: Int = 18
+
+  def numShards: Int = 2
 }
 
