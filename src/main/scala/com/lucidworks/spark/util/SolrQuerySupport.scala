@@ -5,8 +5,11 @@ import java.util
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.client.utils.URLEncodedUtils
+import org.apache.solr.client.solrj.SolrRequest.METHOD
+import org.apache.solr.client.solrj.impl.StreamingBinaryResponseParser
+import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrServerException, StreamingResponseCallback, SolrClient, SolrQuery}
+import org.apache.solr.client.solrj._
 import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
@@ -143,6 +146,14 @@ object SolrQuerySupport extends Logging {
     cursorMark: String): Option[QueryResponse] =
     querySolr(solrClient, solrQuery, startIndex, cursorMark, null)
 
+  // Use this method instead of [[SolrClient.queryAndStreamResponse]] to use POST method for queries
+  def queryAndStreamResponsePost(params: SolrParams, callback: StreamingResponseCallback, cloudClient: SolrClient): QueryResponse = {
+    val parser: ResponseParser = new StreamingBinaryResponseParser(callback)
+    val req: QueryRequest = new QueryRequest(params, METHOD.POST)
+    req.setStreamingResponseCallback(callback)
+    req.setResponseParser(parser)
+    req.process(cloudClient)
+  }
 
   /*
     Query solr and retry on Socket or network exceptions
@@ -167,12 +178,12 @@ object SolrQuerySupport extends Logging {
         solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
 
       if (callback != null) {
-        resp = Some(solrClient.queryAndStreamResponse(solrQuery, callback))
+        resp = Some(queryAndStreamResponsePost(solrQuery, callback, solrClient))
       } else {
-        resp = Some(solrClient.query(solrQuery))
+        resp = Some(solrClient.query(solrQuery, METHOD.POST))
       }
     } catch {
-      case e: Exception => {
+      case e: Exception =>
         log.error("Query [" + solrQuery + "] failed due to: " + e)
 
         //re-try once in the event of a communications error with the server
@@ -185,7 +196,7 @@ object SolrQuerySupport extends Logging {
 
           try {
             if (callback != null) {
-              resp = Some(solrClient.queryAndStreamResponse(solrQuery, callback))
+              resp = Some(queryAndStreamResponsePost(solrQuery, callback, solrClient))
             } else {
               resp = Some(solrClient.query(solrQuery))
             }
@@ -203,7 +214,6 @@ object SolrQuerySupport extends Logging {
             case e2: Exception => throw new SolrServerException(e2)
           }
         }
-      }
 
     }
     resp
