@@ -51,7 +51,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   private EmbeddedSolrServer bootstrapEmbeddedSolrServer(String zkHost, String collection) throws Exception {
 
-    CloudSolrClient cloudClient = (CloudSolrClient)SolrSupport.getSolrServer(zkHost);
+    CloudSolrClient cloudClient = SolrSupport.getCachedCloudClient(zkHost);
     cloudClient.connect();
 
     ZkStateReader zkStateReader = cloudClient.getZkStateReader();

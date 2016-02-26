@@ -35,7 +35,7 @@ public class EventsimUtil {
     if (!schemaFile.exists())
       throw new NotFoundException("Could not find the schema file at path " + schemaPath);
 
-    CloudSolrClient solrClient = SolrSupport.getSolrCloudClient(zkHost);
+    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
     solrClient.setDefaultCollection(collectionName);
     List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
     });
@@ -75,7 +75,7 @@ public class EventsimUtil {
                                     .map(EventsimUtil::convertToSolrDocument)
                                     .collect(Collectors.toList());
 
-    CloudSolrClient solrClient = SolrSupport.getSolrCloudClient(zkHost);
+    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
     solrClient.setDefaultCollection(collectionName);
     solrClient.add(docs);
     solrClient.commit();

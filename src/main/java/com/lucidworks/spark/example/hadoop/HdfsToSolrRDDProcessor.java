@@ -82,10 +82,9 @@ public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {
     SolrSupport.indexDocs(zkHost, collection, 100, pairs.values().rdd());
 
     // send a final commit in case soft auto-commits are not enabled
-    CloudSolrClient cloudSolrClient = SolrSupport.getSolrServer(zkHost);
+    CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
     cloudSolrClient.setDefaultCollection(collection);
     cloudSolrClient.commit(true, true);
-    cloudSolrClient.close();
 
     return 0;
   }

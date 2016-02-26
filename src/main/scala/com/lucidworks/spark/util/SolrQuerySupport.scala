@@ -404,7 +404,7 @@ object SolrQuerySupport extends Logging {
 
   def getNumDocsFromSolr(collection: String, zkHost: String, query: Option[SolrQuery]): Long = {
     val solrQuery = if (query.isDefined) query.get else new SolrQuery().setQuery("*:*")
-    val cloudClient = SolrSupport.getSolrCloudClient(zkHost)
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val response = cloudClient.query(collection, solrQuery)
     response.getResults.getNumFound
   }
@@ -584,7 +584,7 @@ object SolrQuerySupport extends Logging {
     solrQuery.setFacetMinCount(1)
     solrQuery.setFacetLimit(maxCols)
     solrQuery.setRows(0)
-    val resp = querySolr(SolrSupport.getSolrCloudClient(zkHost), solrQuery, 0, null)
+    val resp = querySolr(SolrSupport.getCachedCloudClient(zkHost), solrQuery, 0, null)
     if (resp.isDefined) {
       val ff = resp.get.getFacetField(fieldName)
       for (f <- ff.getValues) {
