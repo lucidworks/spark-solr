@@ -41,7 +41,7 @@ object CacheSolrClient {
 
   private val listener = new RemovalListener[String, CloudSolrClient]() {
     def onRemoval(rn: RemovalNotification[String, CloudSolrClient]): Unit = {
-      if (rn.wasEvicted()) {
+      if (rn != null && rn.getValue != null) {
         rn.getValue.close()
       }
     }
