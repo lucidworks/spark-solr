@@ -10,6 +10,7 @@ class EventsimTestSuite extends EventsimBuilder with Logging {
       .query("*:*")
       .rows(10)
       .select(Array("id"))
+    assert(solrRDD.getNumPartitions == numShards)
     testCommons(solrRDD)
   }
 
@@ -26,7 +27,6 @@ class EventsimTestSuite extends EventsimBuilder with Logging {
   def testCommons(solrRDD: SolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 
-    assert(solrRDD.getNumPartitions == numShards)
     // assert counts
     assert(sparkCount == solrRDD.solrCount.toLong)
     assert(sparkCount == eventSimCount)
