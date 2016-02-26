@@ -102,7 +102,7 @@ public class EventsimUtil {
         }
       }
 
-      doc.setField("id", UUID.randomUUID());
+      doc.setField("id", UUID.randomUUID().toString());
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

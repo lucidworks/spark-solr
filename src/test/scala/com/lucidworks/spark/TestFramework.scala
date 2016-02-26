@@ -1,14 +1,16 @@
 package com.lucidworks.spark
 
 import java.io.File
+import java.util.UUID
 
+import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.spark.{Logging, SparkConf, SparkContext}
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
 import org.restlet.ext.servlet.ServerServlet
-import org.scalatest.{BeforeAndAfterAll, Suite}
+import org.scalatest.{BeforeAndAfterEach, BeforeAndAfterAll, Suite}
 
 
 trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite =>
@@ -47,7 +49,7 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite 
 
 }
 
-trait SparkSolrContextBuilder extends SolrCloudTestBuilder { this: Suite =>
+trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
 
   @transient var sc: SparkContext = _
 
@@ -65,3 +67,30 @@ trait SparkSolrContextBuilder extends SolrCloudTestBuilder { this: Suite =>
     super.afterAll()
   }
 }
+
+// General builder to be used by all the tests that need Solr and Spark running
+trait TestSuiteBuilder extends SparkSolrFunSuite with SparkSolrContextBuilder with SolrCloudTestBuilder {}
+
+// Builder to be used by all the tests that need Eventsim data. All test methods will re-use the same collection name
+trait EventsimBuilder extends TestSuiteBuilder {
+
+  val collectionName: String = "EventsimTest-" + UUID.randomUUID().toString
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    EventsimUtil.defineSchemaForEventSim(zkHost, collectionName)
+    EventsimUtil.loadEventSimDataSet(zkHost, collectionName)
+  }
+
+
+  override def afterAll(): Unit = {
+    SolrCloudUtil.deleteCollection(collectionName, cluster)
+    super.afterAll()
+  }
+
+  def eventSimCount: Int = 1000
+
+  def fieldsCount: Int = 18
+}
+
