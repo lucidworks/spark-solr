@@ -6,7 +6,7 @@ import com.lucidworks.spark.util.SolrCloudUtil
 
 import org.apache.spark.Logging
 
-class RDDTestSuite extends SparkSolrFunSuite with SparkSolrContextBuilder with Logging {
+class RDDTestSuite extends TestSuiteBuilder with Logging {
 
   test("Test Simple Query") {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString

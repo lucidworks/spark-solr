@@ -147,7 +147,7 @@ class SolrRDD(
   }
 
   def solrCount: BigInt = {
-    SolrQuerySupport.getNumDocsFromLuke(collection, zkHost)
+    SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
   }
 
   def buildQuery: SolrQuery = {
