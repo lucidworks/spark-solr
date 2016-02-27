@@ -3,11 +3,14 @@ package com.lucidworks.spark.util;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.status.api.v1.NotFoundException;
+import scala.None;
+import scala.Some;
 import scala.collection.JavaConversions;
 
 import java.io.File;
@@ -79,6 +82,11 @@ public class EventsimUtil {
     solrClient.setDefaultCollection(collectionName);
     solrClient.add(docs);
     solrClient.commit();
+
+    long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply(null));
+    if (!(docsInSolr == 1000)) {
+      throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
+    }
 
  }
 

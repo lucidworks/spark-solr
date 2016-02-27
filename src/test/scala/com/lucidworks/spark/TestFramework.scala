@@ -6,6 +6,7 @@ import java.util.UUID
 import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.{Logging, SparkConf, SparkContext}
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
@@ -52,6 +53,7 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite 
 trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
 
   @transient var sc: SparkContext = _
+  @transient var sqlContext: SQLContext = _
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -60,6 +62,7 @@ trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
       .setAppName("test")
       .set("spark.default.parallelism", "1")
     sc = new SparkContext(conf)
+    sqlContext = new SQLContext(sc)
   }
 
   override def afterAll(): Unit = {
