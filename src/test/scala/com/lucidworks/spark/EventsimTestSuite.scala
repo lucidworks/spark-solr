@@ -26,8 +26,15 @@ class EventsimTestSuite extends EventsimBuilder {
   }
 
   test("SQL fields option") {
-    val df = sqlContext.read.format("solr").option(SOLR_ZK_HOST_PARAM, zkHost).option(SOLR_COLLECTION_PARAM, collectionName).option(SOLR_FIELD_PARAM, "id, userId,").load()
-    assert(df.count() == eventSimCount)
+    val df = sqlContext.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "id, userId,")
+      .option(SOLR_QUERY_PARAM, "userId:93")
+      .load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+    assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
   }
 
   test("SQL query") {
