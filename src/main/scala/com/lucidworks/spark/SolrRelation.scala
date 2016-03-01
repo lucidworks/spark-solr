@@ -1,6 +1,6 @@
 package com.lucidworks.spark
 
-import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport, SolrSchemaUtil}
+import com.lucidworks.spark.util.{ConfigurationConstants, SolrSupport, SolrQuerySupport, SolrSchemaUtil}
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrInputDocument
@@ -11,6 +11,8 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
 import scala.util.control.Breaks._
+import scala.reflect.runtime.universe._
+
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
 
@@ -25,6 +27,10 @@ class SolrRelation(val parameters: Map[String, String],
   }
 
   checkRequiredParams()
+  // Warn about unknown parameters
+  val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
+  log.warn("Unknown parameters passed to query: " + unknownParams.toString())
+
   val sc = sqlContext.sparkContext
   val solrRDD = {
     var rdd = new SolrRDD(conf.getZkHost.get, conf.getCollection.get, sc)
@@ -148,6 +154,37 @@ class SolrRelation(val parameters: Map[String, String],
   private def checkRequiredParams(): Unit = {
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
     require(conf.getCollection.isDefined, "Param '" + SOLR_COLLECTION_PARAM + "' is required")
+  }
+
+}
+
+object SolrRelation {
+  def checkUnknownParams(keySet: Set[String]): Set[String] = {
+    var knownParams = Set.empty[String]
+    var unknownParams = Set.empty[String]
+
+    // Use reflection to get all the members of [ConfigurationConstants] except 'CONFIG_PREFIX'
+    val rm = scala.reflect.runtime.currentMirror
+    val accessors = rm.classSymbol(ConfigurationConstants.getClass).toType.members.collect {
+      case m: MethodSymbol if m.isGetter && m.isPublic => m
+    }
+    val instanceMirror = rm.reflect(ConfigurationConstants)
+
+    for(acc <- accessors) {
+      if (acc.name != "CONFIG_PREFIX")
+        knownParams += instanceMirror.reflectMethod(acc).apply().toString
+    }
+
+    // Check for any unknown options
+    keySet.foreach(key => {
+      if (!knownParams.contains(key)) {
+        // Now check if the prefix is "solr."
+        if (!key.contains(CONFIG_PREFIX)) {
+          unknownParams += key
+        }
+      }
+    })
+    unknownParams
   }
 }
 
