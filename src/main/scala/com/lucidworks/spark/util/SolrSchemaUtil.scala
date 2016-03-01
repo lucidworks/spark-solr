@@ -84,7 +84,6 @@ object SolrSchemaUtil extends Logging {
     if (listOfFields.isEmpty) schema else DataTypes.createStructType(listOfFields.toList)
   }
 
-  // TODO: Is there any particular reason we need to use this instead of '*:*'
   def applyDefaultFields(baseSchema: StructType, solrQuery: SolrQuery): Unit = {
     val schemaFields = baseSchema.fields
     val fieldList = new ListBuffer[String]

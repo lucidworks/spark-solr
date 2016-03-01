@@ -96,11 +96,11 @@ object SolrSupport extends Logging {
   def getSolrBaseUrl(zkHost: String) = {
     val solrClient = getCachedCloudClient(zkHost)
     val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
-    if (liveNodes.isEmpty)
+    if (liveNodes.isEmpty) {
       throw new RuntimeException("No live nodes found for cluster: " + zkHost)
+    }
     var solrBaseUrl = solrClient.getZkStateReader.getBaseUrlForNodeName(liveNodes.iterator().next())
-    if (!solrBaseUrl.endsWith("?"))
-      solrBaseUrl += "/"
+    if (!solrBaseUrl.endsWith("?")) solrBaseUrl += "/"
     solrBaseUrl
   }
 
@@ -157,11 +157,9 @@ object SolrSupport extends Logging {
       val doc = solrInputDocumentIterator.next()
       doc.setField("_indexed_at_tdt", indexedAt)
       batch += doc
-      if (batch.length >= batchSize)
-        sendBatchToSolr(solrClient, collection, batch)
+      if (batch.length >= batchSize) sendBatchToSolr(solrClient, collection, batch)
     }
-    if (batch.nonEmpty)
-      sendBatchToSolr(solrClient, collection, batch)
+    if (batch.nonEmpty) sendBatchToSolr(solrClient, collection, batch)
     })
   }
 
@@ -169,8 +167,9 @@ object SolrSupport extends Logging {
     val req = new UpdateRequest()
     req.setParam("collection", collection)
 
-    if (log.isDebugEnabled)
+    if (log.isDebugEnabled) {
       log.debug("Sending batch of " + batch.size + " to collection " + collection)
+    }
 
     req.add(asJavaCollection(batch))
 
@@ -234,8 +233,7 @@ object SolrSupport extends Logging {
       dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
     val doc = new SolrInputDocument()
     doc.setField(idFieldName, docId)
-    if (obj == null)
-      return doc
+    if (obj == null) return doc
 
     val objClass = obj.getClass
     val fields = new mutable.HashSet[String]()
@@ -394,9 +392,8 @@ object SolrSupport extends Logging {
           queryResponse = Some(solr.query(query))
         }
         catch {
-          case e: SolrServerException => {
+          case e: SolrServerException =>
             throw new RuntimeException(e)
-          }
         }
 
         if (queryResponse.isDefined) {
@@ -414,7 +411,6 @@ object SolrSupport extends Logging {
             inputDoc.removeField("docfilterid_i")
           }
         }
-
       }
 
       inputDocs.valuesIterator
@@ -422,20 +418,20 @@ object SolrSupport extends Logging {
   }
 
   def buildShardList(zkHost: String, collection: String): List[SolrShard] = {
-
     val solrClient = getCachedCloudClient(zkHost)
     val zkStateReader: ZkStateReader = solrClient.getZkStateReader
-
     val clusterState: ClusterState = zkStateReader.getClusterState
+    var collections = Array.empty[String]
 
-    var collections: Array[String] = null
     if (clusterState.hasCollection(collection)) {
-      collections = Array[String](collection)
+      collections = Array(collection)
     }
     else {
       val aliases: Aliases = zkStateReader.getAliases
       val aliasedCollections: String = aliases.getCollectionAlias(collection)
-      if (aliasedCollections == null) throw new IllegalArgumentException("Collection " + collection + " not found!")
+      if (aliasedCollections == null) {
+        throw new IllegalArgumentException("Collection " + collection + " not found!")
+      }
       collections = aliasedCollections.split(",")
     }
 
@@ -462,45 +458,49 @@ object SolrSupport extends Logging {
           }
         }
         val numReplicas: Int = replicas.size
-        if (numReplicas == 0) throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
+        if (numReplicas == 0) {
+          throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
+        }
         shards += new SolrShard(slice.getName, replicas.toList)
       }
     }
     shards.toList
- }
+  }
 
   def splitShards(
       query: SolrQuery,
       solrShard: SolrShard,
       splitFieldName: String,
       splitsPerShard: Int): List[ShardSplit[_]] = {
-    // Get the field type of split field
+
     var fieldDataType: Option[DataType] = None
     if ("_version_".equals(splitFieldName)) {
       fieldDataType = Some(DataTypes.LongType)
     } else {
-
+      // Get the field type of split field
       val fieldMetaMap = SolrQuerySupport.getFieldTypes(Set(splitFieldName), SolrRDD.randomReplicaLocation(solrShard))
       val solrFieldMeta = fieldMetaMap.get(splitFieldName)
       if (solrFieldMeta.isDefined) {
         val fieldTypeClass  = solrFieldMeta.get.fieldTypeClass
-        if (fieldTypeClass.isDefined)
+        if (fieldTypeClass.isDefined) {
           fieldDataType = SolrQuerySupport.SOLR_DATA_TYPES.get(fieldTypeClass.get)
-        else
+        } else
           fieldDataType = Some(DataTypes.StringType)
       } else {
         log.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
         fieldDataType = Some(DataTypes.StringType)
       }
     }
-    if (fieldDataType.isEmpty)
+    if (fieldDataType.isEmpty) {
       throw new IllegalArgumentException("Cannot determine DataType for split field " + splitFieldName)
+    }
 
     getSplits(fieldDataType.get, splitFieldName, splitsPerShard, query, solrShard)
   }
 
   def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit[_]]= {
     var splitStrategy: Option[ShardSplitStrategy] = None
+
     if (fd.equals(DataTypes.LongType) || fd.equals(DataTypes.IntegerType)) {
       splitStrategy = Some(new NumberFieldShardSplitStrategy)
     } else if (fd.equals(DataTypes.StringType)) {
@@ -508,10 +508,12 @@ object SolrSupport extends Logging {
     } else {
       throw new IllegalArgumentException("Can only split shards on fields of type: long, int or String!")
     }
-    if (splitStrategy.isDefined)
+
+    if (splitStrategy.isDefined) {
       splitStrategy.get.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
-    else
-      throw new IllegalArgumentException("No split strategy found for datatype " + fd)
+    } else {
+      throw new IllegalArgumentException("No split strategy found for DataType '" + fd + "'")
+    }
   }
 
 }

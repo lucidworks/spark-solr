@@ -24,7 +24,6 @@ object SolrPartitioner {
       query: SolrQuery,
       splitFieldName: String,
       splitsPerShard: Int): Array[Partition] = {
-
     var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
     var counter = 0
     shards.foreach(shard => {
