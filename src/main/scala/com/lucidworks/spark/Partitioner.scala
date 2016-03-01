@@ -19,10 +19,11 @@ object SolrPartitioner {
       new ShardRDDPartition(i, "*", shard, query, SolrRDD.randomReplica(shard))}.toArray
   }
 
-  def getSplitPartitions(shards: List[SolrShard],
-                         query: SolrQuery,
-                         splitFieldName: String,
-                         splitsPerShard: Int): Array[Partition] = {
+  def getSplitPartitions(
+      shards: List[SolrShard],
+      query: SolrQuery,
+      splitFieldName: String,
+      splitsPerShard: Int): Array[Partition] = {
 
     var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
     var counter = 0
@@ -39,13 +40,11 @@ object SolrPartitioner {
   }
 }
 
-case class SolrShard(
-  shardName: String,
-  replicas: List[SolrReplica])
+case class SolrShard(shardName: String, replicas: List[SolrReplica])
 
 case class SolrReplica(
-  replicaNumber: Int,
-  replicaName: String,
-  replicaUrl: String,
-  replicaHostName: String,
-  locations: Array[InetAddress])
+    replicaNumber: Int,
+    replicaName: String,
+    replicaUrl: String,
+    replicaHostName: String,
+    locations: Array[InetAddress])

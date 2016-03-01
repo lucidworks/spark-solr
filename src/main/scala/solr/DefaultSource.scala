@@ -7,8 +7,7 @@ import org.apache.spark.sql.sources.{DataSourceRegister, BaseRelation, Creatable
 
 class DefaultSource extends RelationProvider with CreatableRelationProvider with DataSourceRegister {
 
-  override def createRelation(sqlContext: SQLContext,
-                              parameters: Map[String, String]): BaseRelation = {
+  override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
     try {
       new SolrRelation(parameters, sqlContext)
     } catch {
@@ -17,9 +16,11 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
     }
   }
 
-  override def createRelation(sqlContext: SQLContext,
-                              mode: SaveMode,
-                              parameters: Map[String, String], df: DataFrame): BaseRelation = {
+  override def createRelation(
+      sqlContext: SQLContext,
+      mode: SaveMode,
+      parameters: Map[String, String],
+      df: DataFrame): BaseRelation = {
     try {
       // TODO: What to do with the saveMode?
       val solrRelation: SolrRelation = new SolrRelation(parameters, sqlContext, Some(df))

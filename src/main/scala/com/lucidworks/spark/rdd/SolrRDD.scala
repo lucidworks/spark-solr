@@ -28,17 +28,18 @@ class SolrRDD(
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
     solrQuery: Option[SolrQuery] = None)
-  extends RDD[SolrDocument](sc, Seq.empty) with Logging{ //TODO: Do we need to pass any deps on parent RDDs for Solr?
+  extends RDD[SolrDocument](sc, Seq.empty)
+  with Logging { //TODO: Do we need to pass any deps on parent RDDs for Solr?
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
 
   protected def copy(
-    query: Option[String] = query,
-    fields: Option[Array[String]] = fields,
-    rows: Option[Int] = rows,
-    splitField: Option[String] = splitField,
-    splitsPerShard: Option[Int] = splitsPerShard,
-    solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
+      query: Option[String] = query,
+      fields: Option[Array[String]] = fields,
+      rows: Option[Int] = rows,
+      splitField: Option[String] = splitField,
+      splitsPerShard: Option[Int] = splitsPerShard,
+      solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
     new SolrRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard, solrQuery)
   }
 
@@ -94,41 +95,23 @@ class SolrRDD(
     Array.empty[InetAddress]
   }
 
-  def query(q: String): SolrRDD = {
-    copy(query = Option(q))
-  }
+  def query(q: String): SolrRDD = copy(query = Option(q))
 
-  def query(solrQuery: SolrQuery): SolrRDD = {
-    copy(solrQuery = Option(solrQuery))
-  }
+  def query(solrQuery: SolrQuery): SolrRDD = copy(solrQuery = Option(solrQuery))
 
-  def select(fl: String): SolrRDD = {
-    copy(fields = Some(fl.split(",")))
-  }
+  def select(fl: String): SolrRDD = copy(fields = Some(fl.split(",")))
 
-  def select(fl: Array[String]): SolrRDD = {
-    copy(fields = Some(fl))
-  }
+  def select(fl: Array[String]): SolrRDD = copy(fields = Some(fl))
 
-  def rows(rows: Int): SolrRDD = {
-    copy(rows = Some(rows))
-  }
+  def rows(rows: Int): SolrRDD = copy(rows = Some(rows))
 
-  def doSplits(): SolrRDD = {
-    copy(splitField = Some(DEFAULT_SPLIT_FIELD))
-  }
+  def doSplits(): SolrRDD = copy(splitField = Some(DEFAULT_SPLIT_FIELD))
 
-  def splitField(field: String): SolrRDD = {
-    copy(splitField = Some(field))
-  }
+  def splitField(field: String): SolrRDD = copy(splitField = Some(field))
 
-  def splitsPerShard(splitsPerShard: Int): SolrRDD = {
-    copy(splitsPerShard = Some(splitsPerShard))
-  }
+  def splitsPerShard(splitsPerShard: Int): SolrRDD = copy(splitsPerShard = Some(splitsPerShard))
 
-  def solrCount: BigInt = {
-    SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
-  }
+  def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
 
   def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)

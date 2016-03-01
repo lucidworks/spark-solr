@@ -11,15 +11,17 @@ trait SolrRDDPartition extends Partition {
 }
 
 case class ShardRDDPartition(
-  index: Int,
-  cursorMark: String,
-  solrShard: SolrShard,
-  query: SolrQuery,
-  preferredReplica: SolrReplica) extends SolrRDDPartition
+    index: Int,
+    cursorMark: String,
+    solrShard: SolrShard,
+    query: SolrQuery,
+    preferredReplica: SolrReplica)
+  extends SolrRDDPartition
 
 case class SplitRDDPartition(
-  index: Int,
-  cursorMark: String,
-  solrShard: SolrShard,
-  query: SolrQuery,
-  preferredReplica: SolrReplica) extends SolrRDDPartition
+    index: Int,
+    cursorMark: String,
+    solrShard: SolrShard,
+    query: SolrQuery,
+    preferredReplica: SolrReplica)
+  extends SolrRDDPartition
