@@ -195,16 +195,18 @@ object SolrSupport extends Logging {
   /**
    * Uses reflection to map bean public fields and getters to dynamic fields in Solr.
    */
-  def autoMapToSolrInputDoc(docId: String,
-                            obj: Object,
-                            dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
+  def autoMapToSolrInputDoc(
+    docId: String,
+    obj: Object,
+    dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
     autoMapToSolrInputDoc("id", docId, obj, dynamicFieldOverrides)
   }
 
-  def autoMapToSolrInputDoc(idFieldName: String,
-                             docId: String,
-                             obj: Object,
-                             dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
+  def autoMapToSolrInputDoc(
+    idFieldName: String,
+    docId: String,
+    obj: Object,
+    dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
     val doc = new SolrInputDocument()
     doc.setField(idFieldName, docId)
     if (obj == null)
@@ -232,7 +234,8 @@ object SolrSupport extends Logging {
               val fieldName = f.getName
               fields.add(fieldName)
               val fieldOverride = if (dynamicFieldOverrides != null) dynamicFieldOverrides.get(fieldName) else null
-              addField(doc, fieldName, value, f.getType, fieldOverride)
+              if (f.getType != null)
+                addField(doc, fieldName, value, f.getType, fieldOverride)
             }
           }
         }
@@ -265,8 +268,9 @@ object SolrSupport extends Logging {
 
               if (value.isDefined) {
                 fields.add(propName)
-                val propOverride  = if (dynamicFieldOverrides != null) dynamicFieldOverrides.get(propName) else null
-                addField(doc, propName, value.get, pd.getPropertyType, propOverride)
+                val propOverride  = if (dynamicFieldOverrides != null) dynamicFieldOverrides.get(propName) else None
+                if (pd.getPropertyType != null)
+                  addField(doc, propName, value.get, pd.getPropertyType, propOverride)
               }
             }
           }
@@ -277,49 +281,60 @@ object SolrSupport extends Logging {
     doc
   }
 
-  def addField(doc: SolrInputDocument,
-               fieldName: String,
-               value: Object,
-               classType: Class[_],
-               dynamicFieldSuffix: Option[String]): Unit = {
-    if (classType.isArray) // TODO: Array types not supported yet ...
+  def addField(
+    doc: SolrInputDocument,
+    fieldName: String,
+    value: Object,
+    classType: Class[_],
+    dynamicFieldSuffix: Option[String]): Unit = {
+    if (classType.isArray) return // TODO: Array types not supported yet ...
 
     if (dynamicFieldSuffix.isDefined) {
       doc.addField(fieldName + dynamicFieldSuffix.get, value)
     } else {
       var suffix = getDefaultDynamicFieldMapping(classType)
-
       if (suffix.isDefined) {
         // treat strings with multiple terms as text only if using the default!
         if ("_s".equals(suffix.get)) {
-          value match {
-            case v1: String =>
-              if (v1.indexOf(" ") != -1) suffix = Some("_t")
-              doc.addField(fieldName + suffix, value)
+          if (value != null) {
+            value match {
+              case v1: String =>
+                if (v1.indexOf(" ") != -1) suffix = Some("_t")
+                val key = fieldName + suffix.get
+                doc.addField(key, value)
+              case v1: Any =>
+                val v = String.valueOf(v1)
+                if (v.indexOf(" ") != -1) suffix = Some("_t")
+                val key = fieldName + suffix.get
+                doc.addField(key, value)
+            }
           }
+        } else {
+          val key = fieldName + suffix.get
+          doc.addField(key, value)
         }
       }
 
     }
   }
 
-  // TODO: Better handling of Some and None
   def getDefaultDynamicFieldMapping(clazz: Class[_]): Option[String] = {
     if (classOf[String] == clazz) return Some("_s")
-    else if ((classOf[Long] == clazz) || (classOf[Long] == clazz)) return Some("_l")
-    else if ((classOf[Integer] == clazz) || (classOf[Int] == clazz)) return Some("_i")
-    else if ((classOf[Double] == clazz) || (classOf[Double] == clazz)) return Some("_d")
-    else if ((classOf[Float] == clazz) || (classOf[Float] == clazz)) return Some("_f")
-    else if ((classOf[Boolean] == clazz) || (classOf[Boolean] == clazz)) return Some("_b")
+    else if ((classOf[java.lang.Long] == clazz) || (classOf[Long] == clazz)) return Some("_l")
+    else if ((classOf[java.lang.Integer] == clazz) || (classOf[Int] == clazz)) return Some("_i")
+    else if ((classOf[java.lang.Double] == clazz) || (classOf[Double] == clazz)) return Some("_d")
+    else if ((classOf[java.lang.Float] == clazz) || (classOf[Float] == clazz)) return Some("_f")
+    else if ((classOf[java.lang.Boolean] == clazz) || (classOf[Boolean] == clazz)) return Some("_b")
     else if (classOf[Date] == clazz) return Some("_tdt")
     log.warn("failed to map class '" + clazz + "' to a known dynamic type")
     None
   }
 
-  def filterDocuments(filterContext: DocFilterContext,
-                       zkHost: String,
-                       collection: String,
-                       docs: DStream[SolrInputDocument]): DStream[SolrInputDocument] = {
+  def filterDocuments(
+    filterContext: DocFilterContext,
+    zkHost: String,
+    collection: String,
+    docs: DStream[SolrInputDocument]): DStream[SolrInputDocument] = {
     val partitionIndex = new AtomicInteger(0)
     val idFieldName = filterContext.getDocIdFieldName
 

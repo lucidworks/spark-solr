@@ -41,7 +41,7 @@ class WordCount extends RDDProcessor{
     val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
     val rdd: RDD[SolrDocument]  = solrRDD.query(queryStr)
 
-    val words: RDD[String] = rdd.map(doc => scala.Option.apply(doc.get("text_t")).getOrElse("").toString)
+    val words: RDD[String] = rdd.map(doc => if (doc.containsKey("text_t")) doc.get("text_t").toString else "")
     val pWords: RDD[String] = words.flatMap(s => s.toLowerCase.replaceAll("[.,!?\n]", " ").trim().split(" "))
 
     val wordsCountPairs: RDD[(String, Int)] = pWords.map(s => (s, 1))
