@@ -105,18 +105,17 @@ object SolrSupport extends Logging {
   }
 
   def indexDStreamOfDocs(
-    zkHost: String,
-    collection: String,
-    batchSize: Int,
-    docs: DStream[SolrInputDocument]): Unit = {
+      zkHost: String,
+      collection: String,
+      batchSize: Int,
+      docs: DStream[SolrInputDocument]): Unit =
     docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, rdd))
-  }
 
   def sendDStreamOfDocsToFusion(
-    fusionUrl: String,
-    fusionCredentials: String,
-    docs: DStream[_],
-    batchSize: Int): Unit = {
+      fusionUrl: String,
+      fusionCredentials: String,
+      docs: DStream[_],
+      batchSize: Int): Unit = {
     docs.foreachRDD(rdd => {
       rdd.foreachPartition(docIter => {
         val creds = if (fusionCredentials != null) fusionCredentials.split(":") else null
@@ -145,10 +144,10 @@ object SolrSupport extends Logging {
   }
 
   def indexDocs(
-    zkHost: String,
-    collection: String,
-    batchSize: Int,
-    rdd: RDD[SolrInputDocument]) = {
+      zkHost: String,
+      collection: String,
+      batchSize: Int,
+      rdd: RDD[SolrInputDocument]) = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
     val solrClient = getCachedCloudClient(zkHost)
@@ -223,21 +222,20 @@ object SolrSupport extends Logging {
    * Uses reflection to map bean public fields and getters to dynamic fields in Solr.
    */
   def autoMapToSolrInputDoc(
-    docId: String,
-    obj: Object,
-    dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
+      docId: String,
+      obj: Object,
+      dynamicFieldOverrides: Map[String, String]): SolrInputDocument =
     autoMapToSolrInputDoc("id", docId, obj, dynamicFieldOverrides)
-  }
 
   def autoMapToSolrInputDoc(
-    idFieldName: String,
-    docId: String,
-    obj: Object,
-    dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
+      idFieldName: String,
+      docId: String,
+      obj: Object,
+      dynamicFieldOverrides: Map[String, String]): SolrInputDocument = {
     val doc = new SolrInputDocument()
     doc.setField(idFieldName, docId)
     if (obj == null)
-      doc
+      return doc
 
     val objClass = obj.getClass
     val fields = new mutable.HashSet[String]()
@@ -309,11 +307,11 @@ object SolrSupport extends Logging {
   }
 
   def addField(
-    doc: SolrInputDocument,
-    fieldName: String,
-    value: Object,
-    classType: Class[_],
-    dynamicFieldSuffix: Option[String]): Unit = {
+      doc: SolrInputDocument,
+      fieldName: String,
+      value: Object,
+      classType: Class[_],
+      dynamicFieldSuffix: Option[String]): Unit = {
     if (classType.isArray) return // TODO: Array types not supported yet ...
 
     if (dynamicFieldSuffix.isDefined) {
@@ -358,10 +356,10 @@ object SolrSupport extends Logging {
   }
 
   def filterDocuments(
-    filterContext: DocFilterContext,
-    zkHost: String,
-    collection: String,
-    docs: DStream[SolrInputDocument]): DStream[SolrInputDocument] = {
+      filterContext: DocFilterContext,
+      zkHost: String,
+      collection: String,
+      docs: DStream[SolrInputDocument]): DStream[SolrInputDocument] = {
     val partitionIndex = new AtomicInteger(0)
     val idFieldName = filterContext.getDocIdFieldName
 
@@ -472,10 +470,10 @@ object SolrSupport extends Logging {
  }
 
   def splitShards(
-    query: SolrQuery,
-    solrShard: SolrShard,
-    splitFieldName: String,
-    splitsPerShard: Int): List[ShardSplit[_]] = {
+      query: SolrQuery,
+      solrShard: SolrShard,
+      splitFieldName: String,
+      splitsPerShard: Int): List[ShardSplit[_]] = {
     // Get the field type of split field
     var fieldDataType: Option[DataType] = None
     if ("_version_".equals(splitFieldName)) {

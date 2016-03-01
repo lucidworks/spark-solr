@@ -16,11 +16,16 @@ import scala.reflect.runtime.universe._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrRelation(val parameters: Map[String, String],
-                   override val sqlContext: SQLContext,
-                   val dataFrame: Option[DataFrame])
-                  (implicit val conf: SolrConf = new SolrConf(parameters))
-  extends BaseRelation with TableScan with PrunedFilteredScan with InsertableRelation with Logging {
+class SolrRelation(
+    val parameters: Map[String, String],
+    override val sqlContext: SQLContext,
+    val dataFrame: Option[DataFrame])
+  (implicit val conf: SolrConf = new SolrConf(parameters))
+  extends BaseRelation
+  with TableScan
+  with PrunedFilteredScan
+  with InsertableRelation
+  with Logging {
 
   def this(parameters: Map[String, String], sqlContext: SQLContext) {
     this(parameters, sqlContext, None)

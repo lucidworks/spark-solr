@@ -30,19 +30,19 @@ import org.json4s.jackson.JsonMethods._
 
 // Should we support all other additional Solr field tags?
 case class SolrFieldMeta(
-  fieldType: String,
-  dynamicBase: Option[String],
-  isRequired: Option[Boolean],
-  isMultiValued: Option[Boolean],
-  isDocValues: Option[Boolean],
-  isStored: Option[Boolean],
-  fieldTypeClass: Option[String])
+    fieldType: String,
+    dynamicBase: Option[String],
+    isRequired: Option[Boolean],
+    isMultiValued: Option[Boolean],
+    isDocValues: Option[Boolean],
+    isStored: Option[Boolean],
+    fieldTypeClass: Option[String])
 
 case class PivotField(
-  solrField: String,
-  prefix: String,
-  otherSuffix: String,
-  maxCols: Int) {
+    solrField: String,
+    prefix: String,
+    otherSuffix: String,
+    maxCols: Int) {
 
   def this(solrField: String, prefix: String, maxCols: Int) {
     this(solrField, prefix, "other", maxCols)
@@ -55,9 +55,10 @@ case class PivotField(
 }
 
 class QueryResultsIterator(
-  solrClient: SolrClient,
-  solrQuery: SolrQuery,
-  cursorMark: String) extends PagedResultsIterator[SolrDocument](solrClient, solrQuery, cursorMark) {
+    solrClient: SolrClient,
+    solrQuery: SolrQuery,
+    cursorMark: String)
+  extends PagedResultsIterator[SolrDocument](solrClient, solrQuery, cursorMark) {
   override protected def processQueryResponse(resp: QueryResponse): util.List[SolrDocument] = resp.getResults
 }
 
@@ -141,10 +142,10 @@ object SolrQuerySupport extends Logging {
   }
 
   def querySolr(
-    solrClient: SolrClient,
-    solrQuery: SolrQuery,
-    startIndex: Int,
-    cursorMark: String): Option[QueryResponse] =
+      solrClient: SolrClient,
+      solrQuery: SolrQuery,
+      startIndex: Int,
+      cursorMark: String): Option[QueryResponse] =
     querySolr(solrClient, solrQuery, startIndex, cursorMark, null)
 
   // Use this method instead of [[SolrClient.queryAndStreamResponse]] to use POST method for queries
@@ -160,11 +161,11 @@ object SolrQuerySupport extends Logging {
     Query solr and retry on Socket or network exceptions
    */
   def querySolr(
-    solrClient: SolrClient,
-    solrQuery: SolrQuery,
-    startIndex: Int,
-    cursorMark: String,
-    callback: StreamingResponseCallback): Option[QueryResponse] = {
+      solrClient: SolrClient,
+      solrQuery: SolrQuery,
+      startIndex: Int,
+      cursorMark: String,
+      callback: StreamingResponseCallback): Option[QueryResponse] = {
     var resp: Option[QueryResponse] = None
 
     try {
@@ -470,12 +471,12 @@ object SolrQuerySupport extends Logging {
   }
 
   def splitShard(
-    sc: SparkContext,
-    query: SolrQuery,
-    shards: List[String],
-    splitFieldName: String,
-    splitsPerShard: Int,
-    collection: String): RDD[ShardSplit[_]] = {
+      sc: SparkContext,
+      query: SolrQuery,
+      shards: List[String],
+      splitFieldName: String,
+      splitsPerShard: Int,
+      collection: String): RDD[ShardSplit[_]] = {
 
     // get field type of split field
     var fieldDataType: Option[DataType] = None
@@ -565,10 +566,10 @@ object SolrQuerySupport extends Logging {
    * task when creating aggregations.
    */
   def withPivotFields(
-    solrData: DataFrame,
-    pivotFields: Array[PivotField],
-    solrRDD: SolrRDD,
-    escapeFieldNames: Boolean): DataFrame = {
+      solrData: DataFrame,
+      pivotFields: Array[PivotField],
+      solrRDD: SolrRDD,
+      escapeFieldNames: Boolean): DataFrame = {
     val schema = SolrSchemaUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
@@ -586,12 +587,12 @@ object SolrQuerySupport extends Logging {
   }
 
   def toPivotSchema(
-    baseSchema: StructType,
-    pivotFields: Array[PivotField],
-    collection: String,
-    schema: StructType,
-    uniqueKey: String,
-    zkHost: String): StructType = {
+      baseSchema: StructType,
+      pivotFields: Array[PivotField],
+      collection: String,
+      schema: StructType,
+      uniqueKey: String,
+      zkHost: String): StructType = {
     val pivotSchemaFields = new ListBuffer[StructField]
     pivotSchemaFields.addAll(baseSchema.fields.toList)
     for (pf: PivotField <- pivotFields) {
@@ -602,14 +603,14 @@ object SolrQuerySupport extends Logging {
   }
 
   def getPivotSchema(
-    fieldName: String,
-    maxCols: Int,
-    fieldPrefix: String,
-    otherName: String,
-    collection: String,
-    schema: StructType,
-    uniqueKey: String,
-    zkHost: String): List[StructField] = {
+      fieldName: String,
+      maxCols: Int,
+      fieldPrefix: String,
+      otherName: String,
+      collection: String,
+      schema: StructType,
+      uniqueKey: String,
+      zkHost: String): List[StructField] = {
     val listOfFields = new ListBuffer[StructField]
     val solrQuery = new SolrQuery("*:*")
     solrQuery.set("collection", collection)

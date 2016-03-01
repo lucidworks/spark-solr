@@ -87,7 +87,6 @@ class SolrConf(config: Map[String, String]) {
 }
 
 object SolrConf {
-//  private val ESCAPE_FIELD_NAMES = Array(SOLR_QUERY_PARAM, SOLR_ROWS_PARAM, SOLR_FIELD_LIST_PARAM)
 
   // Anything in the form of "solr.*" will override the "q", "fields", "rows" in the config
   def parseSolrParams(config: Map[String, String]): ModifiableSolrParams = {
