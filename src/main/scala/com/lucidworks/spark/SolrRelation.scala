@@ -56,7 +56,7 @@ class SolrRelation(val parameters: Map[String, String],
 
   override def schema: StructType = querySchema
 
-  override def buildScan(): RDD[Row] = buildScan(null, null)
+  override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 

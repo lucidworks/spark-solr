@@ -152,7 +152,6 @@ class SolrRDD(
 
   def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    //TODO: Remove null and replace with Option and None
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0)
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     if (!solrQuery.getRows.eq(null))
