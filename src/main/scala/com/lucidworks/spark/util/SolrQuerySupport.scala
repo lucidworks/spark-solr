@@ -14,7 +14,7 @@ import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{Row, DataFrame}
 import org.apache.spark.{SparkContext, Logging}
 import org.apache.spark.sql.types.{StructField, StructType, DataTypes, DataType}
 
@@ -62,6 +62,7 @@ class QueryResultsIterator(
 }
 
 object SolrQuerySupport extends Logging {
+
   val SOLR_DATA_TYPES: Map[String, DataType] = HashMap(
     "solr.StrField" -> DataTypes.StringType,
     "solr.TextField" -> DataTypes.StringType,
@@ -548,7 +549,15 @@ object SolrQuerySupport extends Logging {
     Array(startAt, endAt)
   }
 
-  def fillPivotFieldValues(rawValue: String, row: Array[Object], schema: StructType, pivotPrefix: String) = ???
+  def fillPivotFieldValues(rawValue: String, row: Array[Any], schema: StructType, pivotPrefix: String): Unit = {
+    val range = getPivotFieldRange(schema, pivotPrefix)
+    for (i <- range(0) to range(1)) row(i) = 0
+    try {
+      row(schema.fieldIndex(pivotPrefix + rawValue.toLowerCase)) = 1
+    } catch {
+      case e: IllegalArgumentException => row(range(1)) = 1
+    }
+  }
 
   /**
    * Allows you to pivot a categorical field into multiple columns that can be aggregated into counts, e.g.
@@ -559,7 +568,22 @@ object SolrQuerySupport extends Logging {
     solrData: DataFrame,
     pivotFields: Array[PivotField],
     solrRDD: SolrRDD,
-    escapeFieldNames: Boolean): DataFrame = ???
+    escapeFieldNames: Boolean): DataFrame = {
+    val schema = SolrSchemaUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames)
+    val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
+
+    val withPivotFields: RDD[Row] = solrData.rdd.map(row => {
+      val fields = Array.empty[Any]
+      for (i <- 0 to row.length-1) fields(i) = row.get(i)
+
+      for (pf <- pivotFields)
+        SolrQuerySupport.fillPivotFieldValues(row.getString(row.fieldIndex(pf.solrField)), fields, schemaWithPivots, pf.prefix)
+
+      Row(fields:_*)
+    })
+
+    solrData.sqlContext.createDataFrame(withPivotFields, schemaWithPivots)
+  }
 
   def toPivotSchema(
     baseSchema: StructType,
