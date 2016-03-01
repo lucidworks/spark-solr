@@ -195,7 +195,7 @@ Another subtle aspect of working with DataFrames is that you as a developer need
 // end::spark-shell[]
 // tag::tuning[]
 
-= == Tuning the Solr SparkSQL DataSource
+=== Tuning the Solr SparkSQL DataSource
 
 The Solr DataSource supports a number of optional parameters to allow you to optimize performance when reading data from Solr. Let's start with the most basic definition of the Solr DataSource and build up the options as we progress through this section:
 
@@ -248,6 +248,43 @@ Keep in mind that this is only a hint to the split calculator and you may end up
 
 // end::tuning[]
 // tag::solr-read[]
+
+=== escape_fieldnames
+
+The "escape_fieldnames" option will transform field names in Solr. Any dots ('.') inside the field name are replaced with '_'
+
+[source]
+option("escape_fieldnames", "true")
+
+=== splits
+
+The "splits" option will enable the parallelism by splitting on default field '_version_'.
+
+[source]
+option("splits", "true")
+
+The above option is equivalent to
+
+[source]
+option("split_field", "_version_")
+
+=== dv
+
+The "dv" option will fetch the doc values that are not stored.by using function queries.
+
+[source]
+option("dv", "true")
+
+Since 5.5.0 Solr will return non-stored docValues by default. This option is only needed for versions that are older than 5.5
+
+=== solr.
+
+The "solr." prefix option is used for providing arbitrary Solr query parameters.
+
+[source]
+option("solr.defType", "edismax")
+
+The options provided with this prefix have precedence over other options 'fields', 'query', 'rows'
 
 == Reading data from Solr as a Spark RDD
 
