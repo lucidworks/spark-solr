@@ -8,11 +8,11 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.google.common.cache._
+import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
-import io.netty.channel.ConnectTimeoutException
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -104,22 +104,51 @@ object SolrSupport extends Logging {
     solrBaseUrl
   }
 
-  def indexDStreamOfDocs(zkHost: String,
-                          collection: String,
-                          batchSize: Int,
-                          docs: DStream[SolrInputDocument]): Unit = {
+  def indexDStreamOfDocs(
+    zkHost: String,
+    collection: String,
+    batchSize: Int,
+    docs: DStream[SolrInputDocument]): Unit = {
     docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, rdd))
   }
 
-  def sendDStreamOfDocsToFusion(fusionUrl: String,
-                                 fusionCredentials: String,
-                                 docs: DStream[_],
-                                 batchSize: Int): Unit = ???
+  def sendDStreamOfDocsToFusion(
+    fusionUrl: String,
+    fusionCredentials: String,
+    docs: DStream[_],
+    batchSize: Int): Unit = {
+    docs.foreachRDD(rdd => {
+      rdd.foreachPartition(docIter => {
+        val creds = if (fusionCredentials != null) fusionCredentials.split(":") else null
+        if (creds.size != 3) throw new Exception("Not valid format for Fusion credentials. Except 3 objects separated by :")
+        val fusionClient = if (creds != null) new FusionPipelineClient(fusionUrl, creds(0), creds(1), creds(2)) else new FusionPipelineClient(fusionUrl)
+        var batch = List.empty[Any]
+        val indexedAt = new Date()
 
-  def indexDocs(zkHost: String,
-                collection: String,
-                batchSize: Int,
-                rdd: RDD[SolrInputDocument]) = {
+        while(docIter.hasNext) {
+          val inputDoc = docIter.next()
+          batch.add(inputDoc)
+          if (batch.size >= batchSize) {
+            fusionClient.postBatchToPipeline(batch)
+            batch = List.empty[Any]
+          }
+        }
+
+        if (batch.nonEmpty) {
+          fusionClient.postBatchToPipeline(batch)
+          batch = List.empty[Any]
+        }
+
+        fusionClient.shutdown()
+      })
+    })
+  }
+
+  def indexDocs(
+    zkHost: String,
+    collection: String,
+    batchSize: Int,
+    rdd: RDD[SolrInputDocument]) = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
     val solrClient = getCachedCloudClient(zkHost)
@@ -137,9 +166,7 @@ object SolrSupport extends Logging {
     })
   }
 
-  def sendBatchToSolr(solrClient: SolrClient,
-                      collection: String,
-                      batch: Iterable[SolrInputDocument]): Unit = {
+  def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit = {
     val req = new UpdateRequest()
     req.setParam("collection", collection)
 
@@ -396,8 +423,7 @@ object SolrSupport extends Logging {
     })
   }
 
-  def buildShardList(zkHost: String,
-                     collection: String): List[SolrShard] = {
+  def buildShardList(zkHost: String, collection: String): List[SolrShard] = {
 
     val solrClient = getCachedCloudClient(zkHost)
     val zkStateReader: ZkStateReader = solrClient.getZkStateReader
