@@ -1,7 +1,7 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.ConfigurationConstants
+import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.spark.sql.DataFrame
 
 class EventsimTestSuite extends EventsimBuilder {
@@ -25,6 +25,11 @@ class EventsimTestSuite extends EventsimBuilder {
     testCommons(solrRDD)
   }
 
+  test("SQL fields option") {
+    val df = sqlContext.read.format("solr").option(SOLR_ZK_HOST_PARAM, zkHost).option(SOLR_COLLECTION_PARAM, collectionName).option(SOLR_FIELD_PARAM, "id, userId,").load()
+    assert(df.count() == eventSimCount)
+  }
+
   test("SQL query") {
     val df: DataFrame = sqlContext.read.format("solr").option("zkHost", zkHost).option("collection", collectionName).load()
     assert(df.count() == eventSimCount)
@@ -34,7 +39,7 @@ class EventsimTestSuite extends EventsimBuilder {
     val options = Map(
       "zkHost" -> zkHost,
       "collection" -> collectionName,
-      ConfigurationConstants.SOLR_DO_SPLITS -> "true"
+      SOLR_DO_SPLITS -> "true"
     )
     val df: DataFrame = sqlContext.read.format("solr").options(options).load()
     assert(df.rdd.getNumPartitions > numShards)
