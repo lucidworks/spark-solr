@@ -195,7 +195,7 @@ Another subtle aspect of working with DataFrames is that you as a developer need
 // end::spark-shell[]
 // tag::tuning[]
 
-=== Tuning the Solr SparkSQL DataSource
+== Tuning the Solr SparkSQL DataSource
 
 The Solr DataSource supports a number of optional parameters to allow you to optimize performance when reading data from Solr. Let's start with the most basic definition of the Solr DataSource and build up the options as we progress through this section:
 

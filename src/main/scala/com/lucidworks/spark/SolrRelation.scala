@@ -53,11 +53,12 @@ class SolrRelation(val parameters: Map[String, String],
   val querySchema: StructType = {
     if (dataFrame.isDefined)
       dataFrame.get.schema
-    else
+    else {
       if (query.getFields != null)
         SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
       else
         baseSchema
+    }
   }
 
   override def schema: StructType = querySchema
