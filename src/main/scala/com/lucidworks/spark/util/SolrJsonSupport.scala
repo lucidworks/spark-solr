@@ -101,14 +101,16 @@ object SolrJsonSupport extends Logging {
           val jStatus = jValue \ "responseHeader" \ "status"
           jStatus match {
             case status: JInt =>
-              if (status.values == BigInt(-1))
+              if (status.values == BigInt(-1)) {
                 throw new SolrServerException("Unable to determine outcome of the request to:" + url + "! Response: " + compact(jValue))
+              }
               if (status.values != BigInt(0)) {
                 var errorMsg: Option[String] = None
-                if (jValue.has("error") && (jValue \ "error").has("msg"))
+                if (jValue.has("error") && (jValue \ "error").has("msg")) {
                   errorMsg = Some(compact(render(jValue \ "error" \ "msg")))
-                else
+                } else {
                   errorMsg = Some(compact(render(jValue)))
+                }
                 throw new SolrException(SolrException.ErrorCode.getErrorCode(statusCode),
                 "Request to " + url + " failed due to: " + errorMsg.get)
               }

@@ -19,8 +19,9 @@ import com.lucidworks.spark.util.ConfigurationConstants._
 class SolrRelation(
     val parameters: Map[String, String],
     override val sqlContext: SQLContext,
-    val dataFrame: Option[DataFrame])
-  (implicit val conf: SolrConf = new SolrConf(parameters))
+    val dataFrame: Option[DataFrame])(
+  implicit
+    val conf: SolrConf = new SolrConf(parameters))
   extends BaseRelation
   with TableScan
   with PrunedFilteredScan
@@ -40,15 +41,17 @@ class SolrRelation(
   val solrRDD = {
     var rdd = new SolrRDD(conf.getZkHost.get, conf.getCollection.get, sc)
 
-    if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined)
+    if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
-    else if (conf.splits.isDefined)
+    } else if (conf.splits.isDefined) {
       rdd = rdd.doSplits()
+    }
 
-    if (conf.getSplitField.isDefined && conf.getSplitsPerShard.isDefined)
+    if (conf.getSplitField.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.splitField(conf.getSplitField.get).splitsPerShard(conf.getSplitsPerShard.get)
-    else if (conf.getSplitField.isDefined)
+    } else if (conf.getSplitField.isDefined) {
       rdd = rdd.splitField(conf.getSplitField.get)
+    }
 
     rdd
   }
@@ -56,13 +59,14 @@ class SolrRelation(
   val baseSchema: StructType = SolrSchemaUtil.getBaseSchema(conf.getZkHost.get, conf.getCollection.get, conf.escapeFieldNames.getOrElse(false))
   val query: SolrQuery = buildQuery
   val querySchema: StructType = {
-    if (dataFrame.isDefined)
+    if (dataFrame.isDefined) {
       dataFrame.get.schema
-    else {
-      if (query.getFields != null)
+    } else {
+      if (query.getFields != null) {
         SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
-      else
+      } else {
         baseSchema
+      }
     }
   }
 
@@ -77,12 +81,12 @@ class SolrRelation(
       if (this.baseSchema.size == fields.length) {
         // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
         if (conf.docValues.getOrElse(false)) {
-          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "")})
-          query.setFields(fields:_*)
+          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+          query.setFields(fields: _*)
         }
       } else {
-        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "")})
-        query.setFields(fields:_*)
+        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+        query.setFields(fields: _*)
       }
     }
 
@@ -97,8 +101,9 @@ class SolrRelation(
       filters.foreach(filter => SolrSchemaUtil.applyFilter(filter, query, baseSchema))
     }
 
-    if (log.isInfoEnabled)
+    if (log.isInfoEnabled) {
       log.info("Constructed SolrQuery: " + query)
+    }
 
     try {
       val querySchema = if (!fields.isEmpty) SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) else schema
@@ -117,8 +122,7 @@ class SolrRelation(
       schema.fields.foreach(field => {
         val fname = field.name
         breakable {
-          if (fname.equals("_version"))
-            break()
+          if (fname.equals("_version")) break()
         }
         val fieldIndex = row.fieldIndex(fname)
         val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
@@ -126,10 +130,9 @@ class SolrRelation(
           val value = fieldValue.get
           value match {
             //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
-            case v: Iterable[Any] => {
+            case v: Iterable[Any] =>
               val it = v.iterator
               while (it.hasNext) doc.addField(fname, it.next())
-            }
             case _ => doc.setField(fname, value)
           }
         }
@@ -177,8 +180,9 @@ object SolrRelation {
     val instanceMirror = rm.reflect(ConfigurationConstants)
 
     for(acc <- accessors) {
-      if (acc.name != "CONFIG_PREFIX")
+      if (acc.name.decoded != "CONFIG_PREFIX") {
         knownParams += instanceMirror.reflectMethod(acc).apply().toString
+      }
     }
 
     // Check for any unknown options

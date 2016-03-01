@@ -30,7 +30,7 @@ class SolrRDD(
     splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
     solrQuery: Option[SolrQuery] = None)
   extends RDD[SolrDocument](sc, Seq.empty)
-  with Logging { //TODO: Do we need to pass any deps on parent RDDs for Solr?
+  with Logging {
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
 
@@ -90,17 +90,18 @@ class SolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
-    if (splitField.isDefined)
+    if (splitField.isDefined) {
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
-    else
+    } else {
       SolrPartitioner.getShardPartitions(shards, query)
+    }
   }
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     val urls: Seq[String] = Seq.empty
     split match {
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: AnyRef => log.warn("Unknown partition type '" + partition.getClass)
+      case partition: AnyRef => log.warn("Unknown partition type '" + partition.getClass + "'")
     }
     urls
   }
@@ -134,10 +135,12 @@ class SolrRDD(
 
   def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0)
+    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
-    if (!solrQuery.getRows.eq(null))
+    }
+    if (!solrQuery.getRows.eq(null)) {
       solrQuery = solrQuery.setRows(rows.get)
+    }
 
     solrQuery.set("collection", collection)
     solrQuery

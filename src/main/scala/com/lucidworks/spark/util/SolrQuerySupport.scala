@@ -216,7 +216,6 @@ object SolrQuerySupport extends Logging {
             case e2: Exception => throw new SolrServerException(e2)
           }
         }
-
     }
     resp
   }
@@ -224,8 +223,9 @@ object SolrQuerySupport extends Logging {
   def setQueryDefaultsForShards(solrQuery: SolrQuery, uniqueKey: String) = {
     solrQuery.set("distrib", "false")
     solrQuery.setStart(0)
-    if (solrQuery.getRows == null)
+    if (solrQuery.getRows == null) {
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
+    }
 
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
@@ -241,7 +241,9 @@ object SolrQuerySupport extends Logging {
 
     solrQuery.set("distrib", false)
     solrQuery.setStart(0)
-    if (solrQuery.getRows == null) solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
+    if (solrQuery.getRows == null) {
+      solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
+    }
 
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
@@ -263,55 +265,67 @@ object SolrQuerySupport extends Logging {
           val name = payload.get("name").get.asInstanceOf[String]
           val fieldType = payload.get("type").get.asInstanceOf[String]
 
-          val isRequired: Option[Boolean] = if (payload.contains("required")) {
-            if (payload.get("required").isDefined) {
-              payload.get("required").get match {
-                case v: Boolean => Some(v)
-                case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
-              }
+          val isRequired: Option[Boolean] = {
+            if (payload.contains("required")) {
+              if (payload.get("required").isDefined) {
+                payload.get("required").get match {
+                  case v: Boolean => Some(v)
+                  case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
+                }
+              } else None
             } else None
-          } else None
+          }
 
-          val isMultiValued: Option[Boolean] = if (payload.contains("multiValued")) {
-            if (payload.get("multiValued").isDefined) {
-              payload.get("multiValued").get match {
-                case v: Boolean => Some(v)
-                case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
-              }
+          val isMultiValued: Option[Boolean] = {
+            if (payload.contains("multiValued")) {
+              if (payload.get("multiValued").isDefined) {
+                payload.get("multiValued").get match {
+                  case v: Boolean => Some(v)
+                  case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
+                }
+              } else None
             } else None
-          } else None
+          }
 
-          val isStored: Option[Boolean] = if (payload.contains("stored")) {
-            if (payload.get("stored").isDefined) {
-              payload.get("stored").get match {
-                case v: Boolean => Some(v)
-                case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
-              }
+          val isStored: Option[Boolean] = {
+            if (payload.contains("stored")) {
+              if (payload.get("stored").isDefined) {
+                payload.get("stored").get match {
+                  case v: Boolean => Some(v)
+                  case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
+                }
+              } else None
             } else None
-          } else None
+          }
 
-          val isDocValues: Option[Boolean] = if (payload.contains("docValues")) {
-            if (payload.get("docValues").isDefined) {
-              payload.get("docValues").get match {
-                case v: Boolean => Some(v)
-                case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
-              }
+          val isDocValues: Option[Boolean] = {
+            if (payload.contains("docValues")) {
+              if (payload.get("docValues").isDefined) {
+                payload.get("docValues").get match {
+                  case v: Boolean => Some(v)
+                  case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
+                }
+              } else None
             } else None
-          } else None
+          }
 
-          val dynamicBase: Option[String] = if (payload.contains("dynamicBase")) {
-            if (payload.get("dynamicBase").isDefined) {
-              payload.get("dynamicBase").get match {
-                case v: String => Some(v)
-              }
+          val dynamicBase: Option[String] = {
+            if (payload.contains("dynamicBase")) {
+              if (payload.get("dynamicBase").isDefined) {
+                payload.get("dynamicBase").get match {
+                  case v: String => Some(v)
+                }
+              } else None
             } else None
-          } else None
+          }
 
-          val fieldClassType: Option[String] = if (fieldTypeToClassMap.contains(fieldType)) {
-            if (fieldTypeToClassMap.get(fieldType).isDefined) {
-              Some(fieldTypeToClassMap.get(fieldType).get)
+          val fieldClassType: Option[String] = {
+            if (fieldTypeToClassMap.contains(fieldType)) {
+              if (fieldTypeToClassMap.get(fieldType).isDefined) {
+                Some(fieldTypeToClassMap.get(fieldType).get)
+              } else None
             } else None
-          } else None
+          }
 
           val solrFieldMeta = SolrFieldMeta(fieldType, dynamicBase, isRequired, isMultiValued, isDocValues, isStored, fieldClassType)
 
@@ -400,8 +414,9 @@ object SolrQuerySupport extends Logging {
     val lukeUrl: String = solrUrl + "admin/luke?numTerms=0"
     try {
       val adminMeta: JValue = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, lukeUrl, 2)
-      if (!adminMeta.has("fields"))
+      if (!adminMeta.has("fields")) {
         throw new Exception("Cannot find 'fields' payload inside Schema: " + compact(adminMeta))
+      }
       val fieldsRef = adminMeta \ "fields"
       fieldsRef.values match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String]) => m.asInstanceOf[Map[String, Any]].keySet
@@ -508,7 +523,7 @@ object SolrQuerySupport extends Logging {
       }
     }
 
-
+    // For each shard, get the list of splits and flat map the list of lists
     sc.parallelize(shards, shards.size).flatMap(shardUrl => {
       var splitStrategy: Option[ShardSplitStrategy] = None
       if (fieldDataType.isEmpty) {
