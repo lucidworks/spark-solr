@@ -73,7 +73,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
     Thread.sleep(2000);
 
     String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, testCollection);
-    StructType schema = SolrSchemaUtil.getBaseSchema(zkHost, testCollection, false);
+    StructType schema = SolrSchemaUtil.getBaseSchema(zkHost, testCollection, false, true);
     //StreamingResultsIterator sri = new StreamingResultsIterator(cloudSolrClient, solrQuery, "*");
     QueryResultsIterator sri = new QueryResultsIterator(cloudSolrClient, solrQuery, "*") ;
     int numDocsFound = 0;

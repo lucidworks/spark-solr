@@ -56,7 +56,11 @@ class SolrRelation(
     rdd
   }
 
-  val baseSchema: StructType = SolrSchemaUtil.getBaseSchema(conf.getZkHost.get, conf.getCollection.get, conf.escapeFieldNames.getOrElse(false))
+  val baseSchema: StructType =
+    SolrSchemaUtil.getBaseSchema(conf.getZkHost.get,
+                                 conf.getCollection.get,
+                                 conf.escapeFieldNames.getOrElse(false),
+                                 conf.flattenMultivalued.getOrElse(true))
   val query: SolrQuery = buildQuery
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
@@ -153,7 +157,7 @@ class SolrRelation(
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       if (conf.docValues.getOrElse(false))
-        SolrSchemaUtil.applyDefaultFields(baseSchema, query)
+        SolrSchemaUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))

@@ -17,7 +17,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 object SolrSchemaUtil extends Logging {
 
-  def getBaseSchema(zkHost: String, collection: String, escapeFields: Boolean): StructType = {
+  def getBaseSchema(zkHost: String, collection: String, escapeFields: Boolean, flattenMultivalued: Boolean): StructType = {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val fieldTypeMap = SolrQuerySupport.getFieldTypes(Set.empty[String], solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
@@ -34,7 +34,7 @@ object SolrSchemaUtil extends Logging {
       metadata.putString("name", fieldName)
       metadata.putString("type", fieldMeta.fieldType)
 
-      if (fieldMeta.isMultiValued.isDefined) {
+      if (!flattenMultivalued && fieldMeta.isMultiValued.isDefined) {
         if (fieldMeta.isMultiValued.get) {
           dataType = new ArrayType(dataType, true)
           metadata.putBoolean("multiValued", value = true)
@@ -84,13 +84,13 @@ object SolrSchemaUtil extends Logging {
     if (listOfFields.isEmpty) schema else DataTypes.createStructType(listOfFields.toList)
   }
 
-  def applyDefaultFields(baseSchema: StructType, solrQuery: SolrQuery): Unit = {
+  def applyDefaultFields(baseSchema: StructType, solrQuery: SolrQuery, flattenMultivalued: Boolean): Unit = {
     val schemaFields = baseSchema.fields
     val fieldList = new ListBuffer[String]
 
     for (schemaField <- schemaFields) {
       val meta = schemaField.metadata
-      val isMultiValued = if (meta.contains("multiValued")) meta.getBoolean("multiValued") else false
+      val isMultiValued = if (!flattenMultivalued && meta.contains("multiValued")) meta.getBoolean("multiValued") else false
       val isDocValues = if (meta.contains("docValues")) meta.getBoolean("docValues") else false
       val isStored = if (meta.contains("stored")) meta.getBoolean("stored") else false
 
@@ -234,7 +234,6 @@ object SolrSchemaUtil extends Logging {
       for (field <- fields) {
         val metadata = field.metadata
         val isMultiValued = if (metadata.contains("multiValued")) metadata.getBoolean("multiValued") else false
-
         if (isMultiValued) {
           val fieldValues = solrDocument.getFieldValues(field.name)
           if (fieldValues != null) {
@@ -252,12 +251,24 @@ object SolrSchemaUtil extends Logging {
           fieldValue match {
             case f: String => values.add(f)
             case f: Date => values.add(new Timestamp(f.getTime))
+            case f: java.util.ArrayList[_] =>
+              val jlist = f.iterator.map {
+                case d: Date => new Timestamp(d.getTime)
+                case v: Any => v
+              }
+              val arr = jlist.toArray
+              if (arr.length >= 1) {
+                values.add(arr(0).asInstanceOf[AnyRef])
+              }
             case f: Iterable[_] =>
               val iterableValues = f.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
                 case v: Any => v
               }
-              values.add(iterableValues.toArray)
+              val arr = iterableValues.toArray
+              if (!arr.isEmpty) {
+                values.add(arr(0).asInstanceOf[AnyRef])
+              }
             case f: Any => values.add(f)
             case f => values.add(f)
           }
