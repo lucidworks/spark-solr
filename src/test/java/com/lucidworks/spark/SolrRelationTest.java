@@ -2,6 +2,7 @@ package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.Constants;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -10,9 +11,11 @@ import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
@@ -24,6 +27,64 @@ import static org.junit.Assert.*;
 public class SolrRelationTest extends RDDProcessorTestBase {
 
   @Test
+  public void testFlattenMultivalued() throws Exception {
+    String testCollection = "testFlattenMultivalued";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      deleteCollection(testCollection);
+      String confName = "testConfig";
+      File confDir = new File("src/test/resources/conf");
+      int numShards = 1;
+      int replicationFactor = 1;
+      createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+
+      Date now = new Date();
+
+      SolrInputDocument doc = new SolrInputDocument();
+      doc.setField("id", "flatten-1");
+      byte[] rawContentBytes = "this is the value of the _raw_content_ field".getBytes(StandardCharsets.UTF_8);
+      doc.setField("_raw_content_", Base64.getEncoder().encodeToString(rawContentBytes));
+      byte[] imagesBytes = "this is the value of the images field".getBytes(StandardCharsets.UTF_8);
+      doc.addField("images", Base64.getEncoder().encodeToString(imagesBytes));
+      doc.addField("ts_tdts", now);
+      cloudSolrServer.add(testCollection, doc);
+      cloudSolrServer.commit(testCollection);
+
+      String zkHost = cluster.getZkServer().getZkAddress();
+      Map<String, String> options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      options.put(FLATTEN_MULTIVALUED(), "true");
+      options.put(SOLR_FIELD_PARAM(), "id, _raw_content_, images, ts_tdts");
+
+      SolrQuery q = new SolrQuery("*:*");
+      q.setRows(100);
+      q.addSort("id", SolrQuery.ORDER.asc);
+      dumpSolrCollection(testCollection, q);
+
+      // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
+      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      fromSolr.printSchema();
+
+      List<Row> rows = fromSolr.collectAsList();
+      assertTrue(rows.size() == 1);
+      Row first = rows.get(0);
+      assertEquals(doc.getFieldValue("id"), first.get(first.fieldIndex("id")));
+
+      // compare the bytes in the images field, which proves the multivalued field was flattened correctly
+      byte[] images = (byte[])first.get(first.fieldIndex("images"));
+      String imagesFromSolr = new String(images, StandardCharsets.UTF_8);
+      assertEquals(new String(imagesBytes, StandardCharsets.UTF_8), imagesFromSolr);
+
+      assertEquals(now, first.get(first.fieldIndex("ts_tdts")));
+    } finally {
+      deleteCollection(testCollection);
+    }
+  }
+
+  //@Ignore
+  @Test
   public void testEventsDataFrame() throws Exception {
     String testCollection = "testEventsDataFrame";
     try {
@@ -32,7 +93,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       // load test data from json file to index into Solr
       DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
       eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
-
 
       deleteCollection(testCollection);
       String confName = "testConfig";
@@ -46,6 +106,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     }
   }
 
+  //@Ignore
   @Test
   public void testAggDataFrame() throws Exception {
     String testCollection = "testAggDataFrame";
@@ -74,6 +135,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     }
   }
 
+  //@Ignore
   @Test
   public void testMVDateHandling() throws Exception {
     SQLContext sqlContext = new SQLContext(jsc);
@@ -98,6 +160,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
+    options.put(FLATTEN_MULTIVALUED(), "false");
+
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort("id");
@@ -133,6 +197,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
+    options.put(FLATTEN_MULTIVALUED(), "false");
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort("id");
     fromSolr.printSchema();
@@ -180,6 +245,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       Map<String, String> options = new HashMap<String, String>();
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      options.put(FLATTEN_MULTIVALUED(), "false");
 
       DataFrame df = sqlContext.read().format("solr").options(options).load();
       df.show();
@@ -243,6 +309,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options = new HashMap<String, String>();
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection2);
+      options.put(FLATTEN_MULTIVALUED(), "false");
 
       df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
       Thread.sleep(1000);
