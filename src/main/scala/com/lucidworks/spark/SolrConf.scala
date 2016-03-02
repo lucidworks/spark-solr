@@ -72,6 +72,12 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def flattenMultivalued: Option[Boolean] = {
+    if (config.contains(FLATTEN_MULTIVALUED) && config.get(FLATTEN_MULTIVALUED).isDefined) {
+      return Some(config.get(FLATTEN_MULTIVALUED).get.toBoolean)
+    }
+    None
+  }
 
 }
 
