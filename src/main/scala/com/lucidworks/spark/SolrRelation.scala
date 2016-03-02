@@ -92,7 +92,9 @@ class SolrRelation(
 
     // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
     if (query.getFields != null && query.getFields.length > 0) {
-      SolrSchemaUtil.setAliases(query.getFields.split(","), query, baseSchema)
+      if (conf.docValues.getOrElse(false)) {
+        SolrSchemaUtil.setAliases(query.getFields.split(","), query, baseSchema)
+      }
     }
 
     // Clear all existing filters
