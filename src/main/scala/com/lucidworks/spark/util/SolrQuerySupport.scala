@@ -72,7 +72,8 @@ object SolrQuerySupport extends Logging {
     "solr.TrieLongField" -> DataTypes.LongType,
     "solr.TrieFloatField" -> DataTypes.FloatType,
     "solr.TrieDoubleField" -> DataTypes.DoubleType,
-    "solr.TrieDateField" -> DataTypes.TimestampType
+    "solr.TrieDateField" -> DataTypes.TimestampType,
+    "solr.BinaryField" -> DataTypes.BinaryType
   )
 
   def getUniqueKey(zkHost: String, collection: String): String = {
@@ -331,11 +332,11 @@ object SolrQuerySupport extends Logging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              log.info("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+              log.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
           } else if ((solrFieldMeta.isStored.isDefined && solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              log.info("Can't retrieve a non stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              log.debug("Can't retrieve a non stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
