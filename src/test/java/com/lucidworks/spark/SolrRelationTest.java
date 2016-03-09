@@ -7,15 +7,16 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
-import org.apache.spark.sql.types.ArrayType;
-import org.apache.spark.sql.types.DataType;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.types.*;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import org.apache.spark.sql.functions;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.util.*;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
@@ -26,6 +27,38 @@ import static org.junit.Assert.*;
  */
 public class SolrRelationTest extends RDDProcessorTestBase {
 
+  @Test
+  public void testIndexOneusagovDataFrame() throws Exception {
+    String testCollection = "testIndexOneusagovDataFrame";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      // load test data from json file to index into Solr
+      DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/oneusagov/oneusagov_sample.json");
+      eventsDF = eventsDF.withColumnRenamed("_id", "id");
+
+      sqlContext.udf().register("secs2ts", new UDF1<Long, Timestamp>() {
+        public Timestamp call(final Long secs) throws Exception {
+          return (secs != null) ? new Timestamp(secs * 1000) : null;
+        }
+      }, DataTypes.TimestampType);
+      eventsDF = eventsDF.withColumn("ts", functions.callUDF("secs2ts", eventsDF.col("t"))).drop("t");
+
+      eventsDF.printSchema();
+
+      deleteCollection(testCollection);
+      String confName = "testConfig";
+      File confDir = new File("src/test/resources/conf");
+      int numShards = 1;
+      int replicationFactor = 1;
+      createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
+      validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+    } finally {
+      deleteCollection(testCollection);
+    }
+  }
+
+  //@Ignore
   @Test
   public void testFlattenMultivalued() throws Exception {
     String testCollection = "testFlattenMultivalued";
@@ -170,59 +203,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Row[] docsFromSolr = fromSolr.collect();
     assertTrue(docsFromSolr.length == 4);
   }
-  
-  protected static String array2cdl(String[] arr) {
-    // this is really horrible
-    String str = Arrays.asList(arr).toString();
-    return str.substring(1, str.length() - 1).replaceAll(" ","");
-  }
-  
-  protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
-    sourceData = sourceData.sort("id");
-    sourceData.printSchema();
-    Row[] testData = sourceData.collect();
-    String[] cols = sourceData.columns();
-
-    String zkHost = cluster.getZkServer().getZkAddress();
-    Map<String, String> options = new HashMap<String, String>();
-    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-    options.put(SOLR_COLLECTION_PARAM(), testCollection);
-    sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
-    Thread.sleep(1000);
-
-    SolrQuery q = new SolrQuery("*:*");
-    q.setRows(100);
-    q.addSort("id", SolrQuery.ORDER.asc);
-    dumpSolrCollection(testCollection, q);
-
-    // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-    options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
-    options.put(FLATTEN_MULTIVALUED(), "false");
-    DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
-    fromSolr = fromSolr.sort("id");
-    fromSolr.printSchema();
-
-    Row[] docsFromSolr = fromSolr.collect();
-    Set<String> solrCols = new TreeSet<>();
-    solrCols.addAll(Arrays.asList(fromSolr.columns()));
-    for (String col : cols) {
-      assertTrue("expected "+col+" in Solr DataFrame, but only found: "+solrCols, solrCols.contains(col));
-    }
-
-    long actualEvents = docsFromSolr.length;
-    assertTrue("Expected " + testData.length + " docs from Solr, but found: " + actualEvents, actualEvents == testData.length);
-    for (int e=0; e < testData.length; e++) {
-      Row exp = testData[e];
-      Row doc = docsFromSolr[e];
-      for (String col : cols) {
-        Object expVal = exp.get(exp.fieldIndex(col));
-        Object actVal = doc.get(doc.fieldIndex(col));
-        assertEquals("Value mismatch for col "+col+" at row "+e, expVal, actVal);
-      }
-    }
-
-    return docsFromSolr;
-  }
 
   //@Ignore
   @Test
@@ -320,6 +300,67 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       deleteCollection(testCollection);
       deleteCollection(testCollection2);
     }
+  }
+
+  protected static String array2cdl(String[] arr) {
+    // this is really horrible
+    String str = Arrays.asList(arr).toString();
+    return str.substring(1, str.length() - 1).replaceAll(" ", "");
+  }
+
+
+  protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
+    String idFieldName = "id";
+
+    sourceData = sourceData.sort(idFieldName);
+    sourceData.printSchema();
+    Row[] testData = sourceData.collect();
+    String[] cols = sourceData.columns();
+
+    String zkHost = cluster.getZkServer().getZkAddress();
+    Map<String, String> options = new HashMap<String, String>();
+    options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+    options.put(SOLR_COLLECTION_PARAM(), testCollection);
+    sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
+    Thread.sleep(1000);
+
+    SolrQuery q = new SolrQuery("*:*");
+    q.setRows(100);
+    q.addSort(idFieldName, SolrQuery.ORDER.asc);
+    dumpSolrCollection(testCollection, q);
+
+    // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
+    options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
+    options.put(FLATTEN_MULTIVALUED(), "false");
+
+    System.out.println("\n\n>> reading data from Solr using options: "+options+"\n\n");
+
+    DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    fromSolr = fromSolr.sort(idFieldName);
+    fromSolr.printSchema();
+
+    Row[] docsFromSolr = fromSolr.collect();
+    Set<String> solrCols = new TreeSet<>();
+    solrCols.addAll(Arrays.asList(fromSolr.columns()));
+    for (String col : cols) {
+      if (!solrCols.contains(col)) {
+        assertTrue("expected "+col+" in Solr DataFrame, but only found: "+solrCols+", source cols: "+Arrays.asList(cols), solrCols.contains(col));
+      }
+    }
+
+    long actualEvents = docsFromSolr.length;
+    assertTrue("Expected " + testData.length + " docs from Solr, but found: " + actualEvents, actualEvents == testData.length);
+    for (int e=0; e < testData.length; e++) {
+      Row exp = testData[e];
+      Row doc = docsFromSolr[e];
+      for (String col : cols) {
+        Object expVal = exp.get(exp.fieldIndex(col));
+        Object actVal = doc.get(doc.fieldIndex(col));
+        assertEquals("Value mismatch for col "+col+" at row "+e, expVal, actVal);
+      }
+    }
+
+    return docsFromSolr;
   }
 
   protected void assertCount(long expected, long actual, String expr) {

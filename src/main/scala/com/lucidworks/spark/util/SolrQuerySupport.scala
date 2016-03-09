@@ -257,7 +257,6 @@ object SolrQuerySupport extends Logging {
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
     val fieldNames = if (fields == null || fields.isEmpty) getFieldsFromLuke(solrUrl) else fields
     val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fieldNames)
-
     fieldDefinitionsFromSchema.foreach{ case(name, payloadRef) =>
       payloadRef match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
@@ -332,11 +331,11 @@ object SolrQuerySupport extends Logging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              log.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
-          } else if ((solrFieldMeta.isStored.isDefined && solrFieldMeta.isStored.get) &&
+              log.info("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+          } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              log.debug("Can't retrieve a non stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              log.info("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }

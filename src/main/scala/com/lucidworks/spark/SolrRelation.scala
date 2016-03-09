@@ -1,15 +1,20 @@
 package com.lucidworks.spark
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrSupport, SolrQuerySupport, SolrSchemaUtil}
+
+import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrInputDocument
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
+import scala.collection.{mutable, JavaConversions}
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.reflect.runtime.universe._
 
@@ -35,7 +40,8 @@ class SolrRelation(
   checkRequiredParams()
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
-  log.warn("Unknown parameters passed to query: " + unknownParams.toString())
+  if (!unknownParams.isEmpty)
+    log.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
   val sc = sqlContext.sparkContext
   val solrRDD = {
@@ -61,6 +67,7 @@ class SolrRelation(
                                  conf.getCollection.get,
                                  conf.escapeFieldNames.getOrElse(false),
                                  conf.flattenMultivalued.getOrElse(true))
+
   val query: SolrQuery = buildQuery
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
@@ -121,7 +128,54 @@ class SolrRelation(
     }
   }
 
+  def toSolrType(dataType: DataType): String = {
+    dataType match {
+      case bi: BinaryType => "binary"
+      case b: BooleanType => "boolean"
+      case dt: DateType => "tdata"
+      case db: DoubleType => "double"
+      case ft: FloatType => "float"
+      case i: IntegerType => "int"
+      case l: LongType => "long"
+      case s: ShortType => "int"
+      case t: TimestampType => "tdate"
+      case _ => "string"
+    }
+  }
+
+  def toAddFieldMap(sf: StructField): Map[String,AnyRef] = {
+    val map = scala.collection.mutable.Map[String,AnyRef]()
+    map += ("name" -> sf.name)
+    map += ("indexed" -> "true")
+    map += ("stored" -> "true")
+    map += ("docValues" -> "true")
+    val dataType = sf.dataType
+    dataType match {
+      case at: ArrayType =>
+        map += ("multiValued" -> "true")
+        map += ("type" -> toSolrType(at.elementType))
+      case _ => map += ("type" -> toSolrType(dataType))
+    }
+    map.toMap
+  }
+
   override def insert(df: DataFrame, overwrite: Boolean): Unit = {
+
+    val zkHost = conf.getZkHost.get
+    val collectionId = conf.getCollection.get
+    val dfSchema = df.schema
+    val solrFields : Map[String, SolrFieldMeta] =
+      SolrQuerySupport.getFieldTypes(Set(), SolrSupport.getSolrBaseUrl(zkHost), collectionId)
+
+    // build up a list of updates to send to the Solr Schema API
+    val fieldsToAddToSolr = new ListBuffer[Update]()
+    dfSchema.fields.foreach(f => {
+      if (!solrFields.contains(f.name))
+        fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
+    })
+    val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava)
+    addFieldsUpdateRequest.process(SolrSupport.getCachedCloudClient(zkHost), collectionId)
+
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
