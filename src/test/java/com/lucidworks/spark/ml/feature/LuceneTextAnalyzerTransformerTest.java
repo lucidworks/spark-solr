@@ -34,7 +34,7 @@ import java.util.Collections;
 import java.util.List;
 
 
-public class JavaLuceneAnalyzerTest {
+public class LuceneTextAnalyzerTransformerTest {
   private transient JavaSparkContext jsc;
   private transient SQLContext jsql;
 
@@ -57,7 +57,7 @@ public class JavaLuceneAnalyzerTest {
 
   @Test
   public void testStandardTokenizer() {
-    LuceneAnalyzer analyzer1 = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer1 = new LuceneTextAnalyzerTransformer()
         .setInputCol("rawText")
         .setOutputCol("tokens"); // Default analysis schema: StandardTokenizer + LowerCaseFilter
 
@@ -70,7 +70,6 @@ public class JavaLuceneAnalyzerTest {
         new TokenizerTestData("Te,st. punct", new String[]{"te", "st", "punct"})));
 
     String analysisSchema1 = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'analyzers': [{\n" +
         "  'name': 'StdTok_max10',\n" +
         "  'tokenizer': {\n" +
@@ -78,7 +77,7 @@ public class JavaLuceneAnalyzerTest {
         "    'maxTokenLength': '10'\n" +
         "  }\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'regex': '.+',\n" +
         "  'analyzer': 'StdTok_max10'\n" +
         "}]}\n");
@@ -89,7 +88,6 @@ public class JavaLuceneAnalyzerTest {
         new TokenizerTestData("some-dashed-phrase", new String[]{"some", "dashed", "phrase"})));
 
     String analysisSchema2 = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'defaultLuceneMatchVersion': '4.10.4',\n" +
         "'analyzers': [{\n" +
         "  'name': 'StdTok_max3',\n" +
@@ -98,11 +96,11 @@ public class JavaLuceneAnalyzerTest {
         "    'maxTokenLength': '3'\n" +
         "  }\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'regex': '.+',\n" +
         "  'analyzer': 'StdTok_max3'\n" +
         "}]}\n");
-    LuceneAnalyzer analyzer2 = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer2 = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analysisSchema2)
         .setInputCol("rawText")
         .setOutputCol("tokens");
@@ -116,7 +114,6 @@ public class JavaLuceneAnalyzerTest {
   @SuppressWarnings("unchecked")
   public void testCharFilters() {
     String analysisSchema1 = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'analyzers': [{\n" +
         "  'name': 'strip_alpha_std_tok',\n" +
         "  'charFilters': [{\n" +
@@ -128,11 +125,11 @@ public class JavaLuceneAnalyzerTest {
         "    'type': 'standard'\n" +
         "  }\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'regex': '.+',\n" +
         "  'analyzer': 'strip_alpha_std_tok'\n" +
         "}]}\n");
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analysisSchema1)
         .setInputCol("rawText")
         .setOutputCol("tokens");
@@ -142,7 +139,6 @@ public class JavaLuceneAnalyzerTest {
         new TokenizerTestData("Te,st. punct", new String[]{})));
 
     String analysisSchema2 = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'analyzers': [{\n" +
         "  'name': 'htmlstrip_drop_removeme_std_tok',\n" +
         "  'charFilters': [{\n" +
@@ -156,7 +152,7 @@ public class JavaLuceneAnalyzerTest {
         "    'type': 'standard'\n" +
         "  }\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'name': 'rawText',\n" +
         "  'analyzer': 'htmlstrip_drop_removeme_std_tok'\n" +
         "}]}\n");
@@ -170,7 +166,6 @@ public class JavaLuceneAnalyzerTest {
   @Test
   public void testTokenFilters() {
     String analysisSchema = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'analyzers': [{\n" +
         "  'name': 'std_tok_possessive_stop_lower',\n" +
         "  'tokenizer': {\n" +
@@ -187,11 +182,11 @@ public class JavaLuceneAnalyzerTest {
         "      'type': 'lowercase'\n" +
         "  }]\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'name': 'rawText',\n" +
         "  'analyzer': 'std_tok_possessive_stop_lower'\n" +
         "}]}\n");
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analysisSchema)
         .setInputCol("rawText")
         .setOutputCol("tokens");
@@ -203,7 +198,6 @@ public class JavaLuceneAnalyzerTest {
   @Test
   public void testUAX29URLEmailTokenizer() {
     String analysisSchema = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
         "'analyzers': [{\n" +
         "  'name': 'uax29urlemail_2000',\n" +
         "  'tokenizer': {\n" +
@@ -211,11 +205,11 @@ public class JavaLuceneAnalyzerTest {
         "    'maxTokenLength': '2000'\n" +
         "  }\n" +
         "}],\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'regex': '.+',\n" +
         "  'analyzer': 'uax29urlemail_2000'\n" +
         "}]}\n");
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analysisSchema)
         .setInputCol("rawText")
         .setOutputCol("tokens");
@@ -229,12 +223,11 @@ public class JavaLuceneAnalyzerTest {
   @Test
   public void testPrebuiltAnalyzer() {
     String analyzerConfig = json("{\n" +
-        "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
-        "'inputColumns': [{\n" +
+        "'fields': [{\n" +
         "  'regex': '.+',\n" +
         "  'analyzer': 'org.apache.lucene.analysis.core.WhitespaceAnalyzer'\n" +
         "}]}\n");
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analyzerConfig)
         .setInputCol("rawText")
         .setOutputCol("tokens");
@@ -246,7 +239,7 @@ public class JavaLuceneAnalyzerTest {
 
   @Test
   public void testMultivaluedInputCol() {
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setInputCols(new String[]{"rawText"})
         .setOutputCol("tokens");
     assertExpectedTokens(analyzer, Collections.singletonList(
@@ -256,7 +249,7 @@ public class JavaLuceneAnalyzerTest {
 
   @Test
   public void testMultipleInputCols() {
-    LuceneAnalyzer analyzer1 = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer1 = new LuceneTextAnalyzerTransformer()
         .setInputCols(new String[] {"rawText1", "rawText2"})
         .setOutputCol("tokens");
     assertExpectedTokens(analyzer1, Collections.singletonList(
@@ -264,7 +257,6 @@ public class JavaLuceneAnalyzerTest {
             new String[] {"harold's", "not", "around", "the", "dog's", "nose", "knows"})));
 
     String analysisSchema = json("{\n" +
-          "'schemaType': 'LuceneAnalyzerSchema.v1',\n" +
           "'analyzers': [{\n" +
           "    'name': 'std_tok_lower',\n" +
           "    'tokenizer': { 'type': 'standard' },\n" +
@@ -278,7 +270,7 @@ public class JavaLuceneAnalyzerTest {
           "    'tokenizer': { 'type': 'standard' },\n" +
           "    'filters': [{ 'type': 'lowercase' }]\n" +
           "}],\n" +
-          "'inputColumns': [{\n" +
+          "'fields': [{\n" +
           "    'name': 'rawText1',\n" +
           "    'analyzer': 'std_tok_lower'\n" +
           "  }, {\n" +
@@ -288,7 +280,7 @@ public class JavaLuceneAnalyzerTest {
           "    'regex': '.+',\n" +
           "    'analyzer': 'htmlstrip_std_tok_lower'\n" +
           "}]}\n");
-    LuceneAnalyzer analyzer2 = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer2 = new LuceneTextAnalyzerTransformer()
         .setAnalysisSchema(analysisSchema)
         .setInputCols(new String[] {"rawText1", "rawText2"})
         .setOutputCol("tokens");
@@ -335,7 +327,7 @@ public class JavaLuceneAnalyzerTest {
     String[] prefixedTokens = prefixedTokenList.toArray(new String[prefixedTokenList.size()]);
 
     // First transform without token prefixes
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setInputCols(new String[] {"rawText1", "rawText2"})
         .setOutputCol("tokens");
     assertExpectedTokens(analyzer, Collections.singletonList(
@@ -349,7 +341,7 @@ public class JavaLuceneAnalyzerTest {
 
   @Test
   public void testMissingValues() {
-    LuceneAnalyzer analyzer = new LuceneAnalyzer()
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
         .setInputCol("rawText")
         .setOutputCol("tokens");
     assertExpectedTokens(analyzer, Arrays.asList(new TokenizerTestData(null, new String[]{})));
@@ -365,7 +357,7 @@ public class JavaLuceneAnalyzerTest {
             new String[]{"the", "dog's", "nose", "knows"})));
   }
 
-  private <T> void assertExpectedTokens(LuceneAnalyzer analyzer, List<T> testData) {
+  private <T> void assertExpectedTokens(LuceneTextAnalyzerTransformer analyzer, List<T> testData) {
     JavaRDD<T> rdd = jsc.parallelize(testData);
     Row[] pairs = analyzer.transform(jsql.createDataFrame(rdd, testData.get(0).getClass()))
         .select("wantedTokens", "tokens")

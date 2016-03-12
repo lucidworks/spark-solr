@@ -25,15 +25,15 @@ import org.apache.spark.sql.{Row, DataFrame}
 
 import scala.beans.BeanInfo
 
-class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
-  import com.lucidworks.spark.ml.feature.LuceneAnalyzerSuite._
+class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
+  import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformerSuite._
 
   test("params") {
-    ParamsSuite.checkParams(new LuceneAnalyzer)
+    ParamsSuite.checkParams(new LuceneTextAnalyzerTransformer)
   }
 
   test("StandardTokenizer") {
-    val analyzer1 = new LuceneAnalyzer()
+    val analyzer1 = new LuceneTextAnalyzerTransformer()
       .setInputCol("rawText")
       .setOutputCol("tokens")  // Default analysis schema: StandardTokenizer + LowerCaseFilter
 
@@ -41,7 +41,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       TokenizerTestData("Test for tokenization.", Array("test", "for", "tokenization")),
       TokenizerTestData("Te,st. punct", Array("te", "st", "punct"))
     ))
-    testLuceneAnalyzer(analyzer1, dataset1)
+    testLuceneTextAnalyzerTransformer(analyzer1, dataset1)
 
     val dataset2 = sqlContext.createDataFrame(Seq(
       TokenizerTestData("我是中国人。 １２３４ Ｔｅｓｔｓ ",
@@ -50,25 +50,23 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
     ))
     val analyzerConfig2 = """
                             |{
-                            |  "schemaType": "LuceneAnalyzerSchema.v1",
                             |  "analyzers": [{
-                            |    "name": "StdTok_max3",
+                            |    "name": "StdTok_max10",
                             |    "tokenizer": {
                             |      "type": "standard",
                             |      "maxTokenLength": "10"
                             |    }
                             |  }],
-                            |  "inputColumns": [{
+                            |  "fields": [{
                             |    "name": "rawText",
-                            |    "analyzer": "StdTok_max3"
+                            |    "analyzer": "StdTok_max10"
                             |  }]
                             |}""".stripMargin
     analyzer1.setAnalysisSchema(analyzerConfig2)
-    testLuceneAnalyzer(analyzer1, dataset2)
+    testLuceneTextAnalyzerTransformer(analyzer1, dataset2)
 
     val analyzerConfig3 = """
                             |{
-                            |  "schemaType": "LuceneAnalyzerSchema.v1",
                             |  "defaultLuceneMatchVersion": "4.10.4",
                             |  "analyzers": [{
                             |    "name": "StdTok_max3",
@@ -77,12 +75,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                             |      "maxTokenLength": "3"
                             |    }
                             |  }],
-                            |  "inputColumns": [{
+                            |  "fields": [{
                             |    "regex": ".+",
                             |    "analyzer": "StdTok_max3"
                             |  }]
                             |}""".stripMargin
-    val analyzer2 = new LuceneAnalyzer()
+    val analyzer2 = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig3)
       .setInputCol("rawText")
       .setOutputCol("tokens")
@@ -91,13 +89,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
         Array("Tes", "t", "for", "tok", "eni", "zat", "ion")),
       TokenizerTestData("Te,st.  punct", Array("Te", "st", "pun", "ct"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset3)
+    testLuceneTextAnalyzerTransformer(analyzer2, dataset3)
   }
 
   test("CharFilters") {
     val analyzerConfig1 = """
                             |{
-                            |  "schemaType": "LuceneAnalyzerSchema.v1",
                             |  "analyzers": [{
                             |    "name": "strip_alpha_std_tok",
                             |    "charFilters":[{
@@ -109,12 +106,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                             |      "type": "standard"
                             |    }
                             |  }],
-                            |  "inputColumns": [{
+                            |  "fields": [{
                             |    "regex": ".+",
                             |    "analyzer": "strip_alpha_std_tok"
                             |  }]
                             |}""".stripMargin
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig1)
       .setInputCol("rawText")
       .setOutputCol("tokens")
@@ -122,11 +119,10 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       TokenizerTestData("Test for 9983, tokenization.", Array("9983")),
       TokenizerTestData("Te,st. punct", Array())
     ))
-    testLuceneAnalyzer(analyzer, dataset1)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset1)
 
     val analyzerConfig2 = """
                             |{
-                            |  "schemaType": "LuceneAnalyzerSchema.v1",
                             |  "analyzers": [{
                             |    "name": "htmlstrip_drop_removeme_std_tok",
                             |    "charFilters":[{
@@ -140,7 +136,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                             |      "type": "standard"
                             |    }
                             |  }],
-                            |  "inputColumns": [{
+                            |  "fields": [{
                             |    "name": "rawText",
                             |    "analyzer": "htmlstrip_drop_removeme_std_tok"
                             |  }]
@@ -151,13 +147,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
         "<html><body>remove<b>me</b> but leave<div>the&nbsp;rest.</div></body></html>",
         Array("but", "leave", "the", "rest"))
     ))
-    testLuceneAnalyzer(analyzer, dataset2)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset2)
   }
 
   test("TokenFilters") {
     val analyzerConfig = """
                            |{
-                           |  "schemaType": "LuceneAnalyzerSchema.v1",
                            |  "analyzers": [{
                            |    "name": "std_tok_possessive_stop_lower",
                            |    "tokenizer": {
@@ -174,12 +169,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                            |        "type": "lowercase"
                            |    }]
                            |  }],
-                           |  "inputColumns": [{
+                           |  "fields": [{
                            |    "regex": ".+",
                            |    "analyzer": "std_tok_possessive_stop_lower"
                            |  }]
                            |}""".stripMargin
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
@@ -187,13 +182,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       TokenizerTestData("Harold's not around.", Array("harold", "around")),
       TokenizerTestData("The dog's nose KNOWS!", Array("dog", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer, dataset)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset)
   }
 
   test("UAX29URLEmailTokenizer") {
     val analyzerConfig = """
                            |{
-                           |  "schemaType": "LuceneAnalyzerSchema.v1",
                            |  "analyzers": [{
                            |    "name": "uax29urlemail_2000",
                            |    "tokenizer": {
@@ -201,12 +195,12 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                            |      "maxTokenLength": "2000"
                            |    }
                            |  }],
-                           |  "inputColumns": [{
+                           |  "fields": [{
                            |    "regex": ".+",
                            |    "analyzer": "uax29urlemail_2000"
                            |  }]
                            |}""".stripMargin
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
@@ -216,19 +210,18 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       TokenizerTestData("Email caffeine@coffee.biz for tips on staying@alert",
         Array("Email", "caffeine@coffee.biz", "for", "tips", "on", "staying", "alert"))
     ))
-    testLuceneAnalyzer(analyzer, dataset)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset)
   }
 
   test("PrebuiltAnalyzer") {
     val analyzerConfig = """
                            |{
-                           |  "schemaType": "LuceneAnalyzerSchema.v1",
-                           |  "inputColumns": [{
+                           |  "fields": [{
                            |    "regex": ".+",
                            |    "analyzer": "org.apache.lucene.analysis.core.WhitespaceAnalyzer"
                            |  }]
                            |}""".stripMargin
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
@@ -237,33 +230,32 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       TokenizerTestData("Test for tokenization.", Array("Test", "for", "tokenization.")),
       TokenizerTestData("Te,st. punct", Array("Te,st.", "punct"))
     ))
-    testLuceneAnalyzer(analyzer, dataset1)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset1)
   }
 
   test("MultivaluedInputCol") {
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText"))
       .setOutputCol("tokens")
     val dataset = sqlContext.createDataFrame(Seq(
       MV_TokenizerTestData(Array("Harold's not around.", "The dog's nose KNOWS!"),
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer, dataset)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset)
   }
 
   test("MultipleInputCols") {
-    val analyzer1 = new LuceneAnalyzer()
+    val analyzer1 = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
     val dataset1 = sqlContext.createDataFrame(Seq(
       SV_SV_TokenizerTestData("Harold's not around.", "The dog's nose KNOWS!",
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer1, dataset1)
+    testLuceneTextAnalyzerTransformer(analyzer1, dataset1)
 
     val analyzerConfig = """
                            |{
-                           |  "schemaType": "LuceneAnalyzerSchema.v1",
                            |  "analyzers": [{
                            |      "name": "std_tok_lower",
                            |      "tokenizer": { "type": "standard" },
@@ -277,7 +269,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                            |      "tokenizer": { "type": "standard" },
                            |      "filters": [{ "type": "lowercase" }]
                            |  }],
-                           |  "inputColumns": [{
+                           |  "fields": [{
                            |      "name": "rawText1",
                            |      "analyzer": "std_tok_lower"
                            |    }, {
@@ -288,7 +280,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
                            |      "analyzer": "htmlstrip_std_tok_lower"
                            |  }]
                            |}""".stripMargin
-    val analyzer2 = new LuceneAnalyzer()
+    val analyzer2 = new LuceneTextAnalyzerTransformer()
       .setAnalysisSchema(analyzerConfig)
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
@@ -296,13 +288,13 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
       SV_SV_TokenizerTestData("Harold's NOT around.", "The dog's nose KNOWS!",
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset2)
+    testLuceneTextAnalyzerTransformer(analyzer2, dataset2)
 
     val dataset3 = sqlContext.createDataFrame(Seq(
       SV_MV_TokenizerTestData("Harold's NOT around.", Array("The dog's nose KNOWS!", "Good, fine, great..."),
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "Good", "fine", "great"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset3)
+    testLuceneTextAnalyzerTransformer(analyzer2, dataset3)
 
     val dataset4 = sqlContext.createDataFrame(Seq(
       MV_MV_TokenizerTestData(Array("Harold's NOT around.", "Anymore, I mean."),
@@ -310,7 +302,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
         Array("harold's", "not", "around", "anymore", "i", "mean",
           "The", "dog's", "nose", "KNOWS", "Good", "fine", "great"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset4)
+    testLuceneTextAnalyzerTransformer(analyzer2, dataset4)
 
     analyzer2.setInputCols(Array("rawText1", "rawText2", "rawText3"))
     val dataset5 = sqlContext.createDataFrame(Seq(
@@ -318,7 +310,7 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
         "Harold's NOT around.", "The dog's nose KNOWS!", "<html><body>Content</body></html>",
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "content"))
     ))
-    testLuceneAnalyzer(analyzer2, dataset5)
+    testLuceneTextAnalyzerTransformer(analyzer2, dataset5)
   }
 
   test("PrefixTokensWithInputCol") {
@@ -332,48 +324,48 @@ class LuceneAnalyzerSuite extends SparkSolrFunSuite with MLlibTestSparkContext {
     val prefixedTokens = tokens1.map("rawText1=" + _) ++ tokens2.map("rawText2=" + _)
 
     // First transform without token prefixes
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
     val dataset = sqlContext.createDataFrame(
       Seq(MV_MV_TokenizerTestData(rawText1, rawText2, tokens)))
-    testLuceneAnalyzer(analyzer, dataset)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset)
 
     // Then transform with token prefixes
     analyzer.setPrefixTokensWithInputCol(true)
     val prefixedDataset = sqlContext.createDataFrame(
       Seq(MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)))
-    testLuceneAnalyzer(analyzer, prefixedDataset)
+    testLuceneTextAnalyzerTransformer(analyzer, prefixedDataset)
   }
 
   test("MissingValues") {
-    val analyzer = new LuceneAnalyzer()
+    val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText"))
       .setOutputCol("tokens")
     val dataset1 = sqlContext.createDataFrame(Seq(TokenizerTestData(null, Array())))
-    testLuceneAnalyzer(analyzer, dataset1)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset1)
 
     val dataset2 = sqlContext.createDataFrame(Seq(TokenizerTestData("", Array())))
-    testLuceneAnalyzer(analyzer, dataset2)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset2)
 
     val dataset3 = sqlContext.createDataFrame(Seq(
       MV_TokenizerTestData(Array(null, "Harold's not around.", null, "The dog's nose KNOWS!", ""),
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer, dataset3)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset3)
 
     analyzer.setInputCols(Array("rawText1", "rawText2", "rawText3"))
     val dataset4 = sqlContext.createDataFrame(Seq(
       SV_SV_SV_TokenizerTestData("", "The dog's nose KNOWS!", null,
         Array("the", "dog's", "nose", "knows"))
     ))
-    testLuceneAnalyzer(analyzer, dataset4)
+    testLuceneTextAnalyzerTransformer(analyzer, dataset4)
   }
 }
 
-object LuceneAnalyzerSuite extends SparkSolrFunSuite {
+object LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite {
 
-  def testLuceneAnalyzer(t: LuceneAnalyzer, dataset: DataFrame): Unit = {
+  def testLuceneTextAnalyzerTransformer(t: LuceneTextAnalyzerTransformer, dataset: DataFrame): Unit = {
     t.transform(dataset)
       .select("tokens", "wantedTokens")
       .collect()
