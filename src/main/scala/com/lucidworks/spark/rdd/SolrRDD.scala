@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.StreamingResultsIterator
+import com.lucidworks.spark.query.{SolrStreamIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
@@ -22,6 +22,7 @@ class SolrRDD(
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
+    val useExportHandler: Boolean = false,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
@@ -34,13 +35,26 @@ class SolrRDD(
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
 
   protected def copy(
+      useExportHandler: Boolean = false,
       query: Option[String] = query,
       fields: Option[Array[String]] = fields,
       rows: Option[Int] = rows,
       splitField: Option[String] = splitField,
       splitsPerShard: Option[Int] = splitsPerShard,
       solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
-    new SolrRDD(zkHost, collection, sc, query, fields, rows, splitField, splitsPerShard, solrQuery)
+    new SolrRDD(zkHost, collection, sc, useExportHandler, query, fields, rows, splitField, splitsPerShard, solrQuery)
+  }
+
+
+  /*
+  * Get an Iterator that uses the export handler in Solr
+  */
+  @throws(classOf[Exception])
+  private def getExportHandlerBasedIterator(shardUrl : String, query : SolrQuery) = {
+
+    // Direct the queries to each shard, so we don't want distributed
+    query.set("distrib", false)
+    new SolrStreamIterator(shardUrl, SolrSupport.getHttpSolrClient(shardUrl), query)
   }
 
   @DeveloperApi
@@ -51,14 +65,19 @@ class SolrRDD(
 
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
+        val query = partition.query
         log.info("Using the shard url " + url + " for getting partition data")
-        val streamingIterator = new StreamingResultsIterator(
-          SolrSupport.getHttpSolrClient(url),
-          partition.query,
-          partition.cursorMark)
+        val streamingIterator =
+          if (useExportHandler)
+            getExportHandlerBasedIterator(url, query)
+          else
+            new StreamingResultsIterator(
+              SolrSupport.getHttpSolrClient(url),
+              partition.query,
+              partition.cursorMark)
 
         context.addTaskCompletionListener { (context) =>
-          log.info(f"Fetched ${streamingIterator.getNumDocs} rows from shard $url for partition ${split.index}")
+          log.info(f"Fetched rows from shard $url for partition ${split.index}") // SolrStreamIterator needs to store
         }
         JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
 
