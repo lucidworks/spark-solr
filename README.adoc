@@ -12,6 +12,10 @@ This project includes tools for reading data from Solr as a Spark RDD and indexi
 // end::features[]
 // tag::spark-build[]
 
+== Availability on Maven Central
+
+* All releases (Since 1.1.2) will be available on http://search.maven.org/#search%7Cga%7C1%7Cspark-solr[Maven Central].
+
 == Build the Jars
 First, build the Jar for this project:
 
@@ -133,7 +137,7 @@ scala> tweets.printSchema()
  |-- createdAt_tdt: timestamp (nullable = true)
  |-- currentUserRetweetId_l: long (nullable = true)
  |-- favorited_b: boolean (nullable = true)
- |-- id: string (nullable = true)
+ |-- id: string (nullable = false)
  |-- id_l: long (nullable = true)
  ...
 ----
@@ -242,27 +246,74 @@ option("query.splits.per.shard","4")
 
 Keep in mind that this is only a hint to the split calculator and you may end up with a slightly different number of splits than what was requested.
 
-=== parallel_shards
-
-By default, each shard in your collection is read independently in different Spark tasks, which means your Spark job will not see rows in global sort order. This will not work for top N type queries where you need results sorted by Solr across all shards.
-
-You can set the "parallel_shards" option to "false" to disable this feature to support top N style queries, however, that will reduce read performance in your Spark job, so use it wisely.
-
 // end::tuning[]
 // tag::solr-read[]
 
-== Reading data from Solr as a Spark RDD
+=== escape_fieldnames
 
-The `com.lucidworks.spark.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
+The "escape_fieldnames" option will transform field names in Solr. Any dots ('.') inside the field name are replaced with '_'
 
 [source]
-SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
-JavaRDD<SolrDocument> solrJavaRDD = solrRDD.queryShards(solrQuery);
+option("escape_fieldnames", "true")
+
+=== splits
+
+The "splits" option will enable the parallelism by splitting on default field '_version_'.
+
+[source]
+option("splits", "true")
+
+The above option is equivalent to
+
+[source]
+option("split_field", "_version_")
+
+=== dv
+
+The "dv" option will fetch the doc values that are not stored.by using function queries.
+
+[source]
+option("dv", "true")
+
+Since 5.5.0 Solr will return non-stored docValues by default. This option is only needed for versions that are older than 5.5
+
+=== solr.
+
+The "solr." prefix option is used for providing arbitrary Solr query parameters.
+
+[source]
+option("solr.defType", "edismax")
+
+The options provided with this prefix have precedence over other options 'fields', 'query', 'rows'
+
+== Reading data from Solr as a Spark RDD
+
+The `com.lucidworks.spark.rdd.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
+
+=== Scala:
+
+[source]
+import com.lucidworks.spark.rdd.SolrRDD
+val solrRDD = new SolrRDD(zkHost, collection, sc)
+val words = solrRDD.flatMap(doc => {
+  val tweet = doc.get("text_t")
+  var tweetStr = if (tweet != null) tweet.toString() else ""
+  tweetStr = tweetStr.toLowerCase().replaceAll("[.,!?\n]", " ")
+  tweetStr.split(" ")
+  })
+
+See `com.lucidworks.spark.example.query.WordCount` example for full code
+
+=== Java
+
+[source]
+SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
 
 Once you've converted the results in an RDD, you can use the Spark API to perform analytics against the data from Solr. For instance, the following code extracts terms from the tweet_s field of each document in the results:
 
 [source]
-JavaRDD<String> words = solrJavaRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {
+JavaRDD<String> words = resultsRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {
   public Iterable<String> call(SolrDocument doc) {
     Object tweet_s = doc.get("tweet_s");
     String str = tweet_s != null ? tweet_s.toString() : "";

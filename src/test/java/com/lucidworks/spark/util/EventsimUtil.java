@@ -2,30 +2,22 @@ package com.lucidworks.spark.util;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
-import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.spark.SparkException;
-import org.apache.spark.sql.types.StructType;
 import org.apache.spark.status.api.v1.NotFoundException;
-import org.noggit.JSONParser;
-import org.noggit.ObjectBuilder;
+import scala.None;
+import scala.Some;
+import scala.collection.JavaConversions;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.lucidworks.spark.util.SolrQuerySupport.getFieldTypes;
 
@@ -46,12 +38,12 @@ public class EventsimUtil {
     if (!schemaFile.exists())
       throw new NotFoundException("Could not find the schema file at path " + schemaPath);
 
-    CloudSolrClient solrClient = SolrSupport.getSolrClient(zkHost);
+    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
     solrClient.setDefaultCollection(collectionName);
     List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
     });
-
-    Map<String, SolrQuerySupport.SolrFieldMeta> fields = getFieldTypes(new String[]{}, SolrSupport.getSolrBaseUrl(zkHost), collectionName);
+    JavaConversions.asScalaSet(new HashSet<>());
+    Map<String, SolrFieldMeta> fields = JavaConversions.asJavaMap(getFieldTypes(JavaConversions.asScalaSet(new HashSet<>()).toSet(), SolrSupport.getSolrBaseUrl(zkHost), collectionName));
     Set<String> existingFields = fields.keySet();
 
     // Add the fields to Solr schema
@@ -86,10 +78,15 @@ public class EventsimUtil {
                                     .map(EventsimUtil::convertToSolrDocument)
                                     .collect(Collectors.toList());
 
-    CloudSolrClient solrClient = SolrSupport.getSolrClient(zkHost);
+    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
     solrClient.setDefaultCollection(collectionName);
     solrClient.add(docs);
     solrClient.commit();
+
+    long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply(null));
+    if (!(docsInSolr == 1000)) {
+      throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
+    }
 
  }
 
@@ -113,7 +110,7 @@ public class EventsimUtil {
         }
       }
 
-      doc.setField("id", UUID.randomUUID());
+      doc.setField("id", UUID.randomUUID().toString());
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

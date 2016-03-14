@@ -39,7 +39,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
     String fusionUrl = cli.getOptionValue("fusion");
     if (fusionUrl != null) {
       // just send JSON directly to Fusion
-      SolrSupport.sendDStreamOfDocsToFusion(fusionUrl, cli.getOptionValue("fusionCredentials"), tweets, batchSize);
+      SolrSupport.sendDStreamOfDocsToFusion(fusionUrl, cli.getOptionValue("fusionCredentials"), tweets.dstream(), batchSize);
     } else {
       // map incoming tweets into PipelineDocument objects for indexing in Solr
       JavaDStream<SolrInputDocument> docs = tweets.map(
@@ -50,8 +50,9 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
              */
             public SolrInputDocument call(Status status) {
 
-              if (log.isDebugEnabled())
+              if (log.isDebugEnabled()) {
                 log.debug("Received tweet: " + status.getId() + ": " + status.getText().replaceAll("\\s+", " "));
+              }
 
               // simple mapping from primitives to dynamic Solr fields using reflection
               SolrInputDocument doc =
@@ -59,13 +60,16 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
               doc.setField("provider_s", "twitter");
               doc.setField("author_s", status.getUser().getScreenName());
               doc.setField("type_s", status.isRetweet() ? "echo" : "post");
+
+              if (log.isDebugEnabled())
+                log.debug("Transformed document: " + doc.toString());
               return doc;
             }
           }
       );
 
       // when ready, send the docs into a SolrCloud cluster
-      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
+      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs.dstream());
     }
   }
 

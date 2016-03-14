@@ -37,7 +37,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     val fields = cli.getOptionValue("fields", "")
     if (!fields.isEmpty)
-      fields.split(",").foreach(solrQuery.addField(_))
+      fields.split(",").foreach(solrQuery.addField)
 
     solrQuery.addSort(new SolrQuery.SortClause("id", "asc"))
     solrQuery.setRows(rows)
@@ -46,21 +46,21 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
 
     var startMs: Long = System.currentTimeMillis
 
-    var count = solrRDD.queryShards(solrQuery, splitField, splitsPerShard).count()
+    var count = solrRDD.query(solrQuery).splitField(splitField).splitsPerShard(splitsPerShard).count()
 
     var tookMs: Long = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards with $splitsPerShard splits")
 
     // IMPORTANT: reload the collection to flush caches
     println(s"\nReloading collection $collection to flush caches!\n")
-    var cloudSolrClient = SolrSupport.getSolrServer(zkHost)
-    var req = new CollectionAdminRequest.Reload()
+    val cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val req = new CollectionAdminRequest.Reload()
     req.setCollectionName(collection)
     cloudSolrClient.request(req)
 
     startMs = System.currentTimeMillis
 
-    count = solrRDD.queryShards(solrQuery).count()
+    count = solrRDD.query(solrQuery).count()
 
     tookMs = System.currentTimeMillis - startMs
     println(s"\nTook $tookMs ms read $count docs using queryShards")

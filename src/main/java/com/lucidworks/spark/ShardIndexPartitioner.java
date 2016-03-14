@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * Partition using SolrCloud's sharding scheme.
  */
-public class ShardPartitioner extends Partitioner implements Serializable {
+public class ShardIndexPartitioner extends Partitioner implements Serializable {
 
   protected String zkHost;
   protected String collection;
@@ -24,11 +24,11 @@ public class ShardPartitioner extends Partitioner implements Serializable {
   protected transient DocCollection docCollection = null;
   protected transient Map<String,Integer> shardIndexCache = null;
 
-  public ShardPartitioner(String zkHost, String collection) {
+  public ShardIndexPartitioner(String zkHost, String collection) {
     this(zkHost, collection, "id");
   }
 
-  public ShardPartitioner(String zkHost, String collection, String idField) {
+  public ShardIndexPartitioner(String zkHost, String collection, String idField) {
     this.zkHost = zkHost;
     this.collection = collection;
     this.idField = idField;
@@ -107,7 +107,7 @@ public class ShardPartitioner extends Partitioner implements Serializable {
 
   protected final synchronized CloudSolrClient getCloudSolrServer() {
     if (cloudSolrServer == null)
-      cloudSolrServer = (CloudSolrClient) SolrSupport.getSolrServer(zkHost);
+      cloudSolrServer = SolrSupport.getCachedCloudClient(zkHost);
     return cloudSolrServer;
   }
 }

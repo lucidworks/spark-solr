@@ -18,13 +18,11 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.lucidworks.spark.example.events.EventsimIndexer;
+import com.lucidworks.spark.port.example.events.EventsimIndexer;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
-import com.lucidworks.spark.example.query.QueryBenchmark;
-import com.lucidworks.spark.example.query.ReadTermVectors;
-import com.lucidworks.spark.example.query.WordCount;
+import com.lucidworks.spark.example.query.*;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
