@@ -349,7 +349,8 @@ object SolrSupport extends Logging {
     else if ((classOf[java.lang.Float] == clazz) || (classOf[Float] == clazz)) return Some("_f")
     else if ((classOf[java.lang.Boolean] == clazz) || (classOf[Boolean] == clazz)) return Some("_b")
     else if (classOf[Date] == clazz) return Some("_tdt")
-    log.warn("failed to map class '" + clazz + "' to a known dynamic type")
+    if (log.isDebugEnabled)
+      log.debug("failed to map class '" + clazz + "' to a known dynamic type")
     None
   }
 
