@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipInputStream;
 
+import scala.collection.JavaConversions;
+
 public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
   
   public static Logger log = Logger.getLogger(Logs2SolrRDDProcessor.class);
@@ -49,14 +51,14 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
     jsc.binaryFiles(cli.getOptionValue("hdfsPath")).foreach(
       new VoidFunction<Tuple2<String, PortableDataStream>>() {
         public void call(Tuple2<String, PortableDataStream> t2) throws Exception {
-          final SolrClient solrServer = SolrSupport.getSolrServer(zkHost);
+          final SolrClient solrServer = SolrSupport.getCachedCloudClient(zkHost);
           List<SolrInputDocument> batch = new ArrayList<SolrInputDocument>(batchSize);
-          String path = t2._1;
+          String path = t2._1();
           BufferedReader br = null;
           String line = null;
           int lineNum = 0;
           try {
-            br = new BufferedReader(new InputStreamReader(openPortableDataStream(t2._2), "UTF-8"));
+            br = new BufferedReader(new InputStreamReader(openPortableDataStream(t2._2()), "UTF-8"));
             while ((line = br.readLine()) != null) {
               ++lineNum;
               SolrInputDocument doc = new SolrInputDocument();
@@ -65,13 +67,13 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
               doc.setField("line_t", line);
               batch.add(doc);
               if (batch.size() >= batchSize)
-                SolrSupport.sendBatchToSolr(solrServer, collection, batch);
+                SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.asScalaIterable(batch));
 
               if (lineNum % 10000 == 0)
                 log.info("Sent "+lineNum+" docs to Solr from "+path);
             }
             if (!batch.isEmpty())
-              SolrSupport.sendBatchToSolr(solrServer, collection, batch);
+              SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.asScalaIterable(batch));
           } catch (Exception exc) {
             log.error("Failed to read '" + path + "' due to: " + exc);
           } finally {
@@ -80,7 +82,7 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
                 br.close();
               } catch (Exception ignore) {}
             }
-            t2._2.close();
+            t2._2().close();
           }
         }
 

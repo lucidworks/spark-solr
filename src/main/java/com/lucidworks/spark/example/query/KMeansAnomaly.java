@@ -1,7 +1,9 @@
 package com.lucidworks.spark.example.query;
 
+import com.lucidworks.spark.rdd.SolrJavaRDD;
+import com.lucidworks.spark.util.ConfigurationConstants;
 import com.lucidworks.spark.util.SolrQuerySupport;
-import com.lucidworks.spark.util.SolrQuerySupport.PivotField;
+import com.lucidworks.spark.util.PivotField;
 import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
@@ -28,7 +30,7 @@ import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.lucidworks.spark.util.ConfigurationConstants.*;
+import com.lucidworks.spark.util.ConfigurationConstants.*;
 
 /**
  * Use K-means to do basic anomaly detection by examining user sessions
@@ -75,9 +77,9 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     options.put("zkhost", zkHost);
     options.put("collection", collection);
     options.put("query", queryStr);
-    options.put(SOLR_SPLIT_FIELD_PARAM, "_version_");
-    options.put(SOLR_SPLITS_PER_SHARD_PARAM, "4");
-    options.put(SOLR_FIELD_LIST_PARAM, "id,_version_,"+UID_FIELD+","+TS_FIELD+",bytes_s,response_s,verb_s");
+    options.put(ConfigurationConstants.SOLR_SPLIT_FIELD_PARAM(), "_version_");
+    options.put(ConfigurationConstants.SOLR_SPLITS_PER_SHARD_PARAM(), "4");
+    options.put(ConfigurationConstants.SOLR_FIELD_PARAM(), "id,_version_,"+UID_FIELD+","+TS_FIELD+",bytes_s,response_s,verb_s");
 
     // Use the Solr DataSource to load rows from a Solr collection using a query
     // highlights include:
@@ -98,8 +100,8 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     };
 
     // this "view" has the verb_s and response_s fields expanded into aggregatable
-    SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
-    DataFrame solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD, false);
+    SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+    DataFrame solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD.rdd(), false);
     // register this DataFrame so we can execute a SQL query against it for doing sessionization using lag window func
     solrDataWithPivots.registerTempTable("logs");
 
@@ -155,7 +157,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     options.put("collection", aggCollection);
     sessionsAgg.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
 
-    SolrSupport.getSolrServer(zkHost).commit(aggCollection);
+    SolrSupport.getCachedCloudClient(zkHost).commit(aggCollection);
 
     // k-means clustering for finding anomalies
     

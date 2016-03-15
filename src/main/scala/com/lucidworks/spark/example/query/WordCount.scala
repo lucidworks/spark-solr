@@ -25,7 +25,7 @@ class WordCount extends RDDProcessor{
     Option.builder()
           .argName("QUERY")
           .longOpt("query")
-          .hasArg()
+          .hasArg
           .required(false)
           .desc("URL encoded Solr query to send to Solr")
           .build()
@@ -39,10 +39,9 @@ class WordCount extends RDDProcessor{
 
     val sc = SparkContext.getOrCreate(conf)
     val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
-    val solrQuery: SolrQuery = SolrQuerySupport.toQuery(queryStr)
-    val rdd: RDD[SolrDocument]  = solrRDD.queryShards(solrQuery).rdd
+    val rdd: RDD[SolrDocument]  = solrRDD.query(queryStr)
 
-    val words: RDD[String] = rdd.map(doc => scala.Option.apply(doc.get("text_t")).getOrElse("").toString)
+    val words: RDD[String] = rdd.map(doc => if (doc.containsKey("text_t")) doc.get("text_t").toString else "")
     val pWords: RDD[String] = words.flatMap(s => s.toLowerCase.replaceAll("[.,!?\n]", " ").trim().split(" "))
 
     val wordsCountPairs: RDD[(String, Int)] = pWords.map(s => (s, 1))

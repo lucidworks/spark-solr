@@ -7,6 +7,7 @@ import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocumentList;
+import scala.Option;
 
 import java.util.Iterator;
 import java.util.List;
@@ -58,7 +59,9 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
     if (!hasNext && closeAfterIterating) {
       try {
         solrServer.shutdown();
-      } catch (Exception exc) {}
+      } catch (Exception exc) {
+        exc.printStackTrace();
+      }
     }
     return hasNext;
   }
@@ -70,14 +73,19 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
 
   protected List<T> fetchNextPage() throws SolrServerException {
     int start = (cursorMark != null) ? 0 : getStartForNextPage();
-    QueryResponse resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMark);
-    if (cursorMark != null)
-      cursorMark = resp.getNextCursorMark();
+    Option<QueryResponse> resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMark);
+    if (resp.isDefined()) {
+      if (cursorMark != null)
+        cursorMark = resp.get().getNextCursorMark();
 
-    iterPos = 0;
-    SolrDocumentList docs = resp.getResults();
-    totalDocs = docs.getNumFound();
-    return processQueryResponse(resp);
+      iterPos = 0;
+      SolrDocumentList docs = resp.get().getResults();
+      totalDocs = docs.getNumFound();
+      return processQueryResponse(resp.get());
+    } else {
+      throw new SolrServerException("Found None Query response");
+    }
+
   }
 
   protected abstract List<T> processQueryResponse(QueryResponse resp);

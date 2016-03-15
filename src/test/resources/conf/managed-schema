@@ -2,7 +2,9 @@
 <schema name="example" version="1.5">
   <field name="_version_" type="long" indexed="true" stored="true"/>
   <field name="_root_" type="string" indexed="true" stored="false"/>
-  <field name="id" type="string" indexed="true" stored="true" required="true"/> 
+  <field name="id" type="string" indexed="true" stored="true" required="true"/>
+  <field name="_raw_content_" type="binary" multiValued="false" indexed="false" required="false" stored="true"/>
+  <field name="images" type="binary" multiValued="true" indexed="false" required="false" stored="true"/>
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
@@ -23,4 +25,5 @@
   <fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0"/>
   <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
   <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0"/>
+  <fieldType name="binary" class="solr.BinaryField"/>
 </schema>

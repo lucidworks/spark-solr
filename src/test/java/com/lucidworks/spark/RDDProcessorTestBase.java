@@ -1,5 +1,6 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.common.SolrDocument;
@@ -21,9 +22,13 @@ import static org.junit.Assert.assertTrue;
 /**
  * Base class for testing RDDProcessor implementations.
  */
-public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable {
+public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable{
 
   protected static transient JavaSparkContext jsc;
+
+  public JavaSparkContext getJsc() {
+    return jsc;
+  }
 
   @BeforeClass
   public static void setupJavaSparkContext() {
@@ -70,7 +75,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
       int numDocsIndexed = indexDocs(zkHost, collection, inputDocs);
       Thread.sleep(1000L);
       // verify docs got indexed ... relies on soft auto-commits firing frequently
-      SolrRDD solrRDD = new SolrRDD(zkHost, collection, jsc.sc());
+      SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
       JavaRDD<SolrDocument> resultsRDD = solrRDD.query("*:*");
       long numFound = resultsRDD.count();
       assertTrue("expected " + numDocsIndexed + " docs in query results from " + collection + ", but got " + numFound,
@@ -109,7 +114,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
         return doc;
       }
     });
-    SolrSupport.indexDocs(zkHost, collection, 1, docs);
+    SolrSupport.indexDocs(zkHost, collection, 1000, docs.rdd());
     return inputDocs.length;
   }
 }

@@ -4,22 +4,19 @@ import com.lucidworks.spark.RDDProcessorTestBase;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSchemaUtil;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.types.StructType;
-import org.junit.Ignore;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 import static org.junit.Assert.*;
-import static com.lucidworks.spark.util.SolrQuerySupport.*;
+import com.lucidworks.spark.util.QueryResultsIterator;
 
 public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
 
@@ -56,7 +53,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
           long sleepMs = random.nextInt(10) * 10L;
           try {
             Thread.sleep(sleepMs);
-          } catch (Exception exc) {}
+          } catch (Exception exc) { exc.printStackTrace(); }
 
           if (i % 10 == 0)
             System.out.println("sendDocsThread has sent "+(i+1)+" docs so far ...");
@@ -76,7 +73,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
     Thread.sleep(2000);
 
     String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, testCollection);
-    StructType schema = SolrSchemaUtil.getBaseSchema(zkHost, testCollection, false);
+    StructType schema = SolrSchemaUtil.getBaseSchema(zkHost, testCollection, false, true);
     //StreamingResultsIterator sri = new StreamingResultsIterator(cloudSolrClient, solrQuery, "*");
     QueryResultsIterator sri = new QueryResultsIterator(cloudSolrClient, solrQuery, "*") ;
     int numDocsFound = 0;
@@ -95,7 +92,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
       long sleepMs = random.nextInt(10) * 5L;
       try {
         Thread.sleep(sleepMs);
-      } catch (Exception exc) {}
+      } catch (Exception exc) { exc.printStackTrace(); }
     }
 
     try {

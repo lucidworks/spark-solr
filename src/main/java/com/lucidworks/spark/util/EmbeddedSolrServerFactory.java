@@ -51,7 +51,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   private EmbeddedSolrServer bootstrapEmbeddedSolrServer(String zkHost, String collection) throws Exception {
 
-    CloudSolrClient cloudClient = (CloudSolrClient)SolrSupport.getSolrServer(zkHost);
+    CloudSolrClient cloudClient = SolrSupport.getCachedCloudClient(zkHost);
     cloudClient.connect();
 
     ZkStateReader zkStateReader = cloudClient.getZkStateReader();
@@ -125,12 +125,16 @@ public class EmbeddedSolrServerFactory implements Serializable {
       if (isr != null) {
         try {
           isr.close();
-        } catch (Exception ignoreMe){}
+        } catch (Exception ignoreMe){
+          ignoreMe.printStackTrace();
+        }
       }
       if (osw != null) {
         try {
           osw.close();
-        } catch (Exception ignoreMe){}
+        } catch (Exception ignoreMe){
+          ignoreMe.printStackTrace();
+        }
       }
     }
     return destFile;

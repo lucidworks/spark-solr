@@ -4,7 +4,6 @@ import com.lucidworks.spark.SparkApp;
 import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformer;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
@@ -39,25 +38,25 @@ public class MLPipeline implements SparkApp.RDDProcessor {
 
   @Override
   public Option[] getOptions() {
-    return new Option[]{
-        OptionBuilder
-            .withArgName("QUERY")
+    return new Option[] {
+      Option.builder()
             .hasArg()
-            .isRequired(false)
-            .withDescription("Query to identify documents in the training set")
-            .create("query"),
-        OptionBuilder
-            .withArgName("FIELD")
+            .required(false)
+            .desc("Query to identify documents in the training set")
+            .longOpt("query")
+            .build(),
+      Option.builder()
             .hasArg()
-            .isRequired(false)
-            .withDescription("Field in Solr containing the label for each document in the training set")
-            .create("labelField"),
-        OptionBuilder
-            .withArgName("FIELDS")
+            .required(false)
+            .desc("Field in Solr containing the label for each document in the training set")
+            .longOpt("labelField")
+            .build(),
+      Option.builder()
             .hasArg()
-            .isRequired(false)
-            .withDescription("Comma-separated list of field(s) in Solr containing the text content for each document in the training set")
-            .create("contentFields")
+            .required(false)
+            .desc("Comma-separated list of field(s) in Solr containing the text content for each document in the training set")
+            .longOpt("contentFields")
+            .build()
     };
   }
 
@@ -67,11 +66,11 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     JavaSparkContext jsc = new JavaSparkContext(conf);
     SQLContext sqlContext = new SQLContext(jsc);
 
-    String zkHost = cli.getOptionValue("zkHost", "localhost:2181/fusion21");
+    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
     String collection = cli.getOptionValue("collection", "ml20news");
-    String queryStr = cli.getOptionValue("query", "content_txt_en:[* TO *] AND newsgroup_s:[* TO *]");
+    String queryStr = cli.getOptionValue("query", "content_txt:[* TO *] AND newsgroup_s:[* TO *]");
     final String labelField = cli.getOptionValue("labelField", "newsgroup_s");
-    final String contentFields = cli.getOptionValue("contentFields", "content_txt_en,Subject_txt_en");
+    final String contentFields = cli.getOptionValue("contentFields", "content_txt,subject");
 
     Map<String, String> options = new HashMap<>();
     options.put("zkhost", zkHost);
@@ -143,7 +142,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // analyzer.analysisSchema, and both possibilities for analyzer.prefixTokensWithInputCol.
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
     ParamMap[] paramGrid = new ParamGridBuilder()
-        .addGrid(hashingTF.numFeatures(), new int[]{1000, 10000, 20000})
+        .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000}) // this is just an example ... keep it fast
         .addGrid(lr.regParam(), new double[]{0.1, 0.01})
         .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
         .addGrid(analyzer.prefixTokensWithInputCol())
