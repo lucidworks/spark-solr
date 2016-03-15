@@ -6,18 +6,18 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
+import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.status.api.v1.NotFoundException;
-import scala.None;
-import scala.Some;
 import scala.collection.JavaConversions;
+import scala.collection.immutable.Set$;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.util.*;
-import java.util.stream.Collectors;
 
 import static com.lucidworks.spark.util.SolrQuerySupport.getFieldTypes;
 
@@ -43,7 +43,10 @@ public class EventsimUtil {
     List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
     });
     JavaConversions.asScalaSet(new HashSet<>());
-    Map<String, SolrFieldMeta> fields = JavaConversions.asJavaMap(getFieldTypes(JavaConversions.asScalaSet(new HashSet<>()).toSet(), SolrSupport.getSolrBaseUrl(zkHost), collectionName));
+    Map<String, SolrFieldMeta> fields = JavaConversions.asJavaMap(getFieldTypes(
+      Set$.MODULE$.<String>empty(),
+      SolrSupport.getSolrBaseUrl(zkHost),
+      collectionName));
     Set<String> existingFields = fields.keySet();
 
     // Add the fields to Solr schema
@@ -59,6 +62,8 @@ public class EventsimUtil {
         if (updateResponse.getResponse().asMap(5).containsKey("errors"))
           throw new Exception("Errors from schema request: " + updateResponse.getResponse().get("errors").toString());
         log.info("Added field definition: " + fd.toString());
+      } else {
+        log.info("Field '" + name + "' already exists");
       }
     }
   }
@@ -74,21 +79,29 @@ public class EventsimUtil {
       throw new FileNotFoundException("File not found at path '" + datasetPath + "'");
 
     // Convert the eventsim data to valid SolrDocument
-    List<SolrInputDocument> docs = Files.lines(eventsimFile.toPath())
-                                    .map(EventsimUtil::convertToSolrDocument)
-                                    .collect(Collectors.toList());
+    List<String> lines = Files.readAllLines(eventsimFile.toPath(), Charset.defaultCharset());
+    List<SolrInputDocument> docs = new ArrayList<SolrInputDocument>();
+    for (String line: lines) {
+      docs.add(convertToSolrDocument(line));
+    }
 
     CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
-    solrClient.setDefaultCollection(collectionName);
-    solrClient.add(docs);
-    solrClient.commit();
 
-    long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply(null));
+    log.info("Indexing eventsim documents from file " + eventsimFile.getAbsolutePath());
+    scala.collection.immutable.Map<String, SolrFieldMeta> types = SolrQuerySupport.getFieldTypes(Set$.MODULE$.<String>empty(), SolrSupport.getSolrBaseUrl(zkHost), collectionName);
+    log.info("Existing fields in the collection '" + collectionName + "':  " + types.toString());
+    validateStatusCode(solrClient.add(collectionName, docs));
+    validateStatusCode(solrClient.commit());
+    long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply((SolrQuery) null));
     if (!(docsInSolr == 1000)) {
       throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
     }
+  }
 
- }
+  private static void validateStatusCode(UpdateResponse resp) throws Exception {
+    if (resp.getStatus() != 0)
+      throw new Exception("Bad status code reported from Solr response during a commit: "  + resp.toString());
+  }
 
   private static SolrInputDocument convertToSolrDocument(String line) {
     SolrInputDocument doc = new SolrInputDocument();

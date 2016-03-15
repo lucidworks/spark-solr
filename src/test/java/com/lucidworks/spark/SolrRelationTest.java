@@ -14,6 +14,7 @@ import org.junit.Test;
 
 import org.apache.spark.sql.functions;
 
+import javax.xml.bind.DatatypeConverter;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -77,9 +78,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       SolrInputDocument doc = new SolrInputDocument();
       doc.setField("id", "flatten-1");
       byte[] rawContentBytes = "this is the value of the _raw_content_ field".getBytes(StandardCharsets.UTF_8);
-      doc.setField("_raw_content_", Base64.getEncoder().encodeToString(rawContentBytes));
+      doc.setField("_raw_content_", DatatypeConverter.printBase64Binary(rawContentBytes));
       byte[] imagesBytes = "this is the value of the images field".getBytes(StandardCharsets.UTF_8);
-      doc.addField("images", Base64.getEncoder().encodeToString(imagesBytes));
+      doc.addField("images", DatatypeConverter.printBase64Binary(imagesBytes));
       doc.addField("ts_tdts", now);
       cloudSolrServer.add(testCollection, doc);
       cloudSolrServer.commit(testCollection);

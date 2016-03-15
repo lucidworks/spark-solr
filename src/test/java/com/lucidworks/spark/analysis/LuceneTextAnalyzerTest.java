@@ -81,7 +81,7 @@ public class LuceneTextAnalyzerTest {
     LuceneTextAnalyzer analyzer1 = new LuceneTextAnalyzer(schema1);
 
     assertExpectedTokens(analyzer1, "Test for 9983, tokenization.", Collections.singletonList("9983"));
-    assertExpectedTokens(analyzer1, "Te,st. punct", Collections.emptyList());
+    assertExpectedTokens(analyzer1, "Te,st. punct", Collections.<String>emptyList());
 
     String schema2 = json("{\n" +
         "'analyzers': [{\n" +
@@ -258,19 +258,19 @@ public class LuceneTextAnalyzerTest {
   @Test
   public void testMissingValues() {
     LuceneTextAnalyzer analyzer = new LuceneTextAnalyzer(stdTokLowerSchema);
-    assertExpectedTokens(analyzer, (String)null, Collections.emptyList());
-    assertExpectedTokens(analyzer, "", Collections.emptyList());
+    assertExpectedTokens(analyzer, (String) null, Collections.<String>emptyList());
+    assertExpectedTokens(analyzer, "", Collections.<String>emptyList());
     assertExpectedTokens(analyzer, Arrays.asList(null, "Harold's not around.", null, "The dog's nose KNOWS!", ""),
         Arrays.asList("harold's", "not", "around", "the", "dog's", "nose", "knows"));
 
     Map<String,String> fieldValues = new HashMap<>();
     Map<String,List<String>> expected = new HashMap<>();
     fieldValues.put("one", "");
-    expected.put("one", Collections.emptyList());
+    expected.put("one", Collections.<String>emptyList());
     fieldValues.put("two", "The dog's nose KNOWS!");
     expected.put("two", Arrays.asList("the", "dog's", "nose", "knows"));
     fieldValues.put("three", null);
-    expected.put("three", Collections.emptyList());
+    expected.put("three", Collections.<String>emptyList());
 
     assertExpectedTokens(analyzer, fieldValues, expected);
   }

@@ -274,18 +274,19 @@ object SolrSupport extends Logging {
     }
 
     if (props.isDefined) {
-      props.get.foreach(pd => {
+      for (pd <- props.get) {
         val propName  = pd.getName
         breakable {
           if ("class".equals(propName) || fields.contains(propName)) break()
           else {
             val readMethod = pd.getReadMethod
+            readMethod.setAccessible(true);
             if (readMethod != null) {
               var value: Option[Object] = None
               try {
                 value = Some(readMethod.invoke(obj))
               } catch {
-                case e: Exception => log.debug("failed to invoke read method for property '" + pd.getName + "' on " +
+                case e: Exception => log.warn("failed to invoke read method for property '" + pd.getName + "' on " +
                   "object of type '" + objClass.getName + "' due to: " + e)
               }
 
@@ -298,8 +299,7 @@ object SolrSupport extends Logging {
             }
           }
         }
-
-      })
+      }
     }
     doc
   }
