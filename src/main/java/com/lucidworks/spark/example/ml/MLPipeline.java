@@ -8,7 +8,9 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
+import org.apache.spark.ml.Transformer;
 import org.apache.spark.ml.classification.LogisticRegression;
+import org.apache.spark.ml.classification.NaiveBayes;
 import org.apache.spark.ml.classification.OneVsRest;
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.feature.*;
@@ -56,6 +58,18 @@ public class MLPipeline implements SparkApp.RDDProcessor {
             .required(false)
             .desc("Comma-separated list of field(s) in Solr containing the text content for each document in the training set")
             .longOpt("contentFields")
+            .build(),
+      Option.builder()
+            .hasArg()
+            .required(false)
+            .desc("Classifier type: either NaiveBayes or LogisticRegression")
+            .longOpt("classifier")
+            .build(),
+      Option.builder()
+            .hasArg()
+            .required(false)
+            .desc("Use Lucene analyzer")
+            .longOpt("useLucene")
             .build()
     };
   }
@@ -94,31 +108,51 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     for (int i = 0 ; i < inputCols.length ; ++i) {
       inputCols[i] = inputCols[i].trim();
     }
-    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
-        .setInputCols(inputCols)
-        .setOutputCol("words");
+
+    Transformer textAnalysis = null;
     String whitespaceTokSchema = json(
-        "{ 'analyzers': [{ 'name': 'ws_tok', 'tokenizer': { 'type': 'whitespace' }}],\n" +
-        "'fields': [{ 'regex': '.+', 'analyzer': 'ws_tok' }]}\n");
+            "{ 'analyzers': [{ 'name': 'ws_tok', 'tokenizer': { 'type': 'whitespace' }}],\n" +
+                    "'fields': [{ 'regex': '.+', 'analyzer': 'ws_tok' }]}\n");
     String stdTokLowerSchema = json(
-        "{ 'analyzers': [{ 'name': 'std_tok_lower', 'tokenizer': { 'type': 'standard' },\n" +
-        "                'filters': [{ 'type': 'lowercase' }]}],\n" +
-        "  'fields': [{ 'regex': '.+', 'analyzer': 'std_tok_lower' }]}\n");
+            "{ 'analyzers': [{ 'name': 'std_tok_lower', 'tokenizer': { 'type': 'standard' },\n" +
+                    "                'filters': [{ 'type': 'lowercase' }]}],\n" +
+                    "  'fields': [{ 'regex': '.+', 'analyzer': 'std_tok_lower' }]}\n");
     List<String> analysisSchemas = Arrays.asList(whitespaceTokSchema, stdTokLowerSchema);
+
+    boolean useLucene = "true".equals(cli.getOptionValue("useLucene", "false"));
+    if (useLucene) {
+      LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
+              .setInputCols(inputCols)
+              .setOutputCol("words");
+      textAnalysis = analyzer;
+    } else {
+      Tokenizer tokenizer =
+              new Tokenizer().setInputCol(contentFields).setOutputCol("words");
+      textAnalysis = tokenizer;
+    }
 
     // Vectorize!
     HashingTF hashingTF = new HashingTF()
-        .setInputCol(analyzer.getOutputCol())
+        .setInputCol("words")
         .setOutputCol("features");
 
     // ML pipelines don't provide stages for all algorithms yet, such as NaiveBayes?
+    PipelineStage estimatorStage = null;
 
-    LogisticRegression lr = new LogisticRegression()
-        .setMaxIter(10);
+    if ("NaiveBayes".equals(cli.getOptionValue("classifier", "LogisticRegression"))) {
+      NaiveBayes nb = new NaiveBayes();
+      estimatorStage = nb;
+    } else {
+      LogisticRegression lr = new LogisticRegression().setMaxIter(10);
 
-    // to support 20 newsgroups
-    OneVsRest ovr = new OneVsRest().setClassifier(lr);
-    ovr.setLabelCol("label");
+      // to support 20 newsgroups
+      OneVsRest ovr = new OneVsRest().setClassifier(lr);
+      ovr.setLabelCol("label");
+
+      estimatorStage = ovr;
+    }
+
+    System.out.println("Using estimator: "+estimatorStage);
 
     IndexToString labelConverter = new IndexToString()
         .setInputCol("prediction")
@@ -126,7 +160,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
         .setLabels(labelIndexer.labels());
 
     Pipeline pipeline = new Pipeline()
-        .setStages(new PipelineStage[]{labelIndexer, analyzer, hashingTF, ovr, labelConverter});
+        .setStages(new PipelineStage[]{labelIndexer, textAnalysis, hashingTF, estimatorStage, labelConverter});
 
     DataFrame[] splits = solrData.randomSplit(new double[] {0.7, 0.3});
     DataFrame trainingData = splits[0];
@@ -141,24 +175,43 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // with 3 values for hashingTF.numFeatures, 2 values for lr.regParam, 2 values for
     // analyzer.analysisSchema, and both possibilities for analyzer.prefixTokensWithInputCol.
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
-    ParamMap[] paramGrid = new ParamGridBuilder()
-        .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000}) // this is just an example ... keep it fast
-        .addGrid(lr.regParam(), new double[]{0.1, 0.01})
-        .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
-        .addGrid(analyzer.prefixTokensWithInputCol())
-        .build();
+    ParamGridBuilder paramGridBuilder = new ParamGridBuilder()
+        .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000}); // this is just an example ... keep it fast
+
+    if (useLucene) {
+      LuceneTextAnalyzerTransformer analyzer = (LuceneTextAnalyzerTransformer)textAnalysis;
+      paramGridBuilder.addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
+              .addGrid(analyzer.prefixTokensWithInputCol());
+    }
+
+    if (estimatorStage instanceof LogisticRegression) {
+      LogisticRegression lr = (LogisticRegression)estimatorStage;
+      paramGridBuilder.addGrid(lr.regParam(), new double[]{0.1, 0.01});
+    } else if (estimatorStage instanceof NaiveBayes) {
+      NaiveBayes nb = (NaiveBayes)estimatorStage;
+      paramGridBuilder.addGrid(nb.smoothing(), new double[]{1.0, 0.5});
+    }
+
+    ParamMap[] paramGrid = paramGridBuilder.build();
 
     // We now treat the Pipeline as an Estimator, wrapping it in a CrossValidator instance.
     // This will allow us to jointly choose parameters for all Pipeline stages.
     // A CrossValidator requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
     CrossValidator cv = new CrossValidator()
-        .setEstimator(pipeline)
+            .setEstimator(pipeline)
         .setEvaluator(evaluator)
         .setEstimatorParamMaps(paramGrid)
         .setNumFolds(3); // Use 3+ in practice
 
     CrossValidatorModel cvModel = cv.fit(trainingData);
     System.out.println("Best model params: " + Arrays.toString(cvModel.bestModel().params()));
+
+    // save it to disk
+    cvModel.write().overwrite().save("ml-pipeline-model");
+
+    // read it off disk
+    cvModel = CrossValidatorModel.load("ml-pipeline-model");
+
     DataFrame predictions = cvModel.transform(testData);
     predictions.cache();
 
