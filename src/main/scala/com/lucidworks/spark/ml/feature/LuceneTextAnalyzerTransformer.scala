@@ -19,18 +19,17 @@ package com.lucidworks.spark.ml.feature
 
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper}
 import org.apache.spark.Logging
-import org.apache.spark.ml.HasInputColsTransformer
+import org.apache.spark.ml.{TransformerParamsReader, HasInputColsTransformer}
 import org.apache.spark.ml.param.Param
 import org.apache.spark.sql.types.ArrayType
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, DataFrame}
 import org.apache.spark.sql.functions._
-import org.apache.spark.annotation.Experimental
+import org.apache.spark.annotation.{Since, Experimental}
 import org.apache.spark.ml.param._
-import org.apache.spark.ml.util.Identifiable
+import org.apache.spark.ml.util._
 import org.apache.spark.sql.types._
 
 import java.io.{PrintWriter, StringWriter}
@@ -38,13 +37,13 @@ import java.io.{PrintWriter, StringWriter}
 import scala.util.control.NonFatal
 
 
-/** Specify an analysis schema as a JSON string to build a custom Lucene analyzer, which
-  * transforms the input column(s) into a sequence of tokens in the output column.
-  * See [[LuceneTextAnalyzer]] for a description of the schema format.
-  */
+/**
+ * Specify an analysis schema as a JSON string to build a custom Lucene analyzer, which
+ * transforms the input column(s) into a sequence of tokens in the output column.
+ * See [[LuceneTextAnalyzer]] for a description of the schema format.
+ */
 @Experimental
-class LuceneTextAnalyzerTransformer(override val uid: String)
-  extends HasInputColsTransformer with Logging {
+class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputColsTransformer with Logging with MLWritable {
   def this() = this(Identifiable.randomUID("LuceneAnalyzer"))
 
   /** @group setParam */
@@ -189,8 +188,11 @@ class LuceneTextAnalyzerTransformer(override val uid: String)
     }
   }
 }
-private object LuceneTextAnalyzerTransformer {
+
+object LuceneTextAnalyzerTransformer extends MLReadable[LuceneTextAnalyzerTransformer] {
   /** Used to separate the input column name and the token when prefixTokensWithInputCol = true */
   val OutputTokenSeparator = "="
+
+  override def read: MLReader[LuceneTextAnalyzerTransformer] = new TransformerParamsReader
 }
 

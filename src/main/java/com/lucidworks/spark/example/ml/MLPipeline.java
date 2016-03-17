@@ -8,7 +8,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
-import org.apache.spark.ml.Transformer;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.NaiveBayes;
 import org.apache.spark.ml.classification.OneVsRest;
@@ -68,8 +67,8 @@ public class MLPipeline implements SparkApp.RDDProcessor {
       Option.builder()
             .hasArg()
             .required(false)
-            .desc("Use Lucene analyzer")
-            .longOpt("useLucene")
+            .desc("Fraction (0 to 1) of full dataset to sample from Solr, default is 1")
+            .longOpt("sample")
             .build()
     };
   }
@@ -92,7 +91,9 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     options.put("query", queryStr);
     options.put("fields", "id," + labelField + "," + contentFields);
 
+    double sampleFraction = Double.parseDouble(cli.getOptionValue("sample", "1.0"));
     DataFrame solrData = sqlContext.read().format("solr").options(options).load();
+    solrData = solrData.sample(false, sampleFraction);
 
     // Configure an ML pipeline, which consists of the following stages:
     // index string labels, analyzer, hashingTF, classifier model, convert predictions to string labels.
@@ -109,7 +110,6 @@ public class MLPipeline implements SparkApp.RDDProcessor {
       inputCols[i] = inputCols[i].trim();
     }
 
-    Transformer textAnalysis = null;
     String whitespaceTokSchema = json(
             "{ 'analyzers': [{ 'name': 'ws_tok', 'tokenizer': { 'type': 'whitespace' }}],\n" +
                     "'fields': [{ 'regex': '.+', 'analyzer': 'ws_tok' }]}\n");
@@ -119,17 +119,9 @@ public class MLPipeline implements SparkApp.RDDProcessor {
                     "  'fields': [{ 'regex': '.+', 'analyzer': 'std_tok_lower' }]}\n");
     List<String> analysisSchemas = Arrays.asList(whitespaceTokSchema, stdTokLowerSchema);
 
-    boolean useLucene = "true".equals(cli.getOptionValue("useLucene", "false"));
-    if (useLucene) {
-      LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
-              .setInputCols(inputCols)
-              .setOutputCol("words");
-      textAnalysis = analyzer;
-    } else {
-      Tokenizer tokenizer =
-              new Tokenizer().setInputCol(contentFields).setOutputCol("words");
-      textAnalysis = tokenizer;
-    }
+    LuceneTextAnalyzerTransformer analyzer = new LuceneTextAnalyzerTransformer()
+            .setInputCols(inputCols)
+            .setOutputCol("words");
 
     // Vectorize!
     HashingTF hashingTF = new HashingTF()
@@ -160,7 +152,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
         .setLabels(labelIndexer.labels());
 
     Pipeline pipeline = new Pipeline()
-        .setStages(new PipelineStage[]{labelIndexer, textAnalysis, hashingTF, estimatorStage, labelConverter});
+        .setStages(new PipelineStage[]{labelIndexer, analyzer, hashingTF, estimatorStage, labelConverter});
 
     DataFrame[] splits = solrData.randomSplit(new double[] {0.7, 0.3});
     DataFrame trainingData = splits[0];
@@ -176,13 +168,9 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // analyzer.analysisSchema, and both possibilities for analyzer.prefixTokensWithInputCol.
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
     ParamGridBuilder paramGridBuilder = new ParamGridBuilder()
-        .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000}); // this is just an example ... keep it fast
-
-    if (useLucene) {
-      LuceneTextAnalyzerTransformer analyzer = (LuceneTextAnalyzerTransformer)textAnalysis;
-      paramGridBuilder.addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
-              .addGrid(analyzer.prefixTokensWithInputCol());
-    }
+        .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000})
+        .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
+        .addGrid(analyzer.prefixTokensWithInputCol());
 
     if (estimatorStage instanceof LogisticRegression) {
       LogisticRegression lr = (LogisticRegression)estimatorStage;
@@ -198,7 +186,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // This will allow us to jointly choose parameters for all Pipeline stages.
     // A CrossValidator requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
     CrossValidator cv = new CrossValidator()
-            .setEstimator(pipeline)
+        .setEstimator(pipeline)
         .setEvaluator(evaluator)
         .setEstimatorParamMaps(paramGrid)
         .setNumFolds(3); // Use 3+ in practice
