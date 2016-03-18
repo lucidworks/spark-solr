@@ -32,6 +32,8 @@ public class UseML implements SparkApp.RDDProcessor {
 
     long startMs = System.currentTimeMillis();
 
+    conf.set("spark.ui.enabled", "false");
+
     JavaSparkContext jsc = new JavaSparkContext(conf);
     SQLContext sqlContext = new SQLContext(jsc);
 
