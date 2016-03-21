@@ -145,19 +145,21 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
       throws IOException, SolrServerException
   {
     FieldStatsInfo fsi = getFieldStatsInfo(solrClient, shardUrl, query, splitFieldName);
-    if (fsi.getMin() == null || fsi.getMax() == null) {
-      throw new IllegalStateException("No min/max for " + splitFieldName +
-          "! Check your Solr index to verify if "+splitFieldName+" has values.");
-    }
-    log.info("Using stats: " + fsi);
+    if (fsi.getCount() > 0) {
+      if (fsi.getMin() == null || fsi.getMax() == null) {
+        throw new IllegalStateException("No min/max for " + splitFieldName +
+                "! Check your Solr index to verify if " + splitFieldName + " has values.");
+      }
+      log.info("Using stats: " + fsi);
 
-    // we just build a single big split and then call resplit on it
-    ShardSplit firstSplit =
-        createShardSplit(query, shardUrl, splitFieldName, fsi, null, null);
-    long numHits = fsi.getCount();
-    firstSplit.setNumHits(numHits);
-    long docsPerSplit = Math.round(numHits / splitsPerShard);
-    splits.addAll(reSplit(solrClient, firstSplit, docsPerSplit, fsi));
+      // we just build a single big split and then call resplit on it
+      ShardSplit firstSplit =
+              createShardSplit(query, shardUrl, splitFieldName, fsi, null, null);
+      long numHits = fsi.getCount();
+      firstSplit.setNumHits(numHits);
+      long docsPerSplit = Math.round(numHits / splitsPerShard);
+      splits.addAll(reSplit(solrClient, firstSplit, docsPerSplit, fsi));
+    }
     return fsi;
   }
 
