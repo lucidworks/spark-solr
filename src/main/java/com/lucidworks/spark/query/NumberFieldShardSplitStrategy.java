@@ -54,26 +54,30 @@ public class NumberFieldShardSplitStrategy extends AbstractFieldShardSplitStrate
     statsQuery.setSort(splitFieldName, SolrQuery.ORDER.asc);
     QueryResponse qr = solrClient.query(statsQuery);
     SolrDocumentList results = qr.getResults();
-    if (results.getNumFound() == 0)
-      throw new IllegalStateException("Cannot get min/max for "+splitFieldName+" from "+shardUrl+"!");
-
-    Object o = results.get(0).getFirstValue(splitFieldName);
-    long min = Long.parseLong(o.toString());
-    long count = qr.getResults().getNumFound();
-
-    // get max value of this field using a top 1 query
-    statsQuery.setSort(splitFieldName, SolrQuery.ORDER.desc);
-    qr = solrClient.query(statsQuery);
-    long max = Long.parseLong(qr.getResults().get(0).getFirstValue(splitFieldName).toString());
 
     NamedList<Object> nl = new NamedList<Object>();
-    nl.add("min", new Long(min));
-    nl.add("max", new Long(max));
-    nl.add("count", new Long(count));
+    long count = qr.getResults().getNumFound();
+    if (count != 0) {
+      Object o = results.get(0).getFirstValue(splitFieldName);
+      long min = Long.parseLong(o.toString());
 
-    long _diffMs = (System.currentTimeMillis() - _startMs);
-    log.info("Took " + _diffMs + " ms to lookup min/max from index for " + splitFieldName + " in shard " + shardUrl);
+      // get max value of this field using a top 1 query
+      statsQuery.setSort(splitFieldName, SolrQuery.ORDER.desc);
+      qr = solrClient.query(statsQuery);
+      long max = Long.parseLong(qr.getResults().get(0).getFirstValue(splitFieldName).toString());
 
+      //NamedList<Object> nl = new NamedList<Object>();
+      nl.add("min", new Long(min));
+      nl.add("max", new Long(max));
+      nl.add("count", new Long(count));
+
+      long _diffMs = (System.currentTimeMillis() - _startMs);
+      log.info("Took " + _diffMs + " ms to lookup min/max from index for " + splitFieldName + " in shard " + shardUrl);
+    }
+    else {
+      nl.add("count", new Long(count));
+      log.info("Cannot get min/max for because no results were produced by the query ");
+    }
     return new FieldStatsInfo(nl, splitFieldName);
   }
 

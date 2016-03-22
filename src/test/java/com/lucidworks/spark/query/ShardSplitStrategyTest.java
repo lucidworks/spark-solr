@@ -104,6 +104,29 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
     }
   }
 
+  @Test
+  public void testSplitStrategyEmptyCollection() throws Exception {
+    String collection = "testStringSplit";
+    try {
+      String zkHost = cluster.getZkServer().getZkAddress();
+      SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+      // create empty collection
+      buildCollection(zkHost, collection, null, 1);
+      SolrQuery solrQuery = new SolrQuery("*:*");
+      String shardUrl = SolrRDD$.MODULE$.randomReplicaLocation(SolrSupport.buildShardList(zkHost, collection).head());
+      for (int i = 1; i <= 9; i++) {
+        // split on _version_ field - input doc length set to 0
+        int desiredSplits = i * 3;
+        verifySplits(solrRDD.rdd(), 0, shardUrl, new NumberFieldShardSplitStrategy(), "_version_", desiredSplits, solrQuery);
+
+        // split on string field - input doc length set to 0
+        verifySplits(solrRDD.rdd(), 0, shardUrl, new StringFieldShardSplitStrategy(), "field1_s", desiredSplits, solrQuery);
+      }
+    } finally {
+      deleteCollection(collection);
+    }
+  }
+
   protected void verifySplits(SolrRDD solrRDD,
                               int expNumDocs,
                               String shardUrl,
