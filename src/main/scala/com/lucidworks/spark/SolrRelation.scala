@@ -3,6 +3,7 @@ package com.lucidworks.spark
 
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
+import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrInputDocument
@@ -164,18 +165,39 @@ class SolrRelation(
     val zkHost = conf.getZkHost.get
     val collectionId = conf.getCollection.get
     val dfSchema = df.schema
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
     val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), SolrSupport.getSolrBaseUrl(zkHost), collectionId)
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId)
 
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
-      if (!solrFields.contains(f.name))
+      // TODO: we should load all dynamic field extensions from Solr for making a decision here
+      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en"))
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
     })
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost);
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava)
-    addFieldsUpdateRequest.process(SolrSupport.getCachedCloudClient(zkHost), collectionId)
+    addFieldsUpdateRequest.process(cloudClient, collectionId)
 
+    logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
+    if (conf.softAutoCommitSecs.isDefined) {
+      val softAutoCommitSecs = conf.softAutoCommitSecs.get
+      val softAutoCommitMs = softAutoCommitSecs * 1000
+      var configApi = solrBaseUrl
+      if (!configApi.endsWith("/")) {
+        configApi += "/"
+      }
+      configApi += collectionId+"/config"
+
+      val postRequest = new org.apache.http.client.methods.HttpPost(configApi)
+      val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
+      postRequest.setEntity(new StringEntity(configJson))
+      logInfo("POSTing: "+configJson+" to "+configApi)
+      SolrJsonSupport.doJsonRequest(cloudClient.getLbClient.getHttpClient, configApi, postRequest)
+    }
+
+    val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
@@ -199,7 +221,7 @@ class SolrRelation(
       })
       doc
     })
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, 100, docs) // TODO: Make the numDocs configurable
+    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
   }
 
   private def buildQuery: SolrQuery = {

@@ -46,4 +46,8 @@ case class SolrReplica(
     replicaName: String,
     replicaUrl: String,
     replicaHostName: String,
-    locations: Array[InetAddress])
+    locations: Array[InetAddress]) {
+  override def toString(): String = {
+    return s"SolrReplica(${replicaNumber}) ${replicaName}: url=${replicaUrl}, hostName=${replicaHostName}, locations="+locations.mkString(",")
+  }
+}

@@ -150,16 +150,22 @@ object SolrSupport extends Logging {
       rdd: RDD[SolrInputDocument]) = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
-    val solrClient = getCachedCloudClient(zkHost)
-    val batch = new ArrayBuffer[SolrInputDocument]()
-    val indexedAt: Date = new Date()
-    while (solrInputDocumentIterator.hasNext) {
-      val doc = solrInputDocumentIterator.next()
-      doc.setField("_indexed_at_tdt", indexedAt)
-      batch += doc
-      if (batch.length >= batchSize) sendBatchToSolr(solrClient, collection, batch)
-    }
-    if (batch.nonEmpty) sendBatchToSolr(solrClient, collection, batch)
+      val solrClient = getCachedCloudClient(zkHost)
+      val batch = new ArrayBuffer[SolrInputDocument]()
+      val indexedAt: Date = new Date()
+      while (solrInputDocumentIterator.hasNext) {
+        val doc = solrInputDocumentIterator.next()
+        doc.setField("_indexed_at_tdt", indexedAt)
+        batch += doc
+        if (batch.length >= batchSize) {
+          sendBatchToSolr(solrClient, collection, batch)
+          batch.clear
+        }
+      }
+      if (batch.nonEmpty) {
+        sendBatchToSolr(solrClient, collection, batch)
+        batch.clear
+      }
     })
   }
 

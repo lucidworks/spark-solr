@@ -66,7 +66,7 @@ class SolrRDD(
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
-        log.info("Using the shard url " + url + " for getting partition data")
+        log.info("Using the shard url " + url + " for getting partition data for split: "+split)
         val streamingIterator =
           if (useExportHandler)
             getExportHandlerBasedIterator(url, query)
@@ -90,11 +90,10 @@ class SolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
-    if (splitField.isDefined) {
-      SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get)
-    } else {
-      SolrPartitioner.getShardPartitions(shards, query)
-    }
+    var partitions = if (splitField.isDefined)
+      SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
+    log.info(s"Found ${partitions.length} partitions: ${partitions}")
+    partitions
   }
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
