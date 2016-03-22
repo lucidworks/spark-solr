@@ -68,6 +68,8 @@ object SolrJsonSupport extends Logging {
     }
 
     val httpGet = new HttpGet(newGetUrl)
+    if (log.isDebugEnabled)
+      log.debug("Requesting url: " + getUrl)
     doJsonRequest(httpClient, newGetUrl, httpGet)
   }
 

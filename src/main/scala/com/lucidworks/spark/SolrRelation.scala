@@ -63,10 +63,12 @@ class SolrRelation(
   }
 
   val baseSchema: StructType =
-    SolrSchemaUtil.getBaseSchema(conf.getZkHost.get,
-                                 conf.getCollection.get,
-                                 conf.escapeFieldNames.getOrElse(false),
-                                 conf.flattenMultivalued.getOrElse(true))
+    SolrSchemaUtil.getBaseSchema(
+      conf.getFields.toSet,
+      conf.getZkHost.get,
+      conf.getCollection.get,
+      conf.escapeFieldNames.getOrElse(false),
+      conf.flattenMultivalued.getOrElse(true))
 
   val query: SolrQuery = buildQuery
   val querySchema: StructType = {

@@ -17,9 +17,21 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 object SolrSchemaUtil extends Logging {
 
-  def getBaseSchema(zkHost: String, collection: String, escapeFields: Boolean, flattenMultivalued: Boolean): StructType = {
+  def getBaseSchema(
+      zkHost: String,
+      collection: String,
+      escapeFields: Boolean,
+      flattenMultivalued: Boolean): StructType =
+    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued)
+
+  def getBaseSchema(
+      fields: Set[String],
+      zkHost: String,
+      collection: String,
+      escapeFields: Boolean,
+      flattenMultivalued: Boolean): StructType = {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
-    val fieldTypeMap = SolrQuerySupport.getFieldTypes(Set.empty[String], solrBaseUrl, collection)
+    val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
 
     fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
