@@ -11,6 +11,7 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.cookie.Cookie;
 import org.apache.http.entity.ContentProducer;
@@ -510,6 +511,79 @@ public class FusionPipelineClient {
           log.warn("Failed to consume entity due to: "+ignore);
         } finally {
           entity = null;
+        }
+      }
+    }
+  }
+
+  public void sendRequestToFusion(HttpUriRequest httpRequest) throws Exception {
+    String endpoint = httpRequest.getRequestLine().getUri();
+    int requestId = httpRequest.hashCode();
+    long currTime = System.nanoTime();
+    FusionSession fusionSession;
+    synchronized (this) {
+      fusionSession = sessions.get(endpoint);
+
+      // ensure last request within the session timeout period, else reset the session
+      if (fusionSession == null || (currTime - fusionSession.sessionEstablishedAt) > maxNanosOfInactivity) {
+        log.info("Fusion session is likely expired (or soon will be) for endpoint "+endpoint+", " +
+                "pre-emptively re-setting this session before processing request "+requestId);
+        fusionSession = resetSession(endpoint);
+        if (fusionSession == null)
+          throw new IllegalStateException("Failed to re-connect to "+endpoint+
+                  " after session loss when processing request "+requestId);
+      }
+    }
+
+    HttpEntity entity = null;
+    try {
+
+      HttpClientContext context = HttpClientContext.create();
+      context.setCookieStore(cookieStore);
+
+      HttpResponse response = httpClient.execute(httpRequest, context);
+      entity = response.getEntity();
+      int statusCode = response.getStatusLine().getStatusCode();
+      if (statusCode == 401) {
+        // unauth'd - session probably expired? retry to establish
+        log.warn("Unauthorized error (401) when trying to send request " + requestId +
+                " to Fusion at " + endpoint + ", will re-try to establish session");
+
+        // re-establish the session and re-try the request
+        try {
+          EntityUtils.consume(entity);
+        } catch (Exception ignore) {
+          log.warn("Failed to consume entity due to: "+ignore);
+        } finally {
+          entity = null;
+        }
+
+        synchronized (this) {
+          fusionSession = resetSession(endpoint);
+          if (fusionSession == null)
+            throw new IllegalStateException("After re-establishing session when processing request "+
+                    requestId+", endpoint "+endpoint+" is no longer active! Try another endpoint.");
+        }
+
+        log.info("Going to re-try request "+requestId+" after session re-established with "+endpoint);
+        response = httpClient.execute(httpRequest, context);
+        entity = response.getEntity();
+        statusCode = response.getStatusLine().getStatusCode();
+        if (statusCode == 200 || statusCode == 204) {
+          log.info("Re-try request "+requestId+" after session timeout succeeded for: " + endpoint);
+        } else {
+          raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
+        }
+      } else if (statusCode != 200 && statusCode != 204) {
+        raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
+      }
+    } finally {
+
+      if (entity != null) {
+        try {
+          EntityUtils.consume(entity);
+        } catch (Exception ignore) {
+          log.warn("Failed to consume entity due to: "+ignore);
         }
       }
     }

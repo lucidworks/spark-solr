@@ -18,6 +18,11 @@
 package org.apache.spark.ml
 
 import org.apache.spark.ml.param.shared.{HasOutputCol, HasInputCols}
+import org.apache.spark.ml.util.{DefaultParamsReader, DefaultParamsWritable}
 
 /** Shim to allow access to Spark's private[ml] traits HasInputCols and HasOutputCol */
-abstract class HasInputColsTransformer extends Transformer with HasInputCols with HasOutputCol { }
+abstract class HasInputColsTransformer extends Transformer with HasInputCols with HasOutputCol with DefaultParamsWritable { }
+
+class TransformerParamsReader[T] extends DefaultParamsReader[T] {
+  // just to expose the private[ml] stuff
+}

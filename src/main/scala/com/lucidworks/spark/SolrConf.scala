@@ -79,6 +79,19 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def softAutoCommitSecs: Option[Int] = {
+    if (config.contains(SOFT_AUTO_COMMIT_SECS) && config.get(SOFT_AUTO_COMMIT_SECS).isDefined) {
+      return Some(config.get(SOFT_AUTO_COMMIT_SECS).get.toInt)
+    }
+    None
+  }
+
+  def batchSize: Option[Int] = {
+    if (config.contains(BATCH_SIZE) && config.get(BATCH_SIZE).isDefined) {
+      return Some(config.get(BATCH_SIZE).get.toInt)
+    }
+    None
+  }
 }
 
 object SolrConf {
