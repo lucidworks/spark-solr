@@ -102,7 +102,7 @@ object SolrConf {
 
     for (key <- config.keySet) {
       if (key.startsWith(CONFIG_PREFIX)) {
-        val param = key.substring(CONFIG_PREFIX.length+1)
+        val param = key.substring(CONFIG_PREFIX.length)
         if (config.get(key).isDefined) {
           params.add(param, config.get(key).get)
         }
