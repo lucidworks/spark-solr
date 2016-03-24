@@ -64,7 +64,7 @@ class SolrRelation(
   }
 
   val baseSchema: StructType =
-    SolrSchemaUtil.getBaseSchema(
+    SolrRelationalUtil.getBaseSchema(
       conf.getFields.toSet,
       conf.getZkHost.get,
       conf.getCollection.get,
@@ -77,7 +77,7 @@ class SolrRelation(
       dataFrame.get.schema
     } else {
       if (query.getFields != null) {
-        SolrSchemaUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
+        SolrRelationalUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
       } else {
         baseSchema
       }
@@ -107,14 +107,14 @@ class SolrRelation(
     // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
     if (query.getFields != null && query.getFields.length > 0) {
       if (conf.docValues.getOrElse(false)) {
-        SolrSchemaUtil.setAliases(query.getFields.split(","), query, baseSchema)
+        SolrRelationalUtil.setAliases(query.getFields.split(","), query, baseSchema)
       }
     }
 
     // Clear all existing filters
     if (!filters.isEmpty) {
       query.remove("fq")
-      filters.foreach(filter => SolrSchemaUtil.applyFilter(filter, query, baseSchema))
+      filters.foreach(filter => SolrRelationalUtil.applyFilter(filter, query, baseSchema))
     }
 
     if (log.isInfoEnabled) {
@@ -122,9 +122,9 @@ class SolrRelation(
     }
 
     try {
-      val querySchema = if (!fields.isEmpty) SolrSchemaUtil.deriveQuerySchema(fields, baseSchema) else schema
+      val querySchema = if (!fields.isEmpty) SolrRelationalUtil.deriveQuerySchema(fields, baseSchema) else schema
       val docs = solrRDD.query(query)
-      val rows = SolrSchemaUtil.toRows(querySchema, docs)
+      val rows = SolrRelationalUtil.toRows(querySchema, docs)
       rows
     } catch {
       case e: Throwable => throw new RuntimeException(e)
@@ -235,7 +235,7 @@ class SolrRelation(
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       if (conf.docValues.getOrElse(false))
-        SolrSchemaUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
+        SolrRelationalUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))

@@ -15,9 +15,6 @@ import org.apache.spark.rdd.RDD
 import scala.collection.JavaConverters
 import scala.util.Random
 
-/**
- * TODO: Add support for filter queries
- */
 class SolrRDD(
     val zkHost: String,
     val collection: String,
