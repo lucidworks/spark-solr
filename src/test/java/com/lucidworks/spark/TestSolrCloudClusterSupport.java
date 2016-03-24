@@ -1,8 +1,11 @@
 package com.lucidworks.spark;
 
-import java.io.File;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.*;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
 import org.apache.solr.client.solrj.SolrQuery;
@@ -36,6 +39,7 @@ public class TestSolrCloudClusterSupport {
 
   public static MiniSolrCloudCluster cluster;
   public static CloudSolrClient cloudSolrServer;
+  private static File testWorkingDir;
 
   public CloudSolrClient getClient() {
     return cloudSolrServer;
@@ -45,12 +49,38 @@ public class TestSolrCloudClusterSupport {
     return cluster;
   }
 
+  public static String readSolrXml(File solrXml) throws IOException {
+    StringBuilder sb = new StringBuilder();
+    String line;
+    BufferedReader br = null;
+    try {
+      br = new BufferedReader(new InputStreamReader(new FileInputStream(solrXml), StandardCharsets.UTF_8));
+      while ((line = br.readLine()) != null) {
+        sb.append(line);
+      }
+    } finally {
+      if (br != null) {
+        try {
+          br.close();
+        } catch (IOException ignore){}
+      }
+    }
+    return sb.toString();
+  }
+
   @BeforeClass
   public static void startCluster() throws Exception {
     File solrXml = new File("src/test/resources/solr.xml");
+    String solrXmlContents = readSolrXml(solrXml);
+
     File targetDir = new File("target");
     if (!targetDir.isDirectory())
       fail("Project 'target' directory not found at: "+targetDir.getAbsolutePath());
+
+    testWorkingDir = new File(targetDir, "java-solrcloud-"+System.currentTimeMillis());
+    if (!testWorkingDir.isDirectory()) {
+      testWorkingDir.mkdirs();
+    }
 
     // need the schema stuff
     final SortedMap<ServletHolder,String> extraServlets = new TreeMap<ServletHolder,String>();
@@ -58,7 +88,8 @@ public class TestSolrCloudClusterSupport {
     solrSchemaRestApi.setInitParameter("org.restlet.application", "org.apache.solr.rest.SolrSchemaRestApi");
     extraServlets.put(solrSchemaRestApi, "/schema/*");
 
-    cluster = new MiniSolrCloudCluster(1, null, targetDir, solrXml, extraServlets, null, null);
+    cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
+            testWorkingDir.toPath(), solrXmlContents, extraServlets, null);
 
     cloudSolrServer = new CloudSolrClient(cluster.getZkServer().getZkAddress(), true);
     cloudSolrServer.connect();
@@ -68,8 +99,22 @@ public class TestSolrCloudClusterSupport {
 
   @AfterClass
   public static void stopCluster() throws Exception {
-    cloudSolrServer.shutdown();
-    cluster.shutdown();
+    if (cloudSolrServer != null) {
+      cloudSolrServer.shutdown();
+    } else {
+      log.error("No CloudSolrClient available for this test! " +
+              "Typically this means there was a failure to start the MiniSolrCloudCluster, check logs for more details.");
+    }
+    if (cluster != null) {
+      cluster.shutdown();
+    } else {
+      log.error("No MiniSolrCloudCluster available for this test! " +
+              "Typically this means there was a failure to start the MiniSolrCloudCluster, check logs for more details.");
+    }
+
+    if (testWorkingDir != null && testWorkingDir.isDirectory()) {
+      FileUtils.deleteDirectory(testWorkingDir);
+    }
   }
 
   protected void setCloudSolrServer(CloudSolrClient solrClient) {
