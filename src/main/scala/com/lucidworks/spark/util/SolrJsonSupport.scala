@@ -158,7 +158,7 @@ object SolrJsonSupport extends Logging {
         inStream.close()
       }
     }
-    body.toString()
+    body.result()
   }
 
   def getHttpClient(): HttpClient = {

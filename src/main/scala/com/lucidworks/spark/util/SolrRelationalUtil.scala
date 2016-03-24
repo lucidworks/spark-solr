@@ -160,7 +160,7 @@ object SolrRelationalUtil extends Logging {
           sb.append(String.valueOf(value))
         }
         sb.append(")")
-        crit = Some(sb.toString())
+        crit = Some(sb.result())
       case f: IsNotNull =>
         attr = Some(f.attribute)
         crit = Some("[* TO *]")
