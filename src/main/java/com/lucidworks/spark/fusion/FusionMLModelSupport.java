@@ -18,11 +18,24 @@ import org.apache.spark.ml.util.MLWritable;
 import org.apache.spark.mllib.util.Saveable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class FusionMLModelSupport {
 
@@ -36,6 +49,82 @@ public class FusionMLModelSupport {
                                        String modelId,
                                        Object model,
                                        Map<String,String> metadata)
+          throws Exception
+  {
+    // since we mutate the metadata map, make a copy here
+    HashMap<String,String> mutableMetadata = new HashMap<>();
+    mutableMetadata.putAll(metadata);
+
+    File zipFile = buildModelArchive(sc, modelId, model, mutableMetadata);
+
+    HttpPut putRequest =
+            buildPutRequestToFusion(modelId, fusionHostAndPort, mutableMetadata, zipFile, "/api/apollo");
+
+    // load the zip file with metadata into Fusion
+    FusionPipelineClient fusionClient =
+            new FusionPipelineClient(putRequest.getRequestLine().getUri(), fusionUser, fusionPassword, fusionRealm);
+    fusionClient.sendRequestToFusion(putRequest);
+  }
+
+  public static void saveModelInLocalFusion(SparkContext sc,
+                                            String modelId,
+                                            Object model,
+                                            Map<String,String> metadata)
+          throws Exception
+  {
+    // since we mutate the metadata map, make a copy here
+    HashMap<String,String> mutableMetadata = new HashMap<>();
+    mutableMetadata.putAll(metadata);
+
+    File zipFile = buildModelArchive(sc, modelId, model, mutableMetadata);
+
+    HttpPut putRequest =
+            buildPutRequestToFusion(modelId, "localhost:8765", mutableMetadata, zipFile, "/api/v1");
+
+    // load the zip file with metadata into Fusion
+    FusionPipelineClient fusionClient = new FusionPipelineClient(putRequest.getRequestLine().getUri());
+    fusionClient.sendRequestToFusion(putRequest);
+  }
+
+  public static HttpPut buildPutRequestToFusion(String modelId,
+                                                String fusionHostAndPort,
+                                                HashMap<String,String> mutableMetadata,
+                                                File zipFile,
+                                                String fusionApiPath)
+          throws Exception
+  {
+    // convert metadata into query string parameters for the PUT request to Fusion
+    List<NameValuePair> pairs = new ArrayList<>();
+    for (Map.Entry<String,String> entry : mutableMetadata.entrySet()) {
+      pairs.add(new BasicNameValuePair(entry.getKey(), URLEncoder.encode(entry.getValue(), "UTF-8")));
+    }
+
+    String[] pair = fusionHostAndPort.split(":");
+    String fusionHost = fusionHostAndPort;
+    int fusionPort = 8764;
+    if (pair.length == 2) {
+      fusionHost = pair[0];
+      fusionPort = Integer.parseInt(pair[1]);
+    }
+
+    URIBuilder builder = new URIBuilder();
+    builder.setScheme("http").setHost(fusionHost).setPort(fusionPort).setPath(fusionApiPath+"/blobs/"+modelId)
+            .setParameters(pairs);
+    HttpPut putRequest = new HttpPut(builder.build());
+    putRequest.setHeader("Content-Type", "application/zip");
+
+    EntityBuilder entityBuilder = EntityBuilder.create();
+    entityBuilder.setContentType(ContentType.create("application/zip"));
+    entityBuilder.setFile(zipFile);
+    putRequest.setEntity(entityBuilder.build());
+
+    return putRequest;
+  }
+
+  public static File buildModelArchive(SparkContext sc,
+                                       String modelId,
+                                       Object model,
+                                       HashMap<String,String> metadata)
           throws Exception
   {
     // save model to local directory
@@ -118,35 +207,7 @@ public class FusionMLModelSupport {
 
     addFilesToZip(modelDir, zipFile);
 
-    // convert metadata into query string parameters for the PUT request to Fusion
-    List<NameValuePair> pairs = new ArrayList<>();
-    for (Map.Entry<String,String> entry : metadata.entrySet()) {
-      pairs.add(new BasicNameValuePair(entry.getKey(), URLEncoder.encode(entry.getValue(), "UTF-8")));
-    }
-
-    String[] pair = fusionHostAndPort.split(":");
-    String fusionHost = fusionHostAndPort;
-    int fusionPort = 8764;
-    if (pair.length == 2) {
-      fusionHost = pair[0];
-      fusionPort = Integer.parseInt(pair[1]);
-    }
-
-    URIBuilder builder = new URIBuilder();
-    builder.setScheme("http").setHost(fusionHost).setPort(fusionPort).setPath("/api/apollo/blobs/"+modelId)
-            .setParameters(pairs);
-    HttpPut putRequest = new HttpPut(builder.build());
-    putRequest.setHeader("Content-Type", "application/zip");
-
-    EntityBuilder entityBuilder = EntityBuilder.create();
-    entityBuilder.setContentType(ContentType.create("application/zip"));
-    entityBuilder.setFile(zipFile);
-    putRequest.setEntity(entityBuilder.build());
-
-    // load the zip file with metadata into Fusion
-    FusionPipelineClient fusionClient =
-            new FusionPipelineClient(putRequest.getRequestLine().getUri(), fusionUser, fusionPassword, fusionRealm);
-    fusionClient.sendRequestToFusion(putRequest);
+    return zipFile;
   }
 
   protected static File getModelDir(String modelId) {
