@@ -15,7 +15,7 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-object SolrRelationalUtil extends Logging {
+object SolrRelationUtil extends Logging {
 
   def getBaseSchema(
       zkHost: String,
