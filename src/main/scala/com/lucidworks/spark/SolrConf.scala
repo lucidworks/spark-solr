@@ -92,6 +92,22 @@ class SolrConf(config: Map[String, String]) {
     }
     None
   }
+
+  def getArbitrarySolrParams: ModifiableSolrParams = {
+    val solrParams = new ModifiableSolrParams()
+    if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
+      val paramString = config.get(ARBITRARY_PARAMS_STRING).get
+      val params = paramString.split("&")
+
+      for (param <- params) {
+        val keyValue = param.split("=")
+        val key = keyValue(0)
+        val value = keyValue(1)
+        solrParams.add(key, value)
+      }
+    }
+    solrParams
+  }
 }
 
 object SolrConf {

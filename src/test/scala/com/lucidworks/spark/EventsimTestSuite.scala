@@ -81,6 +81,17 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(singleRow.length == 2)
   }
 
+  test("Test arbitrary params using the param string") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName,
+      ARBITRARY_PARAMS_STRING -> "fl=id,registration"
+    )
+    val df = sqlContext.read.format("solr").options(options).load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+  }
+
   def testCommons(solrRDD: SolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 
