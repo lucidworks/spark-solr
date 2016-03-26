@@ -239,7 +239,6 @@ class SolrRelation(
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
-    query.add(conf.solrConfigParams)
     query.add(conf.getArbitrarySolrParams)
     query.set("collection", conf.getCollection.get)
     query
@@ -265,18 +264,13 @@ object SolrRelation {
     val instanceMirror = rm.reflect(ConfigurationConstants)
 
     for(acc <- accessors) {
-      if (acc.name.decoded != "CONFIG_PREFIX") {
-        knownParams += instanceMirror.reflectMethod(acc).apply().toString
-      }
+      knownParams += instanceMirror.reflectMethod(acc).apply().toString
     }
 
     // Check for any unknown options
     keySet.foreach(key => {
       if (!knownParams.contains(key)) {
-        // Now check if the prefix is "solr."
-        if (!key.contains(CONFIG_PREFIX)) {
-          unknownParams += key
-        }
+        unknownParams += key
       }
     })
     unknownParams
