@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * An iterator over a stream of query results from Solr.
  */
-public class StreamingResultsIterator extends StreamingResponseCallback implements Iterator<SolrDocument>, Iterable<SolrDocument> {
+public class StreamingResultsIterator extends ResultsIterator {
 
   private static Logger log = Logger.getLogger(StreamingResultsIterator.class);
 
@@ -36,11 +36,8 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
   protected boolean closeAfterIterating = false;
   protected LinkedBlockingDeque<SolrDocument> queue;
 
+  private ResponseCallback responseCallback = new ResponseCallback();
   private CountDownLatch docListInfoLatch = new CountDownLatch(1);
-
-  public long getNumDocs() {
-    return numDocs;
-  }
 
   public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
     this(solrServer, solrQuery, null);
@@ -96,7 +93,7 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
     this.cursorMarkOfCurrentPage = nextCursorMark;
-    Option<QueryResponse> resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, this);
+    Option<QueryResponse> resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, responseCallback);
 
     if (resp.isDefined()) {
       if (usingCursors) {
@@ -154,19 +151,26 @@ public class StreamingResultsIterator extends StreamingResponseCallback implemen
     return this;
   }
 
-  public void streamSolrDocument(SolrDocument doc) {
-    if (doc != null) {
-      queue.offer(doc);
-    } else {
-      log.warn("Received null SolrDocument from streamSolrDocument callback while processing cursorMark="+
-              cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+" so far.");
-    }
+  @Override
+  public long getNumDocs() {
+    return numDocs;
   }
 
-  public void streamDocListInfo(long numFound, long start, Float maxScore) {
-    docListInfoLatch.countDown();
-    totalDocs = numFound;
-    if (currentPageSize > totalDocs)
-      currentPageSize = (int)totalDocs;
+  private class ResponseCallback extends StreamingResponseCallback {
+    public void streamSolrDocument(SolrDocument doc) {
+      if (doc != null) {
+        queue.offer(doc);
+      } else {
+        log.warn("Received null SolrDocument from streamSolrDocument callback while processing cursorMark="+
+          cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+" so far.");
+      }
+    }
+
+    public void streamDocListInfo(long numFound, long start, Float maxScore) {
+      docListInfoLatch.countDown();
+      totalDocs = numFound;
+      if (currentPageSize > totalDocs)
+        currentPageSize = (int)totalDocs;
+    }
   }
 }

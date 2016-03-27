@@ -23,7 +23,7 @@ import java.util.NoSuchElementException;
  * This iterator is not thread safe. It is intended to be used within the
  * context of a single thread.
  */
-public class SolrStreamIterator implements Iterator<SolrDocument>, Iterable<SolrDocument> {
+public class SolrStreamIterator extends ResultsIterator {
 
     private static final Logger log = Logger.getLogger(SolrStreamIterator.class);
 
@@ -31,6 +31,7 @@ public class SolrStreamIterator implements Iterator<SolrDocument>, Iterable<Solr
     protected SolrClient solrServer;
     protected SolrQuery solrQuery;
     protected boolean closeAfterIterating;
+    protected long numDocs = 0;
     private boolean isOpenStream;
     private SolrDocument currentTuple = null;
 
@@ -118,6 +119,7 @@ public class SolrStreamIterator implements Iterator<SolrDocument>, Iterable<Solr
 
         final SolrDocument tempCurrentTuple = currentTuple;
         currentTuple = null;
+        ++numDocs;
         return tempCurrentTuple;
     }
 
@@ -127,5 +129,10 @@ public class SolrStreamIterator implements Iterator<SolrDocument>, Iterable<Solr
 
     public Iterator<SolrDocument> iterator() {
         return this;
+    }
+
+    @Override
+    public long getNumDocs() {
+        return numDocs;
     }
 }
