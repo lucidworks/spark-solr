@@ -2,7 +2,7 @@ package com.lucidworks.spark.util
 
 // This should only be used for config options for the sql statements [SolrRelation]
 object ConfigurationConstants {
-  val CONFIG_PREFIX: String = "solr."
+  val ARBITRARY_PARAMS_STRING: String = "solr.params"
   val SOLR_ZK_HOST_PARAM: String = "zkhost"
   val SOLR_COLLECTION_PARAM: String = "collection"
   val SOLR_QUERY_PARAM: String = "query"
