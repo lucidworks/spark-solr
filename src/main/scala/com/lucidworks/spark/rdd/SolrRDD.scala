@@ -87,9 +87,9 @@ class SolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
-    var partitions = if (splitField.isDefined)
+    val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    log.info(s"Found ${partitions.length} partitions: ${partitions}")
+    log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     partitions
   }
 

@@ -8,8 +8,6 @@ class SolrConf(config: Map[String, String]) {
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
 
-  val solrConfigParams: ModifiableSolrParams = SolrConf.parseSolrParams(config)
-
   def getZkHost: Option[String] = {
     if (config.contains(SOLR_ZK_HOST_PARAM)) return config.get(SOLR_ZK_HOST_PARAM)
     None
@@ -92,23 +90,20 @@ class SolrConf(config: Map[String, String]) {
     }
     None
   }
-}
 
-object SolrConf {
+  def getArbitrarySolrParams: ModifiableSolrParams = {
+    val solrParams = new ModifiableSolrParams()
+    if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
+      val paramString = config.get(ARBITRARY_PARAMS_STRING).get
+      val params = paramString.split("&")
 
-  // Anything in the form of "solr.*" will override the "q", "fields", "rows" in the config
-  def parseSolrParams(config: Map[String, String]): ModifiableSolrParams = {
-    val params = new ModifiableSolrParams()
-
-    for (key <- config.keySet) {
-      if (key.startsWith(CONFIG_PREFIX)) {
-        val param = key.substring(CONFIG_PREFIX.length)
-        if (config.get(key).isDefined) {
-          params.add(param, config.get(key).get)
-        }
+      for (param <- params) {
+        val keyValue = param.split("=")
+        val key = keyValue(0)
+        val value = keyValue(1)
+        solrParams.add(key, value)
       }
     }
-    params
+    solrParams
   }
 }
-
