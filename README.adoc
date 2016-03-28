@@ -277,14 +277,14 @@ option("dv", "true")
 
 Since 5.5.0 Solr will return non-stored docValues by default. This option is only needed for versions that are older than 5.5
 
-=== solr.
+=== solr.params
 
-The "solr." prefix option is used for providing arbitrary Solr query parameters.
+The "solr.params" option is used for providing arbitrary Solr query parameters (just like a normal Solr query)
 
 [source]
-option("solr.defType", "edismax")
+option("solr.params", "defType=edismax&timeAllowed=0")
 
-The options provided with this prefix have precedence over other options 'fields', 'query', 'rows'
+The params provided here will override the common Solr params 'fields', 'query', 'rows'
 
 == Reading data from Solr as a Spark RDD
 

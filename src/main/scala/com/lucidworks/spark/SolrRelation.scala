@@ -41,7 +41,7 @@ class SolrRelation(
   checkRequiredParams()
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
-  if (!unknownParams.isEmpty)
+  if (unknownParams.nonEmpty)
     log.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
   val sc = sqlContext.sparkContext
@@ -64,7 +64,7 @@ class SolrRelation(
   }
 
   val baseSchema: StructType =
-    SolrRelationalUtil.getBaseSchema(
+    SolrRelationUtil.getBaseSchema(
       conf.getFields.toSet,
       conf.getZkHost.get,
       conf.getCollection.get,
@@ -77,7 +77,7 @@ class SolrRelation(
       dataFrame.get.schema
     } else {
       if (query.getFields != null) {
-        SolrRelationalUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
+        SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
       } else {
         baseSchema
       }
@@ -107,14 +107,14 @@ class SolrRelation(
     // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
     if (query.getFields != null && query.getFields.length > 0) {
       if (conf.docValues.getOrElse(false)) {
-        SolrRelationalUtil.setAliases(query.getFields.split(","), query, baseSchema)
+        SolrRelationUtil.setAliases(query.getFields.split(","), query, baseSchema)
       }
     }
 
     // Clear all existing filters
     if (!filters.isEmpty) {
       query.remove("fq")
-      filters.foreach(filter => SolrRelationalUtil.applyFilter(filter, query, baseSchema))
+      filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, baseSchema))
     }
 
     if (log.isInfoEnabled) {
@@ -122,9 +122,9 @@ class SolrRelation(
     }
 
     try {
-      val querySchema = if (!fields.isEmpty) SolrRelationalUtil.deriveQuerySchema(fields, baseSchema) else schema
+      val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
       val docs = solrRDD.query(query)
-      val rows = SolrRelationalUtil.toRows(querySchema, docs)
+      val rows = SolrRelationUtil.toRows(querySchema, docs)
       rows
     } catch {
       case e: Throwable => throw new RuntimeException(e)
@@ -235,11 +235,11 @@ class SolrRelation(
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       if (conf.docValues.getOrElse(false))
-        SolrRelationalUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
+        SolrRelationUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
-    query.add(conf.solrConfigParams)
+    query.add(conf.getArbitrarySolrParams)
     query.set("collection", conf.getCollection.get)
     query
   }
@@ -264,18 +264,13 @@ object SolrRelation {
     val instanceMirror = rm.reflect(ConfigurationConstants)
 
     for(acc <- accessors) {
-      if (acc.name.decoded != "CONFIG_PREFIX") {
-        knownParams += instanceMirror.reflectMethod(acc).apply().toString
-      }
+      knownParams += instanceMirror.reflectMethod(acc).apply().toString
     }
 
     // Check for any unknown options
     keySet.foreach(key => {
       if (!knownParams.contains(key)) {
-        // Now check if the prefix is "solr."
-        if (!key.contains(CONFIG_PREFIX)) {
-          unknownParams += key
-        }
+        unknownParams += key
       }
     })
     unknownParams

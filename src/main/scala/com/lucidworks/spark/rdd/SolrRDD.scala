@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.{SolrStreamIterator, StreamingResultsIterator}
+import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
@@ -64,7 +64,7 @@ class SolrRDD(
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
         log.info("Using the shard url " + url + " for getting partition data for split: "+split)
-        val streamingIterator =
+        val resultsIterator: ResultsIterator =
           if (useExportHandler)
             getExportHandlerBasedIterator(url, query)
           else
@@ -74,9 +74,9 @@ class SolrRDD(
               partition.cursorMark)
 
         context.addTaskCompletionListener { (context) =>
-          log.info(f"Fetched rows from shard $url for partition ${split.index}") // SolrStreamIterator needs to store
+          log.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
-        JavaConverters.asScalaIteratorConverter(streamingIterator.iterator()).asScala
+        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
 
       case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
@@ -87,9 +87,9 @@ class SolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
-    var partitions = if (splitField.isDefined)
+    val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    log.info(s"Found ${partitions.length} partitions: ${partitions}")
+    log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     partitions
   }
 
