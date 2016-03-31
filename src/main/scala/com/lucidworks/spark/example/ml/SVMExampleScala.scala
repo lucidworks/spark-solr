@@ -4,6 +4,8 @@ package com.lucidworks.spark.example.ml
  * Created by ganeshkumar on 3/25/16.
  */
 
+import java.util
+
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
 import org.apache.commons.cli.{CommandLine, Option}
@@ -16,7 +18,9 @@ import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.sql.Row
 import org.apache.spark.api.java.function.Function
-import org.apache.spark.mllib.feature.HashingTF;
+import org.apache.spark.mllib.feature.HashingTF
+import scala.collection.JavaConverters._
+import scala.collection
 
 import scala.collection.immutable
 
@@ -117,11 +121,8 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
         }
       }
       val analyzedFields = textAnalyzer.analyzeJava(fields)
-      val terms = new scala.collection.mutable.LinkedList[List[String]]
-      for (i <- analyzedFields.values()) {
-        terms.append(i)
-      }
-
+      var terms = new java.util.LinkedList[String]()
+      analyzedFields.values().asScala.toList.foreach(v => terms.addAll(v))
       val sentimentLabel = if (("0" == polarity)) 0.toDouble else 1.toDouble
       new LabeledPoint(sentimentLabel, hashingTF.transform(terms))
     }
