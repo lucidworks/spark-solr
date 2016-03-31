@@ -1,9 +1,5 @@
 package com.lucidworks.spark.example.ml
 
-/**
- * Created by ganeshkumar on 3/25/16.
- */
-
 import java.util
 
 import com.lucidworks.spark.SparkApp
@@ -19,6 +15,9 @@ import org.apache.spark.mllib.regression.LabeledPoint
 import org.apache.spark.sql.Row
 import org.apache.spark.api.java.function.Function
 import org.apache.spark.mllib.feature.HashingTF
+import org.apache.spark.mllib.feature.Normalizer
+import org.apache.spark.mllib.feature.StandardScaler
+import org.apache.spark.mllib.feature.StandardScalerModel
 import scala.collection.JavaConverters._
 import scala.collection
 
@@ -103,8 +102,8 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     val inputCols = contentFields.split(" ").map(_.trim)
 
     val stdTokLowerSchema = "{ \"analyzers\": [{ \"name\": \"std_tok_lower\", \"tokenizer\": { \"type\": \"standard\" },\n" +
-      "                \"filters\": [{ \"type\": 'lowercase' }]}],\n" +
-      "  'fields': [{ 'regex': '.+', 'analyzer': 'std_tok_lower' }]}\n"
+      "                \"filters\": [{ \"type\": \"lowercase\" }]}],\n" +
+      "  \"fields\": [{ \"regex\": \".+\", \"analyzer\": \"std_tok_lower\" }]}\n"
 
     val numFeatures = cli.getOptionValue("numFeatures", DEFAULT_NUM_FEATURES).toInt
     val numIterations = cli.getOptionValue("numIterations", DEFAULT_NUM_ITERATIONS).toInt
@@ -112,6 +111,7 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     def RowtoLab(row: Row, numFeatures: Int, inputCols: Array[String], stdTokLowerSchema: String ): LabeledPoint = {
       var textAnalyzer: LuceneTextAnalyzer = new LuceneTextAnalyzer(stdTokLowerSchema)
       var hashingTF = new HashingTF(numFeatures)
+      var normalizer = new Normalizer()
       val polarity = row.getString(row.fieldIndex("polarity"))
       var fields = new java.util.HashMap[String, String]()
       for(i <- 0 until inputCols.length){
@@ -124,10 +124,12 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
       var terms = new java.util.LinkedList[String]()
       analyzedFields.values().asScala.toList.foreach(v => terms.addAll(v))
       val sentimentLabel = if (("0" == polarity)) 0.toDouble else 1.toDouble
-      new LabeledPoint(sentimentLabel, hashingTF.transform(terms))
+      new LabeledPoint(sentimentLabel, normalizer.transform(hashingTF.transform(terms)))
     }
 
-    var trainRDD = trainingDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema))
+    var trainingData = trainingDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema))
+    var standardScaler = new StandardScaler().fit(trainingData.map(x => x.features))
+    var trainRDD = trainingData.map(x => new LabeledPoint(x.label, standardScaler.transform(x.features)))
     trainRDD = trainRDD.persist(StorageLevel.MEMORY_ONLY_SER)
     val model = SVMWithSGD.train(trainRDD, numIterations)
 
@@ -139,7 +141,9 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     var testDataFromSolr = sqlContext.read.format("solr").options(options).load()
     testDataFromSolr = testDataFromSolr.withColumnRenamed("test_polarity", "polarity")
     testDataFromSolr.show
-    val scoreAndLabels = testDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema)).map(p => {
+    val testVectors = testDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema)).map(x => new LabeledPoint(x.label, standardScaler.transform(x.features)))
+
+    val scoreAndLabels =  testVectors.map(p => {
       val score = model.predict(p.features)
       System.out.println(">> model predicted: " + score + ", actual: " + p.label)
       new (Double, Double)(score, p.label)
