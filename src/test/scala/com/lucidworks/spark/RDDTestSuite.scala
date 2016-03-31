@@ -35,8 +35,7 @@ class RDDTestSuite extends TestSuiteBuilder with Logging {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 3999, 2, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc,
-                      useExportHandler=true, rows=Option(Integer.MAX_VALUE))
+      val newRDD = new SolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).useExportHandler
       val cnt = newRDD.count()
       print("\n********************** RDD COUNT IS = " + cnt + "\n\n")
       assert(cnt === 3999)
@@ -49,8 +48,7 @@ class RDDTestSuite extends TestSuiteBuilder with Logging {
     val collectionName = "testRDDPartitions" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 1002, 14, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc,
-                      useExportHandler=true,  rows=Option(Integer.MAX_VALUE))
+      val newRDD = new SolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).useExportHandler
       val partitions = newRDD.partitions
       assert(partitions.length === 14)
     } finally {

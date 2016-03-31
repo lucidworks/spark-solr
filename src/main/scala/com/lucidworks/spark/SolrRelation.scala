@@ -46,7 +46,11 @@ class SolrRelation(
 
   val sc = sqlContext.sparkContext
   val solrRDD = {
-    var rdd = new SolrRDD(conf.getZkHost.get, conf.getCollection.get, sc)
+    var rdd = new SolrRDD(
+      conf.getZkHost.get,
+      conf.getCollection.get,
+      sc,
+      exportHandler = conf.useExportHandler)
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)

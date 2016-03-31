@@ -1,6 +1,7 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.ConfigurationConstants
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.spark.sql.DataFrame
 
@@ -42,6 +43,22 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(df.count() == eventSimCount)
   }
 
+  test("SQL query with export handler") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(ConfigurationConstants.USE_EXPORT_HANDLER, "true")
+      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id&sort=userId desc")
+      .load()
+    df.registerTempTable("events")
+    assert(df.count() == 1)
+
+    val queryDF = sqlContext.sql("SELECT firstName, lastName song from events LIMIT 10")
+    val firstRow = queryDF.take(1)(0)
+    println(firstRow)
+    assert(firstRow.get(0) == "Not Even Jail")
+  }
+
   test("SQL query splits") {
     val options = Map(
       "zkHost" -> zkHost,
@@ -81,7 +98,6 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(count == 1)
     val singleRow = df.take(1)(0)
     assert(singleRow.length == 2)
-
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {
