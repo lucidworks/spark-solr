@@ -1,7 +1,5 @@
 package com.lucidworks.spark.example.ml
 
-import java.util
-
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
 import org.apache.commons.cli.{CommandLine, Option}
@@ -22,6 +20,15 @@ import scala.collection.JavaConverters._
 import scala.collection
 
 import scala.collection.immutable
+
+/**
+ * A SVM example for text classification. This class has the following feature transformations
+ * LuceneAnalyzer
+ * HashingTF
+ * Normalizer
+ * StandardScaler
+ * The SVM Model is trained after the above transformations and is tested for the given test data (using same transformations).
+ */
 
 object SVMExampleScala {
   val DEFAULT_NUM_FEATURES = "1000000"
@@ -59,16 +66,17 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
       StructField("username",StringType, true) ::
       StructField("tweet_txt",StringType, true) :: Nil)
 
+    val writeoptions = immutable.HashMap(
+      "zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
+      "collection" -> cli.getOptionValue("collection", DefaultCollection),
+      "soft_commit_secs" -> "10")
+
     val indexTrainingData = cli.getOptionValue("indexTrainingData")
     if (indexTrainingData != null) {
       var csvDF = sqlContext.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTrainingData)
       csvDF = csvDF.repartition(4)
 
-      val options = immutable.HashMap(
-        "zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
-        "collection" -> cli.getOptionValue("collection", DefaultCollection),
-        "soft_commit_secs" -> "10")
-      csvDF.write.format("solr").options(options).mode(SaveMode.Overwrite).save()
+      csvDF.write.format("solr").options(writeoptions).mode(SaveMode.Overwrite).save()
     }
 
     val indexTestData = cli.getOptionValue("indexTestData");
@@ -76,16 +84,12 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
       var csvDF = sqlContext.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTestData)
       csvDF = csvDF.withColumnRenamed("polarity", "test_polarity")
 
-      val options = immutable.HashMap(
-        "zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
-        "collection" -> cli.getOptionValue("collection", DefaultCollection),
-        "soft_commit_secs" -> "10")
-      csvDF.write.format("solr").options(options).mode(SaveMode.Overwrite).save()
+      csvDF.write.format("solr").options(writeoptions).mode(SaveMode.Overwrite).save()
     }
 
     val contentFields = "tweet_txt"
 
-    var options = immutable.HashMap(
+    var trainoptions = immutable.HashMap(
       "zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
       "collection" -> cli.getOptionValue("collection", DefaultCollection),
       "query" -> "+polarity:(0 OR 4) +tweet_txt:[* TO *]",
@@ -96,7 +100,7 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
       "splits_per_shard" -> "8")
 
     val sampleFraction = cli.getOptionValue("sample", "1.0").toDouble
-    var trainingDataFromSolr = sqlContext.read.format("solr").options(options).load()
+    var trainingDataFromSolr = sqlContext.read.format("solr").options(trainoptions).load()
     trainingDataFromSolr = trainingDataFromSolr.sample(false, sampleFraction)
 
     val inputCols = contentFields.split(" ").map(_.trim)
@@ -133,25 +137,25 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     trainRDD = trainRDD.persist(StorageLevel.MEMORY_ONLY_SER)
     val model = SVMWithSGD.train(trainRDD, numIterations)
 
-    options = immutable.HashMap("zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
+    var testoptions = immutable.HashMap("zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
       "collection" -> cli.getOptionValue("collection", DefaultCollection),
       "query" -> "+test_polarity:[* TO *] +tweet_txt:[* TO *]",
       "fields" -> "id,test_polarity,tweet_txt")
 
-    var testDataFromSolr = sqlContext.read.format("solr").options(options).load()
+    var testDataFromSolr = sqlContext.read.format("solr").options(testoptions).load()
     testDataFromSolr = testDataFromSolr.withColumnRenamed("test_polarity", "polarity")
     testDataFromSolr.show
     val testVectors = testDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema)).map(x => new LabeledPoint(x.label, standardScaler.transform(x.features)))
 
     val scoreAndLabels =  testVectors.map(p => {
       val score = model.predict(p.features)
-      System.out.println(">> model predicted: " + score + ", actual: " + p.label)
+      println(">> model predicted: " + score + ", actual: " + p.label)
       new (Double, Double)(score, p.label)
     })
 
     val metrics = new BinaryClassificationMetrics(scoreAndLabels)
     val auROC = metrics.areaUnderROC
-    System.out.println("Area under ROC = " + auROC)
+    println("Area under ROC = " + auROC)
 
     model.save(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"))
 
