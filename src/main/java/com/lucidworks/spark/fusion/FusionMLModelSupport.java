@@ -178,6 +178,49 @@ public class FusionMLModelSupport {
       hashingTF.put("hashingTF", hashingTFMap);
       vectorizerSteps.add(hashingTF);
       metadata.remove("numFeatures");
+      if (metadata.containsKey("normalizer")) {
+        Map<String, Object> normalizerMap = new HashMap<>();
+        if (metadata.containsKey("p-norm")) {
+          normalizerMap.put("p-norm", metadata.get("p-norm"));
+        }
+        Map<String, Object> normalizer = new HashMap<>();
+        normalizer.put("normalizer", normalizerMap);
+        vectorizerSteps.add(normalizer);
+        metadata.remove("p-norm");
+        metadata.remove("normalizer");
+      }
+
+      if (metadata.containsKey("standardscaler")) {
+        Map<String, Object> standardScalerMap = new HashMap<>();
+        if (metadata.containsKey("withMean")) {
+          standardScalerMap.put("withMean", metadata.get("withMean"));
+        }
+        if (metadata.containsKey("withStd")) {
+          standardScalerMap.put("withStd", metadata.get("withStd"));
+        }
+        standardScalerMap.put("mean", metadata.get("mean"));
+        standardScalerMap.put("std", metadata.get("std"));
+        Map<String, Object> standardScaler = new HashMap<>();
+        standardScaler.put("standardScaler", standardScalerMap);
+        vectorizerSteps.add(standardScaler);
+        metadata.remove("withMean");
+        metadata.remove("withStd");
+        metadata.remove("mean");
+        metadata.remove("std");
+        metadata.remove("standardscaler");
+      }
+
+      if (metadata.containsKey("chisqselector")) {
+        Map<String, Object> chisqselectorMap = new HashMap<>();
+        chisqselectorMap.put("numtopfeatures", metadata.get("numtopfeatures"));
+        chisqselectorMap.put("selectedfeatures", metadata.get("selectedfeatures"));
+        Map<String, Object> chisqSelector = new HashMap<>();
+        chisqSelector.put("chisqselector", chisqselectorMap);
+        vectorizerSteps.add(chisqSelector);
+        metadata.remove("numtopfeatures");
+        metadata.remove("selectedfeatures");
+        metadata.remove("chisqselector");
+      }
 
       modelJson.put("vectorizer", vectorizerSteps);
     }
