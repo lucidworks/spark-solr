@@ -7,7 +7,6 @@ import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.util.SolrSupport
 import org.apache.commons.cli.CommandLine
 import org.apache.commons.cli.Option.{builder => OptionBuilder} // Avoid clash with Scala Option
-import org.apache.log4j.Logger
 import org.apache.solr.common.SolrInputDocument
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.Logging
@@ -20,14 +19,64 @@ import collection.JavaConversions._
 import scala.io.Source
 import scala.util.control.NonFatal
 
-object NewsgroupsIndexer {
-  var log: Logger = Logger.getLogger(classOf[NewsgroupsIndexer])
-  val DefaultZkHost = "localhost:9983"
-  val DefaultBatchSize = 100
-  val NonXmlCharsRegex = "[\u0000-\u0008\u000B\u000C\u000E-\u001F]".r
-  val NewsgroupHeaderRegex = "^([^: \t]+):[ \t]*(.*)".r
-  val NonAlphaNumCharsRegex = "[^_A-Za-z0-9]".r
-}
+/** Example application to index each article in the 20 newsgroups data as a Solr document.
+  * The 20 newsgroups data is downloadable from:
+  *
+  *    http://curl.haxx.se/mail/archive-2014-10/0053.html
+  *
+  * Articles in any of the three archives available there can be indexed,
+  * after first downloading it from the above page and unpacking it.
+  *
+  * The path you supply as an argument to the `--path` cmdline option (see the
+  * "Example invocation" section below) should be the directory containing the newsgroup
+  * folders.  All files found recursively under this path will be indexed to Solr.
+  *
+  * == Prerequisites ==
+  *
+  * You must have Solr running in cloud mode, with a target collection created.
+  *
+  * == Document fields ==
+  *
+  * Each header present in the newsgroup articles will be indexed to a Solr dynamic field
+  * name prefixed with the header name, e.g. Subject: text will be indexed into a field
+  * named `Subject_txt_en`.
+  *
+  * Note that the set of headers in each of the three available archives is different; details
+  * are on the download page above.
+  *
+  * The body of each article will be indexed into the `content_txt_en` field.
+  *
+  * The `newsgroup_s` field will contain the name of the article's parent directory.
+  *
+  * The `id` field value will in the format `newsgroup_articlenum`, e.g. "comp.graphics_38659",
+  * where `newsgroup` is the name of the article's parent directory, and `articlenum` is the
+  * article filename.
+  *
+  * The `filepath_s` field will contain the full path of the article source file.
+  *
+  * If you downloaded the `20news-19997.tar.gz` archive, the only one with the Date: header,
+  * dates will be indexed into two fields: the `Date_s` field will contain the original Date:
+  * text, and the `Date_tdt` field will contain the date reformatted in ISO-8601 format.
+  *
+  * == Example invocation ==
+  *
+  * You must first run `mvn package` in the spark-solr project, and you must download
+  * a Spark 1.6.1 binary distribution and pointed the environment variable `$SPARK_HOME`
+  * to the unpacked distribution directory.
+  *
+  * {{{
+  *   $SPARK_HOME/bin/spark-submit --master 'local[2]' --class com.lucidworks.spark.SparkApp \
+  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr -zkHost localhost:9983     \
+  *   -collection 20newsgroups -path /relative/or/absolute/path/to/20news-18828`
+  * }}}
+  *
+  * To see a description of all available options, run the following:
+  *
+  * {{{
+  *   $SPARK_HOME/bin/spark-submit --class com.lucidworks.spark.SparkApp \
+  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr
+  * }}}
+  */
 class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
   import NewsgroupsIndexer._
   def getName = "newsgroups2solr"
@@ -65,7 +114,7 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
         // Newsgroup name is the parent directory; if this file's path doesn't have a parent directory
         // after removing the source path, use the first listed newsgroup from the article content
         val newsgroup = group.getOrElse(doc.getFieldValues("Newsgroups_ss").head)
-        doc.addField("id", s"$newsgroup:$articleNum")
+        doc.addField("id", s"${newsgroup}_$articleNum")
         doc.addField("newsgroup_s", newsgroup)
         doc.addField("filepath_s", row._1)
         batch += doc
@@ -123,6 +172,13 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
     doc
   }
 }
+object NewsgroupsIndexer {
+  val DefaultZkHost = "localhost:9983"
+  val DefaultBatchSize = 100
+  val NonXmlCharsRegex = "[\u0000-\u0008\u000B\u000C\u000E-\u001F]".r
+  val NewsgroupHeaderRegex = "^([^: \t]+):[ \t]*(.*)".r
+  val NonAlphaNumCharsRegex = "[^_A-Za-z0-9]".r
+}
 
 /** Converts 3-letter time zone IDs to IDs that Joda-Time understands, parses dates using
   * a set of date formats known to be present in the 20 newsgroups data, then converts them
@@ -161,9 +217,9 @@ private object DateConverter extends Serializable with Logging {
     try {
       var zone = DateTimeZone.UTC
       val dateSingleSpaced = MultiSpaceRegex.replaceAllIn(date, " ")
-      val dateTrailingOffsetRemoved = TrailingOffsetRegex.replaceFirstIn(dateSingleSpaced, "")
-      val dateDowRemoved = DowRegex.replaceFirstIn(dateTrailingOffsetRemoved, "")
-      val dateNoZone = ZonesRegex.replaceAllIn(dateDowRemoved, m => {
+      val dateNoExtraTrailingOffset = TrailingOffsetRegex.replaceFirstIn(dateSingleSpaced, "")
+      val dateNoDow = DowRegex.replaceFirstIn(dateNoExtraTrailingOffset, "")
+      val dateNoZone = ZonesRegex.replaceAllIn(dateNoDow, m => {
         zone = ZoneMap(m.group(1).toUpperCase(Locale.ROOT))
         ""}) // remove time zone abbreviations
       Some(Formatter.withZone(zone).parseDateTime(dateNoZone).toString(ISODateTimeFormat.dateTimeNoMillis()))
