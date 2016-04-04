@@ -1,12 +1,8 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.{SolrJsonSupport, SolrSupport, ConfigurationConstants}
 import com.lucidworks.spark.util.ConfigurationConstants._
-import org.apache.http.client.HttpClient
 import org.apache.spark.sql.DataFrame
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -87,12 +83,11 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(singleRow.length == 2)
   }
 
-
-  test("SQL query with export handler") {
+  test("SQL collect query with export handler") {
     val df: DataFrame = sqlContext.read.format("solr")
       .option("zkHost", zkHost)
       .option("collection", collectionName)
-      .option(ConfigurationConstants.USE_EXPORT_HANDLER, "true")
+      .option(USE_EXPORT_HANDLER, "true")
       .option(ARBITRARY_PARAMS_STRING, "sort=userId desc")
       .load()
 
@@ -107,6 +102,20 @@ class EventsimTestSuite extends EventsimBuilder {
     // methods that do not need a callback. Better to set fl in the arbitrary params string or 'fields' option
     val rows = queryDF.collect()
     assert(rows.length == eventSimCount)
+  }
+
+  test("SQL count query with export handler") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(USE_EXPORT_HANDLER, "true")
+      .option(ARBITRARY_PARAMS_STRING, "fl=artist&sort=userId desc") // The test will fail without the fl param here
+      .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT artist FROM events")
+    queryDF.count()
+    assert(queryDF.count() == eventSimCount)
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {
