@@ -123,7 +123,6 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
     StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
   }
   override def transform(dataset: DataFrame): DataFrame = {
-    val startMs = System.currentTimeMillis()
     val schema = dataset.schema
     val existingInputCols = $(inputCols).filter(schema.fieldNames.contains(_))
     val outputSchema = transformSchema(schema)
@@ -149,8 +148,6 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
     val args = existingInputCols.map(dataset(_))
     val metadata = outputSchema($(outputCol)).metadata
     val resultDF = dataset.select(col("*"), analysisFunc(struct(args: _*)).as($(outputCol), metadata))
-    val diffMs = System.currentTimeMillis() - startMs
-    logInfo(s"Lucene analyzer took ${diffMs} ms to transform doc")
     resultDF
   }
 

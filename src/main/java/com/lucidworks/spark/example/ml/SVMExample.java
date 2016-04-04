@@ -5,6 +5,7 @@ import com.lucidworks.spark.analysis.LuceneTextAnalyzer;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -12,6 +13,8 @@ import org.apache.spark.mllib.classification.SVMModel;
 import org.apache.spark.mllib.classification.SVMWithSGD;
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics;
 import org.apache.spark.mllib.feature.HashingTF;
+import org.apache.spark.mllib.linalg.*;
+import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.regression.LabeledPoint;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.DataFrame;
@@ -24,6 +27,9 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.storage.StorageLevel;
 import scala.Tuple2;
+import org.apache.spark.mllib.feature.Normalizer;
+import org.apache.spark.mllib.feature.StandardScaler;
+import org.apache.spark.mllib.feature.StandardScalerModel;
 
 import java.io.Serializable;
 import java.util.*;
@@ -38,6 +44,7 @@ public class SVMExample implements SparkApp.RDDProcessor {
     private String[] inputCols;
     private String textAnalyzerJson;
     private HashingTF hashingTF;
+    private Normalizer normalizer =  new Normalizer();
     private transient LuceneTextAnalyzer textAnalyzer;
 
     RowToLabeledPoint(String[] inputCols, int numFeatures, String textAnalyzerJson) {
@@ -69,7 +76,7 @@ public class SVMExample implements SparkApp.RDDProcessor {
       }
 
       double sentimentLabel = "0".equals(polarity) ? 0d : 1d;
-      return new LabeledPoint(sentimentLabel, hashingTF.transform(terms));
+      return new LabeledPoint(sentimentLabel, normalizer.transform(hashingTF.transform(terms)));
     }
   };
 
@@ -100,7 +107,7 @@ public class SVMExample implements SparkApp.RDDProcessor {
             Option.builder()
                     .hasArg()
                     .required(false)
-                    .desc("Number of features; default is "+DEFAULT_NUM_FEATURES)
+                    .desc("Number of features; default is " + DEFAULT_NUM_FEATURES)
                     .longOpt("numFeatures")
                     .build(),
             Option.builder()
@@ -119,7 +126,6 @@ public class SVMExample implements SparkApp.RDDProcessor {
   }
 
   public int run(SparkConf conf, CommandLine cli) throws Exception {
-
     JavaSparkContext jsc = new JavaSparkContext(conf);
     SQLContext sqlContext = new SQLContext(jsc);
 
@@ -143,13 +149,13 @@ public class SVMExample implements SparkApp.RDDProcessor {
     // better than random :-(
     String indexTrainingData = cli.getOptionValue("indexTrainingData");
     if (indexTrainingData != null) {
+
       DataFrame csvDF = sqlContext.read()
               .format("com.databricks.spark.csv")
               .schema(csvSchema)
               .option("header", "false")
               .load(indexTrainingData);
       csvDF = csvDF.repartition(4);
-
       Map<String, String> options = new HashMap<>();
       options.put("zkhost", zkHost);
       options.put("collection", collection);
@@ -165,7 +171,6 @@ public class SVMExample implements SparkApp.RDDProcessor {
               .option("header", "false")
               .load(indexTestData);
       csvDF = csvDF.withColumnRenamed("polarity","test_polarity");
-
       Map<String, String> options = new HashMap<>();
       options.put("zkhost", zkHost);
       options.put("collection", collection);
@@ -204,9 +209,18 @@ public class SVMExample implements SparkApp.RDDProcessor {
     final int numFeatures = Integer.parseInt(cli.getOptionValue("numFeatures", DEFAULT_NUM_FEATURES));
     final Function<Row, LabeledPoint> mapFunc = new RowToLabeledPoint(inputCols, numFeatures, stdTokLowerSchema);
     final int numIterations = Integer.parseInt(cli.getOptionValue("numIterations", DEFAULT_NUM_ITERATIONS));
-
     JavaRDD<LabeledPoint> trainingData = trainingDataFromSolr.javaRDD().map(mapFunc);
-    RDD<LabeledPoint> trainRDD = trainingData.rdd();
+    final StandardScalerModel standardScaler = new StandardScaler().fit(trainingData.map(new Function<LabeledPoint, org.apache.spark.mllib.linalg.Vector>() {
+      public Vector call(LabeledPoint labpt) {
+        return labpt.features();
+      }
+    }).rdd());
+    RDD<LabeledPoint> trainRDD = trainingData.map(new Function<LabeledPoint, LabeledPoint>() {
+      public LabeledPoint call(LabeledPoint lp) {
+        return new LabeledPoint(lp.label(), standardScaler.transform(lp.features()));
+      }
+    }).rdd();
+
     trainRDD = trainRDD.persist(StorageLevel.MEMORY_ONLY_SER());
     final SVMModel model = SVMWithSGD.train(trainRDD, numIterations);
 
@@ -224,7 +238,11 @@ public class SVMExample implements SparkApp.RDDProcessor {
     testDataFromSolr = testDataFromSolr.withColumnRenamed("test_polarity", "polarity");
     testDataFromSolr.show();
 
-    JavaRDD<LabeledPoint> testVectors = testDataFromSolr.javaRDD().map(mapFunc);
+    JavaRDD<LabeledPoint> testVectors = testDataFromSolr.javaRDD().map(mapFunc).map(new Function<LabeledPoint, LabeledPoint>() {
+      public LabeledPoint call(LabeledPoint lp) {
+        return new LabeledPoint(lp.label(), standardScaler.transform(lp.features()));
+      }
+    });
 
     // Compute raw scores on the test set.
     JavaRDD<Tuple2<Object, Object>> scoreAndLabels = testVectors.map(
@@ -244,11 +262,11 @@ public class SVMExample implements SparkApp.RDDProcessor {
 
     // Save and load model
     model.save(jsc.sc(), cli.getOptionValue("modelOutput", "mllib-svm-sentiment"));
-
     return 0;
   }
 
   private String json(String singleQuoted) {
     return singleQuoted.replaceAll("'", "\"");
   }
+
 }
