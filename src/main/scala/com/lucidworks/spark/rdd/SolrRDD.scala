@@ -19,7 +19,7 @@ class SolrRDD(
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
-    val useExportHandler: Boolean = false,
+    exportHandler: Option[Boolean] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
@@ -32,16 +32,15 @@ class SolrRDD(
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
 
   protected def copy(
-      useExportHandler: Boolean = false,
+      exportHandler: Option[Boolean] = exportHandler,
       query: Option[String] = query,
       fields: Option[Array[String]] = fields,
       rows: Option[Int] = rows,
       splitField: Option[String] = splitField,
       splitsPerShard: Option[Int] = splitsPerShard,
       solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
-    new SolrRDD(zkHost, collection, sc, useExportHandler, query, fields, rows, splitField, splitsPerShard, solrQuery)
+    new SolrRDD(zkHost, collection, sc, exportHandler, query, fields, rows, splitField, splitsPerShard, solrQuery)
   }
-
 
   /*
   * Get an Iterator that uses the export handler in Solr
@@ -65,7 +64,7 @@ class SolrRDD(
         val query = partition.query
         log.info("Using the shard url " + url + " for getting partition data for split: "+split)
         val resultsIterator: ResultsIterator =
-          if (useExportHandler)
+          if (exportHandler.isDefined && exportHandler.get)
             getExportHandlerBasedIterator(url, query)
           else
             new StreamingResultsIterator(
@@ -86,7 +85,8 @@ class SolrRDD(
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
+    if (!(exportHandler.isDefined && exportHandler.get))
+      SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
     log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
@@ -126,6 +126,8 @@ class SolrRDD(
   def splitField(field: String): SolrRDD = copy(splitField = Some(field))
 
   def splitsPerShard(splitsPerShard: Int): SolrRDD = copy(splitsPerShard = Some(splitsPerShard))
+
+  def useExportHandler: SolrRDD = copy(exportHandler = Some(true))
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
 

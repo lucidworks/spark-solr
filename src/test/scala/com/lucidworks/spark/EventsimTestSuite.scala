@@ -1,8 +1,12 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.{SolrJsonSupport, SolrSupport, ConfigurationConstants}
 import com.lucidworks.spark.util.ConfigurationConstants._
+import org.apache.http.client.HttpClient
 import org.apache.spark.sql.DataFrame
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -81,7 +85,28 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(count == 1)
     val singleRow = df.take(1)(0)
     assert(singleRow.length == 2)
+  }
 
+
+  test("SQL query with export handler") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(ConfigurationConstants.USE_EXPORT_HANDLER, "true")
+      .option(ARBITRARY_PARAMS_STRING, "sort=userId desc")
+      .load()
+
+    // The below two options are not working with the streaming iterator right now due to parsing issues.
+    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id&sort=userId desc")
+    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&sort=userId desc")
+
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT artist FROM events")
+    //  queryDF.count() // count is not going to work with StreamIterator because Spark does not set 'fields' param for
+    // methods that do not need a callback. Better to set fl in the arbitrary params string or 'fields' option
+    val rows = queryDF.collect()
+    assert(rows.length == eventSimCount)
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {

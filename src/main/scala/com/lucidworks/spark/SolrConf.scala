@@ -91,6 +91,13 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def useExportHandler: Option[Boolean] = {
+    if (config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
+      return Some(config.get(USE_EXPORT_HANDLER).get.toBoolean)
+    }
+    None
+  }
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {

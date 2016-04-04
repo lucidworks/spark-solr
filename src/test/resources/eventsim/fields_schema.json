@@ -1,6 +1,6 @@
 [
   {
-    "name": "userId", "type": "string", "indexed": "true", "stored": "true"
+    "name": "userId", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
     "name": "sessionId", "type": "int", "indexed": "true", "stored": "true"
@@ -39,13 +39,13 @@
     "name": "gender", "type": "string", "indexed": "true", "stored": "true"
   },
   {
-    "name": "artist", "type": "string", "indexed": "true", "stored": "true"
+    "name": "artist", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
-    "name": "song", "type": "string", "indexed": "true", "stored": "true"
+    "name": "song", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
-    "name": "length", "type": "double", "indexed": "true", "stored": "true"
+    "name": "length", "type": "double", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
     "name": "timestamp", "type": "tdate", "indexed": "false", "stored": "false", "docValues": "true"

@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.SolrQuerySupport;
 import org.apache.commons.collections.IteratorUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
@@ -40,16 +41,22 @@ public class SolrStreamIterator extends ResultsIterator {
         this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
         this.solrQuery = solrQuery;
 
+        if (solrQuery.getRequestHandler() == null) {
+            solrQuery = solrQuery.setRequestHandler("/export");
+        }
+        solrQuery.setRows(null);
         Map<String, Object> params = getAll(solrQuery, null,
                 (String[]) IteratorUtils.toArray(solrQuery.getParameterNamesIterator(), String.class));
+        SolrQuerySupport.validateExportHandlerQuery(solrServer, solrQuery);
         this.stream = new SolrStream(shardUrl, params);
         openStream();
     }
 
-    /**Copy all params to the given map or if the given map is null
+    /**
+     * Copy all params to the given map or if the given map is null
      * create a new one
      */
-    public Map<String, Object> getAll(SolrQuery solrQuery, Map<String, Object> sink, String... params){
+    public Map<String, Object> getAll(SolrQuery solrQuery, Map<String, Object> sink, String... params) {
         if(sink == null) sink = new LinkedHashMap<>();
         for (String param : params) {
             String[] v = solrQuery.getParams(param);
@@ -70,7 +77,7 @@ public class SolrStreamIterator extends ResultsIterator {
                 currentTuple = fetchNextDocument();
             }
         } catch (IOException e) {
-            log.error("Failed to fetch next document.", e);
+            log.error("Failed to fetch next document for query: " + solrQuery.toQueryString(), e);
             throw new RuntimeException(e);
         }
 
