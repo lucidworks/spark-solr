@@ -102,7 +102,7 @@ class EventsimTestSuite extends EventsimBuilder {
 
     df.registerTempTable("events")
 
-    val queryDF = sqlContext.sql("SELECT song FROM events")
+    val queryDF = sqlContext.sql("SELECT artist FROM events")
     //  queryDF.count() // count is not going to work with StreamIterator because Spark does not set 'fields' param for
     // methods that do not need a callback. Better to set fl in the arbitrary params string or 'fields' option
     val rows = queryDF.collect()
