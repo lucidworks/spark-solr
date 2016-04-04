@@ -85,7 +85,8 @@ class SolrRDD(
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
+    if (!(exportHandler.isDefined && exportHandler.get))
+      SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
     log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
