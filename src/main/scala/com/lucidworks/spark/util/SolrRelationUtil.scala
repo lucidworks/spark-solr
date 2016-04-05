@@ -37,8 +37,13 @@ object SolrRelationUtil extends Logging {
     fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
-        if (fieldMeta.fieldTypeClass.isDefined)
-          SolrQuerySupport.SOLR_DATA_TYPES(fieldMeta.fieldTypeClass.get)
+        if (fieldMeta.fieldTypeClass.isDefined) {
+          if (SolrQuerySupport.SOLR_DATA_TYPES.contains(fieldMeta.fieldTypeClass.get)) {
+            SolrQuerySupport.SOLR_DATA_TYPES(fieldMeta.fieldTypeClass.get)
+          } else {
+            DataTypes.StringType
+          }
+        }
         else
           DataTypes.StringType
       }
