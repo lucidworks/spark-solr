@@ -1,5 +1,7 @@
 package com.lucidworks.spark
 
+import java.util.UUID
+
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
@@ -174,7 +176,7 @@ class SolrRelation(
     val zkHost = conf.getZkHost.get
     val collectionId = conf.getCollection.get
     val dfSchema = df.schema
-    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId)
 
@@ -219,6 +221,9 @@ class SolrRelation(
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
+    val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
+    val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
+    // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
@@ -242,6 +247,12 @@ class SolrRelation(
           }
         }
       })
+      // Generate unique key if the document doesn't have one
+      if (generateUniqKey) {
+        if (!doc.containsKey(uniqueKey)) {
+          doc.setField(uniqueKey, UUID.randomUUID().toString)
+        }
+      }
       doc
     })
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
