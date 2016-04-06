@@ -1,12 +1,15 @@
 package com.lucidworks.spark
 
+import java.util.UUID
 
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
-import org.apache.solr.common.SolrInputDocument
+import org.apache.solr.common.SolrException.ErrorCode
+import org.apache.solr.common.{SolrException, SolrInputDocument}
+import org.apache.solr.common.params.ModifiableSolrParams
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -29,6 +32,7 @@ class SolrRelation(
   implicit
     val conf: SolrConf = new SolrConf(parameters))
   extends BaseRelation
+  with Serializable
   with TableScan
   with PrunedFilteredScan
   with InsertableRelation
@@ -46,7 +50,11 @@ class SolrRelation(
 
   val sc = sqlContext.sparkContext
   val solrRDD = {
-    var rdd = new SolrRDD(conf.getZkHost.get, conf.getCollection.get, sc)
+    var rdd = new SolrRDD(
+      conf.getZkHost.get,
+      conf.getCollection.get,
+      sc,
+      exportHandler = conf.useExportHandler)
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
@@ -135,12 +143,13 @@ class SolrRelation(
     dataType match {
       case bi: BinaryType => "binary"
       case b: BooleanType => "boolean"
-      case dt: DateType => "tdata"
-      case db: DoubleType => "double"
-      case ft: FloatType => "float"
-      case i: IntegerType => "int"
-      case l: LongType => "long"
-      case s: ShortType => "int"
+      case dt: DateType => "tdate"
+      case db: DoubleType => "tdouble"
+      case dec: DecimalType => "tdouble"
+      case ft: FloatType => "tfloat"
+      case i: IntegerType => "tint"
+      case l: LongType => "tlong"
+      case s: ShortType => "tint"
       case t: TimestampType => "tdate"
       case _ => "string"
     }
@@ -167,7 +176,7 @@ class SolrRelation(
     val zkHost = conf.getZkHost.get
     val collectionId = conf.getCollection.get
     val dfSchema = df.schema
-    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost);
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId)
 
@@ -178,9 +187,21 @@ class SolrRelation(
       if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en"))
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
     })
-    val cloudClient = SolrSupport.getCachedCloudClient(zkHost);
-    val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava)
-    addFieldsUpdateRequest.process(cloudClient, collectionId)
+
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val solrParams = new ModifiableSolrParams()
+    solrParams.add("updateTimeoutSecs","30")
+    val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
+
+    logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+
+    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
+      addFieldsUpdateRequest.process(cloudClient, collectionId)
+    if (updateResponse.getStatus >= 400) {
+      val errMsg = "Schema update request failed due to: "+updateResponse
+      logError(errMsg)
+      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+    }
 
     logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
     if (conf.softAutoCommitSecs.isDefined) {
@@ -200,6 +221,9 @@ class SolrRelation(
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
+    val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
+    val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
+    // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
@@ -217,10 +241,18 @@ class SolrRelation(
             case v: Iterable[Any] =>
               val it = v.iterator
               while (it.hasNext) doc.addField(fname, it.next())
+            case bd: java.math.BigDecimal =>
+              doc.setField(fname, bd.doubleValue())
             case _ => doc.setField(fname, value)
           }
         }
       })
+      // Generate unique key if the document doesn't have one
+      if (generateUniqKey) {
+        if (!doc.containsKey(uniqueKey)) {
+          doc.setField(uniqueKey, UUID.randomUUID().toString)
+        }
+      }
       doc
     })
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)

@@ -6,10 +6,11 @@ import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.solr.client.solrj.SolrRequest.METHOD
-import org.apache.solr.client.solrj.impl.StreamingBinaryResponseParser
+import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj._
+import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
@@ -331,11 +332,13 @@ object SolrQuerySupport extends Logging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              log.info("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+              if (log.isDebugEnabled)
+                log.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
           } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              log.info("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              if (log.isDebugEnabled)
+                log.debug("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
@@ -429,8 +432,30 @@ object SolrQuerySupport extends Logging {
     }
   }
 
+  def validateExportHandlerQuery(solrServer: SolrClient, solrQuery: SolrQuery) = {
+    var cloneQuery = solrQuery.getCopy
+    cloneQuery = cloneQuery.setRows(0)
+    val queryRequest = new QueryRequest(cloneQuery)
+    queryRequest.setResponseParser(new InputStreamResponseParser("json"))
+    queryRequest.setMethod(SolrRequest.METHOD.POST)
+    try {
+      val queryResponse = queryRequest.process(solrServer)
+      if (queryResponse.getStatus != 0) {
+        throw new RuntimeException(
+          "Solr request returned with status code '" + queryResponse.getStatus + "'. Response: '" + queryResponse.getResponse.toString)
+      }
+    } catch {
+      case e: Any =>
+        log.error("Error while validating query request: " + queryRequest.toString)
+        throw e
+    }
+  }
+
   def getNumDocsFromSolr(collection: String, zkHost: String, query: Option[SolrQuery]): Long = {
     val solrQuery = if (query.isDefined) query.get else new SolrQuery().setQuery("*:*")
+    val cloneQuery = solrQuery.getCopy
+    cloneQuery.set("distrib", "true")
+    cloneQuery.setRows(0)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val response = cloudClient.query(collection, solrQuery)
     response.getResults.getNumFound

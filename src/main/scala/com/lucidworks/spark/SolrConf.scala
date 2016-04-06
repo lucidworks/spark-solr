@@ -91,6 +91,20 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def useExportHandler: Option[Boolean] = {
+    if (config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
+      return Some(config.get(USE_EXPORT_HANDLER).get.toBoolean)
+    }
+    None
+  }
+
+  def genUniqKey: Option[Boolean] = {
+    if (config.contains(GENERATE_UNIQUE_KEY) && config.get(GENERATE_UNIQUE_KEY).isDefined) {
+      return Some(config.get(GENERATE_UNIQUE_KEY).get.toBoolean)
+    }
+    None
+  }
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {

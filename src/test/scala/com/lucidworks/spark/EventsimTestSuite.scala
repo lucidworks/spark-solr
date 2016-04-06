@@ -81,7 +81,41 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(count == 1)
     val singleRow = df.take(1)(0)
     assert(singleRow.length == 2)
+  }
 
+  test("SQL collect query with export handler") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(USE_EXPORT_HANDLER, "true")
+      .option(ARBITRARY_PARAMS_STRING, "sort=userId desc")
+      .load()
+
+    // The below two options are not working with the streaming iterator right now due to parsing issues.
+    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id&sort=userId desc")
+    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&sort=userId desc")
+
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT artist FROM events")
+    //  queryDF.count() // count is not going to work with StreamIterator because Spark does not set 'fields' param for
+    // methods that do not need a callback. Better to set fl in the arbitrary params string or 'fields' option
+    val rows = queryDF.collect()
+    assert(rows.length == eventSimCount)
+  }
+
+  test("SQL count query with export handler") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(USE_EXPORT_HANDLER, "true")
+      .option(ARBITRARY_PARAMS_STRING, "fl=artist&sort=userId desc") // The test will fail without the fl param here
+      .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT artist FROM events")
+    queryDF.count()
+    assert(queryDF.count() == eventSimCount)
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {

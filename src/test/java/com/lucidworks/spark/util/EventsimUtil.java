@@ -91,7 +91,7 @@ public class EventsimUtil {
     scala.collection.immutable.Map<String, SolrFieldMeta> types = SolrQuerySupport.getFieldTypes(Set$.MODULE$.<String>empty(), SolrSupport.getSolrBaseUrl(zkHost), collectionName);
     log.info("Existing fields in the collection '" + collectionName + "':  " + types.toString());
     validateStatusCode(solrClient.add(collectionName, docs));
-    validateStatusCode(solrClient.commit());
+    validateStatusCode(solrClient.commit(collectionName, true, true));
     long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply((SolrQuery) null));
     if (!(docsInSolr == 1000)) {
       throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
