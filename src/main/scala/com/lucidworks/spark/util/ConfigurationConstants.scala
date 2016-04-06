@@ -17,4 +17,5 @@ object ConfigurationConstants {
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
   val BATCH_SIZE: String = "batch_size"
   val USE_EXPORT_HANDLER: String = "use_export_handler"
+  val GENERATE_UNIQUE_KEY: String = "gen_uniq_key"
 }
