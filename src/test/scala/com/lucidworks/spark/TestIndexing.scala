@@ -2,13 +2,14 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil}
+import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.{SolrQuerySupport, ConfigurationConstants, SolrCloudUtil}
 
 class TestIndexing extends TestSuiteBuilder {
 
   test("Load csv file and index to Solr") {
     val collectionName = "testIndexing-" + UUID.randomUUID().toString
-    SolrCloudUtil.buildCollection(zkHost, collectionName, 3, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
       val csvFileLocation = "src/test/resources/test-data/nyc_yellow_taxi_sample_1k.csv"
       val csvDF = sqlContext.read.format("com.databricks.spark.csv")
@@ -25,7 +26,6 @@ class TestIndexing extends TestSuiteBuilder {
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
-
   }
 
 }
