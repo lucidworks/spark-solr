@@ -92,7 +92,7 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
     if (str == null) return Seq.empty[String]
     val builder = Seq.newBuilder[String]
-    val inputStream = MultiAnalyzer.tokenStream(field, str)
+    val inputStream = analyzerWrapper.tokenStream(field, str)
     val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
     inputStream.reset()
     while (inputStream.incrementToken) builder += charTermAttr.toString
@@ -165,9 +165,14 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     for ((field, values) <- fieldValues) output.put(field, analyzeMVJava(field, values))
     java.util.Collections.unmodifiableMap(output)
   }
-  def tokenStream(fieldName: String, text: String) = MultiAnalyzer.tokenStream(fieldName, text)
-  def tokenStream(fieldName: String, reader: Reader) = MultiAnalyzer.tokenStream(fieldName, reader)
-  private object MultiAnalyzer extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
+  /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
+    * for the analyzer to tokenize the contents of `text`. */
+  def tokenStream(fieldName: String, text: String) = analyzerWrapper.tokenStream(fieldName, text)
+  /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
+    * for the analyzer to tokenize the contents of `reader`. */
+  def tokenStream(fieldName: String, reader: Reader) = analyzerWrapper.tokenStream(fieldName, reader)
+  @transient private lazy val analyzerWrapper = new AnalyzerWrapper
+  private class AnalyzerWrapper extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
     override protected def getWrappedAnalyzer(field: String): Analyzer = {
       analyzerCache.synchronized {
         var analyzer = analyzerCache.get(field)
