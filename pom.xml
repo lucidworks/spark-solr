@@ -540,5 +540,10 @@
       <artifactId>commons-compress</artifactId>
       <version>1.4.1</version>
     </dependency>
+    <dependency> <!-- optional dependency of joda-time that is mandatory in Scala -->
+      <groupId>org.joda</groupId>
+      <artifactId>joda-convert</artifactId>
+      <version>1.2</version>
+    </dependency>
   </dependencies>
 </project>
