@@ -48,7 +48,7 @@ import scala.util.control.NonFatal
   *
   * The `newsgroup_s` field will contain the name of the article's parent directory.
   *
-  * The `id` field value will in the format `newsgroup_articlenum`, e.g. "comp.graphics_38659",
+  * The `id` field value will be in the format `newsgroup_articlenum`, e.g. "comp.graphics_38659",
   * where `newsgroup` is the name of the article's parent directory, and `articlenum` is the
   * article filename.
   *
@@ -61,7 +61,7 @@ import scala.util.control.NonFatal
   * == Example invocation ==
   *
   * You must first run `mvn package` in the spark-solr project, and you must download
-  * a Spark 1.6.1 binary distribution and pointed the environment variable `$SPARK_HOME`
+  * a Spark 1.6.1 binary distribution and point the environment variable `$SPARK_HOME`
   * to the unpacked distribution directory.
   *
   * {{{
