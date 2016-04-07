@@ -117,6 +117,10 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
       })
       if (batch.nonEmpty) sendBatch()
     })
+    // Explicit commit to make sure all docs are visible
+    val solrServer = SolrSupport.getCachedCloudClient(zkHost)
+    solrServer.commit(collection, true, true)
+
     sc.stop()
     0
   }
