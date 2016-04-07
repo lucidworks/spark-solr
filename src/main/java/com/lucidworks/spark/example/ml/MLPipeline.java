@@ -82,7 +82,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
 
     String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
     String collection = cli.getOptionValue("collection", "ml20news");
-    String queryStr = cli.getOptionValue("query", "content_txt:[* TO *] AND newsgroup_s:[* TO *]");
+    String queryStr = cli.getOptionValue("query", "content_txt_en:[* TO *] AND newsgroup_s:[* TO *]");
     final String labelField = cli.getOptionValue("labelField", "newsgroup_s");
     final String contentFields = cli.getOptionValue("contentFields", "content_txt,subject");
 
