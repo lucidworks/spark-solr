@@ -74,7 +74,7 @@ import scala.util.control.NonFatal
   *
   * {{{
   *   $SPARK_HOME/bin/spark-submit --class com.lucidworks.spark.SparkApp \
-  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr
+  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr --help
   * }}}
   */
 class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
@@ -84,17 +84,12 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
     OptionBuilder().longOpt("path").hasArg.argName("PATH").required
       .desc("Path from which to recursively load newsgroup articles").build,
     OptionBuilder().longOpt("collection").hasArg.argName("NAME").required
-      .desc("Target Solr collection").build,
-    OptionBuilder().longOpt("zkHost").hasArg.argName("HOST").required(false)
-      .desc(s"ZooKeeper connection string. Default: $DefaultZkHost").build,
-    OptionBuilder().longOpt("batchSize").hasArg.argName("DOCS").required(false)
-      .`type`(classOf[Number]).desc(s"Solr indexing batch size. Default: $DefaultBatchSize").build)
+      .desc("Target Solr collection; default: $DefaultCollection").build)
   def run(conf: SparkConf, cli: CommandLine): Int = {
     val path = cli.getOptionValue("path")
-    val collection = cli.getOptionValue("collection")
+    val collection = cli.getOptionValue("collection", DefaultCollection)
     val zkHost = cli.getOptionValue("zkHost", DefaultZkHost)
-    val batchSize = Option(cli.getParsedOptionValue("batchSize"))
-      .map(_.asInstanceOf[Number].intValue()).getOrElse(DefaultBatchSize)
+    val batchSize = cli.getOptionValue("batchSize", DefaultBatchSize).toInt
     val sc = new SparkContext(conf)
     sc.hadoopConfiguration.setBoolean("mapreduce.input.fileinputformat.input.dir.recursive", true)
     // Use binaryFiles() because wholeTextFiles() assumes files are UTF-8, but article encoding is Latin-1
@@ -174,7 +169,8 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
 }
 object NewsgroupsIndexer {
   val DefaultZkHost = "localhost:9983"
-  val DefaultBatchSize = 100
+  val DefaultBatchSize = "100"
+  val DefaultCollection = "ml20news"
   val NonXmlCharsRegex = "[\u0000-\u0008\u000B\u000C\u000E-\u001F]".r
   val NewsgroupHeaderRegex = "^([^: \t]+):[ \t]*(.*)".r
   val NonAlphaNumCharsRegex = "[^_A-Za-z0-9]".r
