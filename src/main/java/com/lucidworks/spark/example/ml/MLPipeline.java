@@ -172,8 +172,8 @@ public class MLPipeline implements SparkApp.RDDProcessor {
         .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
         .addGrid(analyzer.prefixTokensWithInputCol());
 
-    if (estimatorStage instanceof LogisticRegression) {
-      LogisticRegression lr = (LogisticRegression)estimatorStage;
+    if (estimatorStage instanceof OneVsRest) {
+      LogisticRegression lr = (LogisticRegression)((OneVsRest)estimatorStage).getClassifier();
       paramGridBuilder.addGrid(lr.regParam(), new double[]{0.1, 0.01});
     } else if (estimatorStage instanceof NaiveBayes) {
       NaiveBayes nb = (NaiveBayes)estimatorStage;
