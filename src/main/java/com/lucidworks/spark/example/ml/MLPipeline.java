@@ -8,6 +8,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
+import org.apache.spark.ml.classification.Classifier;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.NaiveBayes;
 import org.apache.spark.ml.classification.OneVsRest;
@@ -173,7 +174,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
         .addGrid(analyzer.prefixTokensWithInputCol());
 
     if (estimatorStage instanceof OneVsRest) {
-      LogisticRegression lr = (LogisticRegression)((OneVsRest)estimatorStage).getClassifier();
+      LogisticRegression lr = (LogisticRegression)((Classifier)((OneVsRest)estimatorStage).getClassifier());
       paramGridBuilder.addGrid(lr.regParam(), new double[]{0.1, 0.01});
     } else if (estimatorStage instanceof NaiveBayes) {
       NaiveBayes nb = (NaiveBayes)estimatorStage;
