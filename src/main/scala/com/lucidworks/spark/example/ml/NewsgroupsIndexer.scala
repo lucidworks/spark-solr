@@ -67,7 +67,7 @@ import scala.util.control.NonFatal
   * {{{
   *   $SPARK_HOME/bin/spark-submit --master 'local[2]' --class com.lucidworks.spark.SparkApp \
   *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr -zkHost localhost:9983     \
-  *   -collection 20newsgroups -path /relative/or/absolute/path/to/20news-18828`
+  *   -collection ml20news -path /relative/or/absolute/path/to/20news-18828`
   * }}}
   *
   * To see a description of all available options, run the following:
