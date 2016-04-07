@@ -8,7 +8,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
-import org.apache.spark.ml.classification.Classifier;
 import org.apache.spark.ml.classification.LogisticRegression;
 import org.apache.spark.ml.classification.NaiveBayes;
 import org.apache.spark.ml.classification.OneVsRest;
@@ -82,7 +81,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
 
     String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
     String collection = cli.getOptionValue("collection", "ml20news");
-    String queryStr = cli.getOptionValue("query", "content_txt_en:[* TO *] AND newsgroup_s:[* TO *]");
+    String queryStr = cli.getOptionValue("query", "content_txt:[* TO *] AND newsgroup_s:[* TO *]");
     final String labelField = cli.getOptionValue("labelField", "newsgroup_s");
     final String contentFields = cli.getOptionValue("contentFields", "content_txt,subject");
 
@@ -173,8 +172,8 @@ public class MLPipeline implements SparkApp.RDDProcessor {
         .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
         .addGrid(analyzer.prefixTokensWithInputCol());
 
-    if (estimatorStage instanceof OneVsRest) {
-      LogisticRegression lr = (LogisticRegression)((Classifier)((OneVsRest)estimatorStage).getClassifier());
+    if (estimatorStage instanceof LogisticRegression) {
+      LogisticRegression lr = (LogisticRegression)estimatorStage;
       paramGridBuilder.addGrid(lr.regParam(), new double[]{0.1, 0.01});
     } else if (estimatorStage instanceof NaiveBayes) {
       NaiveBayes nb = (NaiveBayes)estimatorStage;
