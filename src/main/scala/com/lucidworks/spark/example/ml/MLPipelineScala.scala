@@ -20,7 +20,7 @@ package com.lucidworks.spark.example.ml
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformer
 import org.apache.commons.cli.CommandLine
-import org.apache.commons.cli.Option.{builder => OptionBuilder}
+import org.apache.commons.cli.Option.{builder => OptionBuilder} // Avoid clash with Scala Option
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.LogisticRegression
@@ -36,17 +36,15 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
   import MLPipelineScala._
   def getName = "ml-pipeline-scala"
   def getOptions = Array(
-    OptionBuilder().longOpt("zkHost").hasArg.argName("HOST").required(false).desc(
-      s"ZooKeeper connection string. Default: $DefaultZkHost").build(),
     OptionBuilder().longOpt("query").hasArg.argName("QUERY").required(false).desc(
       s"Query to identify documents in the training set. Default: $DefaultQuery").build(),
     OptionBuilder().longOpt("labelField").hasArg.argName("FIELD").required(false).desc(
-      s"Field in containing the label in Solr training set documents. Default: $DefaultLabelField").build(),
+      s"Field containing the label in Solr training set documents. Default: $DefaultLabelField").build(),
     OptionBuilder().longOpt("contentFields").hasArg.argName("FIELDS").required(false).desc(
       s"Comma-separated list of text field(s) in Solr training set documents. Default: $DefaultContentFields").build(),
     OptionBuilder().longOpt("classifier").hasArg.argName("TYPE").required(false).desc(
       s"Classifier type: either NaiveBayes or LogisticRegression. Default: $DefaultClassifier").build(),
-    OptionBuilder().longOpt("sample").hasArg.argName("FRACTION").required(false).`type`(classOf[Number]).desc(
+    OptionBuilder().longOpt("sample").hasArg.argName("FRACTION").required(false).desc(
       s"Fraction (0 to 1) of full dataset to sample from Solr. Default: $DefaultSample").build())
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
@@ -55,8 +53,7 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
     val labelField = cli.getOptionValue("labelField", DefaultLabelField)
     val classifier = cli.getOptionValue("classifier", DefaultClassifier)
     val contentFields = cli.getOptionValue("contentFields", DefaultContentFields).split(",").map(_.trim)
-    val sampleFraction = Option(cli.getParsedOptionValue("sample"))
-      .map(_.asInstanceOf[Number].doubleValue()).getOrElse(DefaultSample)
+    val sampleFraction = cli.getOptionValue("sample", DefaultSample).toDouble
 
     val options = Map(
       "zkhost" -> cli.getOptionValue("zkHost", DefaultZkHost),
@@ -152,13 +149,13 @@ object MLPipelineScala {
   val PredictionCol = "prediction"
   val FeaturesCol = "features"
   val PredictedLabelCol = "predictedLabel"
-  val DefaultZkHost = "localhost:2181/fusion21"
+  val DefaultZkHost = "localhost:9983"
   val DefaultQuery = "content_txt_en:[* TO *] AND newsgroup_s:[* TO *]"
   val DefaultLabelField = "newsgroup_s"
   val DefaultContentFields = "content_txt_en,Subject_txt_en"
   val DefaultCollection = "ml20news"
   val DefaultClassifier = "LogisticRegression"
-  val DefaultSample = 1.0
+  val DefaultSample = "1.0"
   val WhitespaceTokSchema =
     """{ "analyzers": [{ "name": "ws_tok", "tokenizer": { "type": "whitespace" } }],
       |  "fields": [{ "regex": ".+", "analyzer": "ws_tok" }] }""".stripMargin
