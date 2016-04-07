@@ -83,7 +83,7 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
   def getOptions = Array(
     OptionBuilder().longOpt("path").hasArg.argName("PATH").required
       .desc("Path from which to recursively load newsgroup articles").build,
-    OptionBuilder().longOpt("collection").hasArg.argName("NAME").required
+    OptionBuilder().longOpt("collection").hasArg.argName("NAME").required(false)
       .desc("Target Solr collection; default: $DefaultCollection").build)
   def run(conf: SparkConf, cli: CommandLine): Int = {
     val path = cli.getOptionValue("path")
