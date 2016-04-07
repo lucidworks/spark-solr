@@ -22,7 +22,7 @@ import scala.util.control.NonFatal
 /** Example application to index each article in the 20 newsgroups data as a Solr document.
   * The 20 newsgroups data is downloadable from:
   *
-  *    http://curl.haxx.se/mail/archive-2014-10/0053.html
+  *    http://qwone.com/~jason/20Newsgroups/
   *
   * Articles in any of the three archives available there can be indexed,
   * after first downloading it from the above page and unpacking it.
