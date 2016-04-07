@@ -45,7 +45,9 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
     OptionBuilder().longOpt("classifier").hasArg.argName("TYPE").required(false).desc(
       s"Classifier type: either NaiveBayes or LogisticRegression. Default: $DefaultClassifier").build(),
     OptionBuilder().longOpt("sample").hasArg.argName("FRACTION").required(false).desc(
-      s"Fraction (0 to 1) of full dataset to sample from Solr. Default: $DefaultSample").build())
+      s"Fraction (0 to 1) of full dataset to sample from Solr. Default: $DefaultSample").build(),
+    OptionBuilder().longOpt("collection").hasArg.argName("NAME").required(false)
+      .desc("Solr source collection; default: $DefaultCollection").build())
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
     val jsc = new SparkContext(conf)
