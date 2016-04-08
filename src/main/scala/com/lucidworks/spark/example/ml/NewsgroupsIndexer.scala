@@ -20,9 +20,7 @@ import scala.io.Source
 import scala.util.control.NonFatal
 
 /** Example application to index each article in the 20 newsgroups data as a Solr document.
-  * The 20 newsgroups data is downloadable from:
-  *
-  *    http://qwone.com/~jason/20Newsgroups/
+  * The 20 newsgroups data is downloadable from [[http://qwone.com/~jason/20Newsgroups/]].
   *
   * Articles in any of the three archives available there can be indexed,
   * after first downloading it from the above page and unpacking it.
@@ -33,13 +31,19 @@ import scala.util.control.NonFatal
   *
   * == Prerequisites ==
   *
-  * You must have Solr running in cloud mode, with a target collection created.
+  * Start Solr in cloud mode, and create a target collection, e.g. (after downloading the
+  * binary Solr distribution - see [[https://lucene.apache.org/solr/]] - then unpacking and
+  * changing to the unpacked root directory, e.g. `solr-5.4.1/`):
+  *
+  * {{{
+  *   bin/solr -c && bin/solr create -c testing -shards 2
+  * }}}
   *
   * == Document fields ==
   *
   * Each header present in the newsgroup articles will be indexed to a Solr dynamic field
   * name prefixed with the header name, e.g. Subject: text will be indexed into a field
-  * named `Subject_txt_en`.
+  * named Subject_txt_en`.
   *
   * Note that the set of headers in each of the three available archives is different; details
   * are on the download page above.
@@ -60,7 +64,7 @@ import scala.util.control.NonFatal
   *
   * == Example invocation ==
   *
-  * You must first run `mvn package` in the spark-solr project, and you must download
+  * You must first run `mvn -DskipTests package` in the spark-solr project, and you must download
   * a Spark 1.6.1 binary distribution and point the environment variable `$SPARK_HOME`
   * to the unpacked distribution directory.
   *
