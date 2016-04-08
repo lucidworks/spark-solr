@@ -20,11 +20,10 @@ package com.lucidworks.spark.example.ml
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformer
 import org.apache.commons.cli.CommandLine
-import org.apache.commons.cli.Option.{builder => OptionBuilder} // Avoid clash with Scala Option
+import org.apache.commons.cli.Option.{builder => OptionBuilder}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.ml.Pipeline
-import org.apache.spark.ml.classification.LogisticRegression
-import org.apache.spark.ml.classification.{NaiveBayes, OneVsRest}
+import org.apache.spark.ml.{Pipeline, PipelineStage}
+import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature._
 import org.apache.spark.ml.tuning.CrossValidator
@@ -42,18 +41,19 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
       s"Field containing the label in Solr training set documents. Default: $DefaultLabelField").build(),
     OptionBuilder().longOpt("contentFields").hasArg.argName("FIELDS").required(false).desc(
       s"Comma-separated list of text field(s) in Solr training set documents. Default: $DefaultContentFields").build(),
-    OptionBuilder().longOpt("classifier").hasArg.argName("TYPE").required(false).desc(
-      s"Classifier type: either NaiveBayes or LogisticRegression. Default: $DefaultClassifier").build(),
+// CrossValidator model export only supports NaiveBayes in Spark 1.6.1, but in Spark 2.0,
+// OneVsRest+LogisticRegression will be supported: https://issues.apache.org/jira/browse/SPARK-11892
+//    OptionBuilder().longOpt("classifier").hasArg.argName("TYPE").required(false).desc(
+//      s"Classifier type: either NaiveBayes or LogisticRegression. Default: $DefaultClassifier").build(),
     OptionBuilder().longOpt("sample").hasArg.argName("FRACTION").required(false).desc(
       s"Fraction (0 to 1) of full dataset to sample from Solr. Default: $DefaultSample").build(),
     OptionBuilder().longOpt("collection").hasArg.argName("NAME").required(false).desc(
-      s"Solr source collection; default: $DefaultCollection").build())
+      s"Solr source collection. Default: $DefaultCollection").build())
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
     val jsc = new SparkContext(conf)
     val sqlContext = new SQLContext(jsc)
     val labelField = cli.getOptionValue("labelField", DefaultLabelField)
-    val classifier = cli.getOptionValue("classifier", DefaultClassifier)
     val contentFields = cli.getOptionValue("contentFields", DefaultContentFields).split(",").map(_.trim)
     val sampleFraction = cli.getOptionValue("sample", DefaultSample).toDouble
 
@@ -63,7 +63,7 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
       "query" -> cli.getOptionValue("query", DefaultQuery),
       "fields" -> s"""id,$labelField,${contentFields.mkString(",")}""")
     val solrData = sqlContext.read.format("solr").options(options).load
-    val sampledSolrData = solrData.sample(false, sampleFraction)
+    val sampledSolrData = solrData.sample(withReplacement = false, sampleFraction)
 
     // Configure an ML pipeline, which consists of the following stages:
     // index string labels, analyzer, hashingTF, classifier model, convert predictions to string labels.
@@ -76,11 +76,9 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
     // Vectorize!
     val hashingTF = new HashingTF().setInputCol(WordsCol).setOutputCol(FeaturesCol)
 
-    // ML pipelines don't provide stages for all algorithms yet, such as NaiveBayes?
-    var estimatorStage = classifier match {
-      case "NaiveBayes" => new NaiveBayes()
-      case _ => new OneVsRest().setClassifier(new LogisticRegression().setMaxIter(10)).setLabelCol(LabelCol)
-    }
+    val nb =  new NaiveBayes()
+    val estimatorStage:PipelineStage = nb
+    println(s"Using estimator: $estimatorStage")
     val labelConverter = new IndexToString().setInputCol(PredictionCol)
       .setOutputCol(PredictedLabelCol).setLabels(labelIndexer.labels)
     val pipeline = new Pipeline().setStages(Array(labelIndexer, analyzer, hashingTF, estimatorStage, labelConverter))
@@ -92,24 +90,18 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
     // with 3 values for hashingTF.numFeatures, 2 values for lr.regParam, 2 values for
     // analyzer.analysisSchema, and both possibilities for analyzer.prefixTokensWithInputCol.
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
-    val paramGridBuilder = new ParamGridBuilder()
+    val paramGrid = new ParamGridBuilder()
       .addGrid(hashingTF.numFeatures, Array(1000, 5000))
       .addGrid(analyzer.analysisSchema, Array(WhitespaceTokSchema, StdTokLowerSchema))
       .addGrid(analyzer.prefixTokensWithInputCol)
-
-    estimatorStage match {
-      case ovr: OneVsRest => paramGridBuilder.addGrid(
-        ovr.getClassifier.asInstanceOf[LogisticRegression].regParam, Array(0.1, 0.01))
-      case nb: NaiveBayes => paramGridBuilder.addGrid(nb.smoothing, Array(1.0, 0.5))
-    }
+      .addGrid(nb.smoothing, Array(1.0, 0.5)).build
 
     // We now treat the Pipeline as an Estimator, wrapping it in a CrossValidator instance.
     // This will allow us to jointly choose parameters for all Pipeline stages.
     // A CrossValidator requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
     val cv = new CrossValidator().setEstimator(pipeline).setEvaluator(evaluator)
-      .setEstimatorParamMaps(paramGridBuilder.build).setNumFolds(3)
+      .setEstimatorParamMaps(paramGrid).setNumFolds(3)
     val cvModel = cv.fit(trainingData)
-    println(s"Best model params: ${cvModel.bestModel.params.mkString(", ")}")
 
     // save it to disk
     cvModel.write.overwrite.save("ml-pipeline-model")
@@ -156,7 +148,6 @@ object MLPipelineScala {
   val DefaultLabelField = "newsgroup_s"
   val DefaultContentFields = "content_txt_en,Subject_txt_en"
   val DefaultCollection = "ml20news"
-  val DefaultClassifier = "LogisticRegression"
   val DefaultSample = "1.0"
   val WhitespaceTokSchema =
     """{ "analyzers": [{ "name": "ws_tok", "tokenizer": { "type": "whitespace" } }],
