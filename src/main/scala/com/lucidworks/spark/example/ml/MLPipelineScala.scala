@@ -31,6 +31,33 @@ import org.apache.spark.ml.tuning.{CrossValidatorModel, ParamGridBuilder}
 import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.sql.SQLContext
 
+/** An example of building a spark.ml classification model to predict the newsgroup of
+  * articles from the 20 newsgroups data (see [[http://qwone.com/~jason/20Newsgroups/]])
+  * hosted in a Solr collection.
+  *
+  * == Prerequisites ==
+  *
+  * You must run `mvn -DskipTests package` in the spark-solr project, and you must download
+  * a Spark 1.6.1 binary distribution and point the environment variable `$SPARK_HOME`
+  * to the unpacked distribution directory.
+  *
+  * Follow the instructions in the [[NewsgroupsIndexer]] example's scaladoc to populate a Solr
+  * collection with articles from the above-linked 20 newsgroup data.
+  *
+  * == Example invocation ==
+  *
+  * {{{
+  *  $SPARK_HOME/bin/spark-submit --master 'local[2]' --class com.lucidworks.spark.SparkApp \
+  *  target/spark-solr-2.0.0-SNAPSHOT-shaded.jar ml-pipeline-scala
+  * }}}
+  *
+  * To see a description of all available options, run the following:
+  *
+  * {{{
+  *  $SPARK_HOME/bin/spark-submit --class com.lucidworks.spark.SparkApp \
+  *  target/spark-solr-2.0.0-SNAPSHOT-shaded.jar ml-pipeline-scala --help
+  * }}}
+  */
 class MLPipelineScala extends SparkApp.RDDProcessor {
   import MLPipelineScala._
   def getName = "ml-pipeline-scala"
