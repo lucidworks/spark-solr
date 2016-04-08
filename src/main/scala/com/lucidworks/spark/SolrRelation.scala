@@ -99,8 +99,17 @@ class SolrRelation(
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
     if (fields != null && fields.length > 0) {
-      fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
-      query.setFields(fields: _*)
+      // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
+      if (this.baseSchema.size == fields.length) {
+        // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
+        if (conf.docValues.getOrElse(false)) {
+          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+          query.setFields(fields: _*)
+        }
+      } else {
+        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+        query.setFields(fields: _*)
+      }
     }
 
     // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
