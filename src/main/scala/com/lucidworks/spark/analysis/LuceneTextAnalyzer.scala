@@ -23,7 +23,7 @@ import java.util.regex.Pattern
 import com.lucidworks.spark.util.Utils
 import org.apache.lucene.analysis.custom.CustomAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper}
+import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper, TokenStream}
 import org.apache.lucene.util.{Version => LuceneVersion}
 import org.json4s.jackson.JsonMethods._
 
@@ -91,14 +91,14 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   def analyze(field: String, str: String): Seq[String] = {
     if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
     if (str == null) return Seq.empty[String]
-    val builder = Seq.newBuilder[String]
-    val inputStream = analyzerWrapper.tokenStream(field, str)
-    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
-    inputStream.reset()
-    while (inputStream.incrementToken) builder += charTermAttr.toString
-    inputStream.end()
-    inputStream.close()
-    builder.result()
+    analyze(analyzerWrapper.tokenStream(field, str))
+  }
+  /** Looks up the analyzer mapped to the given field from the configured analysis schema,
+    * uses it to perform analysis on the given reader, returning the produced token sequence.
+    */
+  def analyze(field: String, reader: Reader): Seq[String] = {
+    if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
+    analyze(analyzerWrapper.tokenStream(field, reader))
   }
   /** For each of the field->value pairs in fieldValues, looks up the analyzer mapped
     * to the field from the configured analysis schema, and uses it to perform analysis on the
@@ -134,6 +134,12 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     * token sequence. */
   def analyzeJava(field: String, str: String): java.util.List[String] = {
     seqAsJavaList(analyze(field, str))
+  }
+  /** Java-friendly version: looks up the analyzer mapped to the given field from the configured
+    * analysis schema, uses it to perform analysis on the given reader, returning the produced
+    * token sequence. */
+  def analyzeJava(field: String, reader: Reader): java.util.List[String] = {
+    seqAsJavaList(analyze(field, reader))
   }
   /** Java-friendly version: for each of the field->value pairs in fieldValues, looks up the
     * analyzer mapped to the field from the configured analysis schema, and uses it to perform
@@ -186,9 +192,18 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
       }
     }
   }
+  private def analyze(inputStream: TokenStream): Seq[String] = {
+    val builder = Seq.newBuilder[String]
+    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
+    inputStream.reset()
+    while (inputStream.incrementToken) builder += charTermAttr.toString
+    inputStream.end()
+    inputStream.close()
+    builder.result()
+  }
 }
 
-  private class AnalyzerSchema(val analysisSchema: String) {
+private class AnalyzerSchema(val analysisSchema: String) {
   implicit val formats = org.json4s.DefaultFormats    // enable extract
   val schemaConfig = parse(analysisSchema).extract[SchemaConfig]
   val analyzers = mutable.Map[String, Analyzer]()
