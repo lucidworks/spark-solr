@@ -9,15 +9,18 @@ import org.apache.solr.client.solrj.request.schema.SchemaRequest;
 import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.SQLContext;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.status.api.v1.NotFoundException;
 import scala.collection.JavaConversions;
 import scala.collection.immutable.Set$;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
+import java.sql.Timestamp;
 import java.util.*;
+import java.util.Date;
 
 import static com.lucidworks.spark.util.SolrQuerySupport.getFieldTypes;
 
@@ -72,66 +75,46 @@ public class EventsimUtil {
    * Load the eventsim json dataset and post it through HttpClient
    * @throws Exception
    */
-  public static void loadEventSimDataSet(String zkHost, String collectionName) throws Exception {
+  public static void loadEventSimDataSet(String zkHost, String collectionName, SQLContext sqlContext) throws Exception {
     String datasetPath = "src/test/resources/eventsim/sample_eventsim_1000.json";
-    File eventsimFile = new File(datasetPath);
-    if (!eventsimFile.exists())
-      throw new FileNotFoundException("File not found at path '" + datasetPath + "'");
+    DataFrame df = sqlContext.read().json(datasetPath);
+    // Modify the unix timestamp to ISO format for Solr
+    log.info("Indexing eventsim documents from file " + datasetPath);
 
-    // Convert the eventsim data to valid SolrDocument
-    List<String> lines = Files.readAllLines(eventsimFile.toPath(), Charset.defaultCharset());
-    List<SolrInputDocument> docs = new ArrayList<SolrInputDocument>();
-    for (String line: lines) {
-      docs.add(convertToSolrDocument(line));
-    }
+    df.registerTempTable("jdbcDF");
 
-    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
+    sqlContext.udf().register("ts2ISO", new UDF1<Long, Timestamp>() {
+      public Timestamp call(Long ts) {
+        return asDate(ts);
+      }
+    }, DataTypes.TimestampType);
 
-    log.info("Indexing eventsim documents from file " + eventsimFile.getAbsolutePath());
-    scala.collection.immutable.Map<String, SolrFieldMeta> types = SolrQuerySupport.getFieldTypes(Set$.MODULE$.<String>empty(), SolrSupport.getSolrBaseUrl(zkHost), collectionName);
-    log.info("Existing fields in the collection '" + collectionName + "':  " + types.toString());
-    validateStatusCode(solrClient.add(collectionName, docs));
-    validateStatusCode(solrClient.commit(collectionName, true, true));
+    // Registering an UDF and re-using it via DataFrames is not available through Java right now.
+    DataFrame newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
+      "length, level, location, method, page, ts2ISO(registration) AS registration, sessionId, song, status, " +
+      "ts2ISO(ts) AS timestamp from jdbcDF");
+
+    HashMap<String, String> options = new HashMap<String, String>();
+    options.put("zkhost", zkHost);
+    options.put("collection", collectionName);
+    options.put(ConfigurationConstants.GENERATE_UNIQUE_KEY(), "true");
+
+    newDF.write().format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save();
+
+    CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
+    cloudSolrClient.commit(collectionName, true, true);
+
     long docsInSolr = SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, scala.Option.apply((SolrQuery) null));
     if (!(docsInSolr == 1000)) {
       throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
     }
   }
 
-  private static void validateStatusCode(UpdateResponse resp) throws Exception {
-    if (resp.getStatus() != 0)
-      throw new Exception("Bad status code reported from Solr response during a commit: "  + resp.toString());
-  }
-
-  private static SolrInputDocument convertToSolrDocument(String line) {
-    SolrInputDocument doc = new SolrInputDocument();
-    try {
-      Map<String, Object> event = objectMapper.readValue(line, new TypeReference<Map<String, Object>>() {
-      });
-      // Parse timestamps to ISO format
-      if (event.containsKey("ts")) {
-        doc.setField("timestamp", asDate(event.get("ts")));
-      }
-      if (event.containsKey("registration")) {
-        doc.setField("registration", asDate(event.get("registration")));
-      }
-
-      // Add all other fields to Solr
-      for (String k: event.keySet()) {
-        if (!k.equals("ts") && !k.equals("registration")) {
-          doc.setField(k, event.get(k));
-        }
-      }
-
-      doc.setField("id", UUID.randomUUID().toString());
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+  private static Timestamp asDate(Object tsObj) {
+    if (tsObj != null) {
+      long tsLong = (tsObj instanceof Number) ? ((Number)tsObj).longValue() : Long.parseLong(tsObj.toString());
+      return new Timestamp(tsLong);
     }
-    return doc;
-  }
-
-  private static Date asDate(Object tsObj) {
-    long tsLong = (tsObj instanceof Number) ? ((Number)tsObj).longValue() : Long.parseLong(tsObj.toString());
-    return new Date(tsLong);
+    return null;
   }
 }
