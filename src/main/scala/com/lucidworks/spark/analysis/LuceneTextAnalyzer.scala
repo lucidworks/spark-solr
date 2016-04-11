@@ -21,11 +21,14 @@ import java.io.{PrintWriter, Reader, StringWriter}
 import java.util.regex.Pattern
 
 import com.lucidworks.spark.util.Utils
+import org.apache.commons.io.IOUtils
 import org.apache.lucene.analysis.custom.CustomAnalyzer
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
+import org.apache.lucene.analysis.tokenattributes.{CharTermAttribute, OffsetAttribute, PositionIncrementAttribute}
 import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper, TokenStream}
 import org.apache.lucene.util.{Version => LuceneVersion}
+import org.apache.solr.schema.JsonPreAnalyzedParser
 import org.json4s.jackson.JsonMethods._
+import org.json4s.jackson.Serialization
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable
@@ -91,14 +94,14 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   def analyze(field: String, str: String): Seq[String] = {
     if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
     if (str == null) return Seq.empty[String]
-    analyze(analyzerWrapper.tokenStream(field, str))
+    analyze(tokenStream(field, str))
   }
   /** Looks up the analyzer mapped to the given field from the configured analysis schema,
     * uses it to perform analysis on the given reader, returning the produced token sequence.
     */
   def analyze(field: String, reader: Reader): Seq[String] = {
     if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
-    analyze(analyzerWrapper.tokenStream(field, reader))
+    analyze(tokenStream(field, reader))
   }
   /** For each of the field->value pairs in fieldValues, looks up the analyzer mapped
     * to the field from the configured analysis schema, and uses it to perform analysis on the
@@ -177,6 +180,91 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
     * for the analyzer to tokenize the contents of `reader`. */
   def tokenStream(fieldName: String, reader: Reader) = analyzerWrapper.tokenStream(fieldName, reader)
+  /** Looks up the analyzer mapped to the given field from the configured analysis schema,
+    * uses it to perform analysis on the given string, and returns a PreAnalyzedField-compatible
+    * JSON string with the following serialized attributes:
+    *
+    *   - CharTermAttribute (token text)
+    *   - OffsetAttribute (start and end character offsets)
+    *   - PositionIncrementAttribute (token position relative to the previous token)
+    *
+    * If stored = true, the original string input value will be included as a value to be stored.
+    * (Note that the Solr schema for the destination Solr field must be configured to store the
+    * value; if it is not, then the stored value included in the JSON will be ignored by Solr.)
+    */
+  def toPreAnalyzedJson(field: String, str: String, stored: Boolean): String = {
+    toPreAnalyzedJson(tokenStream(field, str), if (stored) Some(str) else None)
+  }
+  /** Looks up the analyzer mapped to the given field from the configured analysis schema,
+    * uses it to perform analysis on the given reader, and returns a PreAnalyzedField-compatible
+    * JSON string with the following serialized attributes:
+    *
+    * - CharTermAttribute (token text),
+    * - OffsetAttribute (start and end position)
+    * - PositionIncrementAttribute (token position relative to the previous token)
+    *
+    * If stored = true, the original reader input value, read into a string, will be included as
+    * a value to be stored. (Note that the Solr schema for the destination Solr field must be
+    * configured to store the value; if it is not, then the stored value included in the JSON
+    * will be ignored by Solr.)
+    */
+  def toPreAnalyzedJson(field: String, reader: Reader, stored: Boolean): String = {
+    if (stored)
+      toPreAnalyzedJson(field, IOUtils.toString(reader), stored = true)
+    else
+      toPreAnalyzedJson(tokenStream(field, reader), None)
+  }
+  private def toPreAnalyzedJson(stream: TokenStream, str: Option[String]): String = {
+    // Implementation note: Solr's JsonPreAnalyzedParser.toFormattedString() produces JSON
+    // suitable for use with PreAnalyzedField, but there are problems with using it with
+    // CustomAnalyzer:
+    //
+    //   - toFormattedString() will serialize all attributes present on the passed-in token
+    //     stream's AttributeSource, which is fixed by CustomAnalyzer at those in the
+    //     PackedTokenAttributeImpl, which includes the PositionLengthAttribute and the
+    //     TypeAttribute, neither of which are indexed, and so shouldn't be output
+    //     (by default anyway) from this method.
+    //   - To modify the set of attributes that CustomAnalyzer has in its AttributeSource,
+    //     CustomAnalyzer can't be extended because it's final, so CustomAnalyzer's
+    //     createComponents() method can't be overridden to pass in an alternate AttributeFactory
+    //     to TokenizerFactory.create().  However, a wrapper can be constructed that forwards all
+    //     methods except createComponents(), and then have createComponents() do the right thing.
+    //   - Once an alternate AttributeFactory is used in an effectively overridden
+    //     CustomAnalyzer.createComponents(), this form will be cached for future uses, but we
+    //     don't want that, since it might conflict with the analyze*() methods' requirements,
+    //     and future versions of toPreAnalyzedJson might allow for customization of attributes
+    //     to output (including e.g. PayloadAttribute).  So we would have to either use an
+    //     alternate cache, or not cache analyzers used by toPreAnalyzedJson(), both of which
+    //     seem overcomplicated.
+    //
+    // The code below constructs JSON with a fixed set of serialized attributes.
+
+    val termAtt = stream.addAttribute(classOf[CharTermAttribute])
+    val offsetAtt = stream.addAttribute(classOf[OffsetAttribute])
+    val posIncAtt = stream.addAttribute(classOf[PositionIncrementAttribute])
+    var tokens = List.newBuilder[immutable.ListMap[String, Any]]
+    val token = immutable.ListMap.newBuilder[String, Any]
+    try {
+      stream.reset()
+      while (stream.incrementToken) {
+        token.clear()
+        token += (JsonPreAnalyzedParser.TOKEN_KEY -> new String(termAtt.buffer, 0, termAtt.length))
+        token += (JsonPreAnalyzedParser.OFFSET_START_KEY -> offsetAtt.startOffset)
+        token += (JsonPreAnalyzedParser.OFFSET_END_KEY -> offsetAtt.endOffset)
+        token += (JsonPreAnalyzedParser.POSINCR_KEY -> posIncAtt.getPositionIncrement)
+        tokens += token.result
+      }
+      stream.end()
+    } finally {
+      stream.close()
+    }
+    val topLevel = immutable.ListMap.newBuilder[String, Any]
+    topLevel += (JsonPreAnalyzedParser.VERSION_KEY -> JsonPreAnalyzedParser.VERSION)
+    if (str.isDefined) topLevel += (JsonPreAnalyzedParser.STRING_KEY -> str)
+    topLevel += (JsonPreAnalyzedParser.TOKENS_KEY -> tokens.result)
+    implicit val formats = org.json4s.DefaultFormats // required by Serialization.write()
+    Serialization.write(topLevel.result)
+  }
   @transient private lazy val analyzerWrapper = new AnalyzerWrapper
   private class AnalyzerWrapper extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
     override protected def getWrappedAnalyzer(field: String): Analyzer = {

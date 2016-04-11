@@ -20,49 +20,9 @@ package com.lucidworks.spark.analysis
 import java.io.{Reader, StringReader}
 
 import com.lucidworks.spark.SparkSolrFunSuite
+import org.json4s.jackson.JsonMethods._
+import org.json4s.JValue
 
-object LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
-  val stdTokLowerSchema =
-    """{ "analyzers": [{ "name": "StdTokLower",
-      |                  "tokenizer": { "type": "standard" },
-      |                  "filters": [{ "type": "lowercase" }] }],
-      |  "fields": [{ "regex": ".+", "analyzer": "StdTokLower" }] }""".stripMargin
-
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, in: String, expected: Array[String]): Unit = {
-    assertExpectedTokens(analyzer, "dummy", in, expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
-                           in: String, expected: Array[String]): Unit = {
-    val output = analyzer.analyze(field, in)
-    assert(output === expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, reader: Reader, expected: Array[String]): Unit = {
-    assertExpectedTokens(analyzer, "dummy", reader, expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
-                           reader: Reader, expected: Array[String]): Unit = {
-    val output = analyzer.analyze(field, reader)
-    assert(output === expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, in: Array[String], expected: Array[String]): Unit = {
-    assertExpectedTokens(analyzer, "dummy", in, expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
-                           in: Array[String], expected: Array[String]): Unit = {
-    val output = analyzer.analyzeMV(field, in)
-    assert(output === expected)
-  }
-  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, fieldValues: Map[String,String],
-                           expected: Map[String,Seq[String]]): Unit = {
-    val output = analyzer.analyze(fieldValues)
-    assert(output === expected)
-  }
-  def assertExpectedTokensMV(analyzer: LuceneTextAnalyzer, fieldValues: Map[String,Seq[String]],
-                             expected: Map[String,Seq[String]]): Unit = {
-    val output = analyzer.analyzeMV(fieldValues)
-    assert(output === expected)
-  }
-}
 class LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
   import LuceneTextAnalyzerSuite._
 
@@ -309,5 +269,72 @@ class LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
     assertExpectedTokens(analyzer2, new StringReader("Test for tokenization."),
       Array("Tes", "t", "for", "tok", "eni", "zat", "ion"))
     assertExpectedTokens(analyzer2, new StringReader("Te,st.  punct"), Array("Te", "st", "pun", "ct"))
+  }
+
+  test("Pre-analyzed JSON") {
+    val text = "Test for tokenization."
+    def getParsedJson(text: Option[String]) = {
+      parse(s"""{"v":"1", ${if (text.isDefined) s""""str":"${text.get}",""" else ""}
+               |"tokens":[{"t":"test",         "s":0, "e":4,  "i":1},
+               |          {"t":"for",          "s":5, "e":8,  "i":1},
+               |          {"t":"tokenization", "s":9, "e":21, "i":1}]}""".stripMargin)
+    }
+    val analyzer = new LuceneTextAnalyzer(stdTokLowerSchema)
+    assertExpectedJson(analyzer, "dummy", text, stored = true, getParsedJson(Some(text)))
+    assertExpectedJson(analyzer, "dummy", text, stored = false, getParsedJson(None))
+    assertExpectedJson(analyzer, "dummy", new StringReader(text), stored = true, getParsedJson(Some(text)))
+    assertExpectedJson(analyzer, "dummy", new StringReader(text), stored = false, getParsedJson(None))
+  }
+}
+object LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
+  val stdTokLowerSchema =
+    """{ "analyzers": [{ "name": "StdTokLower",
+      |                  "tokenizer": { "type": "standard" },
+      |                  "filters": [{ "type": "lowercase" }] }],
+      |  "fields": [{ "regex": ".+", "analyzer": "StdTokLower" }] }""".stripMargin
+
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, in: String, expected: Array[String]): Unit = {
+    assertExpectedTokens(analyzer, "dummy", in, expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
+                           in: String, expected: Array[String]): Unit = {
+    val output = analyzer.analyze(field, in)
+    assert(output === expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, reader: Reader, expected: Array[String]): Unit = {
+    assertExpectedTokens(analyzer, "dummy", reader, expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
+                           reader: Reader, expected: Array[String]): Unit = {
+    val output = analyzer.analyze(field, reader)
+    assert(output === expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, in: Array[String], expected: Array[String]): Unit = {
+    assertExpectedTokens(analyzer, "dummy", in, expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
+                           in: Array[String], expected: Array[String]): Unit = {
+    val output = analyzer.analyzeMV(field, in)
+    assert(output === expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, fieldValues: Map[String,String],
+                           expected: Map[String,Seq[String]]): Unit = {
+    val output = analyzer.analyze(fieldValues)
+    assert(output === expected)
+  }
+  def assertExpectedTokensMV(analyzer: LuceneTextAnalyzer, fieldValues: Map[String,Seq[String]],
+                             expected: Map[String,Seq[String]]): Unit = {
+    val output = analyzer.analyzeMV(fieldValues)
+    assert(output === expected)
+  }
+  def assertExpectedJson
+  (analyzer: LuceneTextAnalyzer, field: String, in: String, stored: Boolean, expected: JValue): Unit = {
+    val output = parse(analyzer.toPreAnalyzedJson(field, in, stored))
+    assert(output === expected)
+  }
+  def assertExpectedJson
+  (analyzer: LuceneTextAnalyzer, field: String, reader: Reader, stored: Boolean, expected: JValue): Unit = {
+    val output = parse(analyzer.toPreAnalyzedJson(field, reader, stored))
+    assert(output === expected)
   }
 }
