@@ -20,9 +20,7 @@ import scala.io.Source
 import scala.util.control.NonFatal
 
 /** Example application to index each article in the 20 newsgroups data as a Solr document.
-  * The 20 newsgroups data is downloadable from:
-  *
-  *    http://curl.haxx.se/mail/archive-2014-10/0053.html
+  * The 20 newsgroups data is downloadable from [[http://qwone.com/~jason/20Newsgroups/]].
   *
   * Articles in any of the three archives available there can be indexed,
   * after first downloading it from the above page and unpacking it.
@@ -33,13 +31,19 @@ import scala.util.control.NonFatal
   *
   * == Prerequisites ==
   *
-  * You must have Solr running in cloud mode, with a target collection created.
+  * Start Solr in cloud mode, and create a target collection, e.g. (after downloading the
+  * binary Solr distribution - see [[https://lucene.apache.org/solr/]] - then unpacking and
+  * changing to the unpacked root directory, e.g. `solr-5.4.1/`):
+  *
+  * {{{
+  *   bin/solr -c && bin/solr create -c testing -shards 2
+  * }}}
   *
   * == Document fields ==
   *
   * Each header present in the newsgroup articles will be indexed to a Solr dynamic field
   * name prefixed with the header name, e.g. Subject: text will be indexed into a field
-  * named `Subject_txt_en`.
+  * named Subject_txt_en`.
   *
   * Note that the set of headers in each of the three available archives is different; details
   * are on the download page above.
@@ -48,7 +52,7 @@ import scala.util.control.NonFatal
   *
   * The `newsgroup_s` field will contain the name of the article's parent directory.
   *
-  * The `id` field value will in the format `newsgroup_articlenum`, e.g. "comp.graphics_38659",
+  * The `id` field value will be in the format `newsgroup_articlenum`, e.g. "comp.graphics_38659",
   * where `newsgroup` is the name of the article's parent directory, and `articlenum` is the
   * article filename.
   *
@@ -60,21 +64,21 @@ import scala.util.control.NonFatal
   *
   * == Example invocation ==
   *
-  * You must first run `mvn package` in the spark-solr project, and you must download
-  * a Spark 1.6.1 binary distribution and pointed the environment variable `$SPARK_HOME`
+  * You must first run `mvn -DskipTests package` in the spark-solr project, and you must download
+  * a Spark 1.6.1 binary distribution and point the environment variable `$SPARK_HOME`
   * to the unpacked distribution directory.
   *
   * {{{
   *   $SPARK_HOME/bin/spark-submit --master 'local[2]' --class com.lucidworks.spark.SparkApp \
   *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr -zkHost localhost:9983     \
-  *   -collection 20newsgroups -path /relative/or/absolute/path/to/20news-18828`
+  *   -collection ml20news -path /relative/or/absolute/path/to/20news-18828`
   * }}}
   *
   * To see a description of all available options, run the following:
   *
   * {{{
   *   $SPARK_HOME/bin/spark-submit --class com.lucidworks.spark.SparkApp \
-  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr
+  *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr --help
   * }}}
   */
 class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
@@ -83,18 +87,13 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
   def getOptions = Array(
     OptionBuilder().longOpt("path").hasArg.argName("PATH").required
       .desc("Path from which to recursively load newsgroup articles").build,
-    OptionBuilder().longOpt("collection").hasArg.argName("NAME").required
-      .desc("Target Solr collection").build,
-    OptionBuilder().longOpt("zkHost").hasArg.argName("HOST").required(false)
-      .desc(s"ZooKeeper connection string. Default: $DefaultZkHost").build,
-    OptionBuilder().longOpt("batchSize").hasArg.argName("DOCS").required(false)
-      .`type`(classOf[Number]).desc(s"Solr indexing batch size. Default: $DefaultBatchSize").build)
+    OptionBuilder().longOpt("collection").hasArg.argName("NAME").required(false)
+      .desc("Target Solr collection; default: $DefaultCollection").build)
   def run(conf: SparkConf, cli: CommandLine): Int = {
     val path = cli.getOptionValue("path")
-    val collection = cli.getOptionValue("collection")
+    val collection = cli.getOptionValue("collection", DefaultCollection)
     val zkHost = cli.getOptionValue("zkHost", DefaultZkHost)
-    val batchSize = Option(cli.getParsedOptionValue("batchSize"))
-      .map(_.asInstanceOf[Number].intValue()).getOrElse(DefaultBatchSize)
+    val batchSize = cli.getOptionValue("batchSize", DefaultBatchSize).toInt
     val sc = new SparkContext(conf)
     sc.hadoopConfiguration.setBoolean("mapreduce.input.fileinputformat.input.dir.recursive", true)
     // Use binaryFiles() because wholeTextFiles() assumes files are UTF-8, but article encoding is Latin-1
@@ -122,6 +121,10 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
       })
       if (batch.nonEmpty) sendBatch()
     })
+    // Explicit commit to make sure all docs are visible
+    val solrServer = SolrSupport.getCachedCloudClient(zkHost)
+    solrServer.commit(collection, true, true)
+
     sc.stop()
     0
   }
@@ -174,7 +177,8 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
 }
 object NewsgroupsIndexer {
   val DefaultZkHost = "localhost:9983"
-  val DefaultBatchSize = 100
+  val DefaultBatchSize = "100"
+  val DefaultCollection = "ml20news"
   val NonXmlCharsRegex = "[\u0000-\u0008\u000B\u000C\u000E-\u001F]".r
   val NewsgroupHeaderRegex = "^([^: \t]+):[ \t]*(.*)".r
   val NonAlphaNumCharsRegex = "[^_A-Za-z0-9]".r

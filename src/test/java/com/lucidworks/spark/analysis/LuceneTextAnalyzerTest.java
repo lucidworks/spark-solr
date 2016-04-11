@@ -20,6 +20,8 @@ package com.lucidworks.spark.analysis;
 import junit.framework.Assert;
 import org.junit.Test;
 
+import java.io.Reader;
+import java.io.StringReader;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -275,12 +277,40 @@ public class LuceneTextAnalyzerTest {
     assertExpectedTokens(analyzer, fieldValues, expected);
   }
 
+  @Test
+  public void testAnalyzeReader() {
+    LuceneTextAnalyzer analyzer1 = new LuceneTextAnalyzer(stdTokLowerSchema);
+
+    assertExpectedTokens(analyzer1, new StringReader("Test for tokenization."), Arrays.asList("test", "for", "tokenization"));
+    assertExpectedTokens(analyzer1, new StringReader("Te,st. punct"), Arrays.asList("te", "st", "punct"));
+
+    String stdTokMax3Schema = json(
+        "{'defaultLuceneMatchVersion': '4.10.4',\n" +
+            " 'analyzers': [{'name': 'StdTok_max3',\n" +
+            "                'tokenizer': {'type': 'standard', 'maxTokenLength': '3'} }],\n" +
+            "'fields': [{'regex': '.+', 'analyzer': 'StdTok_max3'}] }\n");
+    LuceneTextAnalyzer analyzer2 = new LuceneTextAnalyzer(stdTokMax3Schema);
+
+    assertExpectedTokens(analyzer2, new StringReader("Test for tokenization."),
+        Arrays.asList("Tes", "t", "for", "tok", "eni", "zat", "ion"));
+    assertExpectedTokens(analyzer2, new StringReader("Te,st.  punct"), Arrays.asList("Te", "st", "pun", "ct"));
+  }
+
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String in, List<String> expected) {
     assertExpectedTokens(analyzer, "dummy", in, expected);
   }
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String field, String in, List<String> expected) {
     List<String> output = analyzer.analyzeJava(field, in);
+    Assert.assertEquals(expected, output);
+  }
+
+  private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, Reader reader, List<String> expected) {
+    assertExpectedTokens(analyzer, "dummy", reader, expected);
+  }
+
+  private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String field, Reader reader, List<String> expected) {
+    List<String> output = analyzer.analyzeJava(field, reader);
     Assert.assertEquals(expected, output);
   }
 
