@@ -59,7 +59,7 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         // list of fields that are present in src/test/resources/eventsim/fields_schema.json
         assert fieldNames.length == 19 + 1 + 1; // extra fields are id and _version_
 
-        Assert.assertEquals(schema.apply("timestamp").dataType().typeName(), DataTypes.TimestampType.typeName());
+        Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
         Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.IntegerType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
@@ -72,7 +72,7 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
         eventsim.registerTempTable("eventsim");
 
-        DataFrame records = sqlContext.sql("SELECT `userId`, `timestamp` from eventsim WHERE `gender` = 'M'");
+        DataFrame records = sqlContext.sql("SELECT `userId`, `ts` from eventsim WHERE `gender` = 'M'");
         assert records.count() == 567;
       }
 

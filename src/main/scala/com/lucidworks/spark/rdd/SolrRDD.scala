@@ -89,7 +89,8 @@ class SolrRDD(
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    if (log.isDebugEnabled)
+      log.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     partitions
   }
 

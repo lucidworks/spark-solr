@@ -1,7 +1,9 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.Constants;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
@@ -323,7 +325,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
     sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
-    Thread.sleep(1000);
+
+    // Explicit commit to make sure all docs are visible
+    CloudSolrClient solrCloudClient = SolrSupport.getCachedCloudClient(zkHost);
+    solrCloudClient.commit(testCollection, true, true);
 
     SolrQuery q = new SolrQuery("*:*");
     q.setRows(100);
