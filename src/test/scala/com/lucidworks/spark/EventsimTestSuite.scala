@@ -118,6 +118,17 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(queryDF.count() == eventSimCount)
   }
 
+  test("Timestamp filter queries") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .load()
+    df.registerTempTable("events")
+
+    val timeQueryDF = sqlContext.sql("SELECT * from events WHERE `registration` = '2015-05-31 11:03:07Z'")
+    assert(timeQueryDF.count() == 11)
+  }
+
   def testCommons(solrRDD: SolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 

@@ -82,7 +82,6 @@ public class EventsimUtil {
     log.info("Indexing eventsim documents from file " + datasetPath);
 
     df.registerTempTable("jdbcDF");
-
     sqlContext.udf().register("ts2ISO", new UDF1<Long, Timestamp>() {
       public Timestamp call(Long ts) {
         return asDate(ts);
@@ -91,8 +90,8 @@ public class EventsimUtil {
 
     // Registering an UDF and re-using it via DataFrames is not available through Java right now.
     DataFrame newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
-      "length, level, location, method, page, ts2ISO(registration) AS registration, sessionId, song, status, " +
-      "ts2ISO(ts) AS timestamp from jdbcDF");
+      "length, level, location, method, page, sessionId, song,  " +
+      "ts2ISO(registration) AS registration, ts2ISO(ts) AS timestamp1, status from jdbcDF");
 
     HashMap<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
