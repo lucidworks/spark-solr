@@ -17,6 +17,8 @@
 
 package com.lucidworks.spark.analysis
 
+import java.io.{Reader, StringReader}
+
 import com.lucidworks.spark.SparkSolrFunSuite
 
 object LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
@@ -32,6 +34,14 @@ object LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
   def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
                            in: String, expected: Array[String]): Unit = {
     val output = analyzer.analyze(field, in)
+    assert(output === expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, reader: Reader, expected: Array[String]): Unit = {
+    assertExpectedTokens(analyzer, "dummy", reader, expected)
+  }
+  def assertExpectedTokens(analyzer: LuceneTextAnalyzer, field: String,
+                           reader: Reader, expected: Array[String]): Unit = {
+    val output = analyzer.analyze(field, reader)
     assert(output === expected)
   }
   def assertExpectedTokens(analyzer: LuceneTextAnalyzer, in: Array[String], expected: Array[String]): Unit = {
@@ -273,5 +283,31 @@ class LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
     assertExpectedTokens(analyzer,
       Map("rawText1"->"", "rawText2"->"The dog's nose KNOWS!", "rawText3"->null),
       Map("rawText1"->Seq(), "rawText2"->Seq("the", "dog's", "nose", "knows"), "rawText3"->Seq()))
+  }
+
+  test("analyze Reader") {
+    val analyzer1 = new LuceneTextAnalyzer(stdTokLowerSchema)
+    assertExpectedTokens(analyzer1, new StringReader("Test for tokenization."), Array("test", "for", "tokenization"))
+    assertExpectedTokens(analyzer1, new StringReader("Te,st. punct"), Array("te", "st", "punct"))
+
+    val stdTokMax3Schema = """
+                             |{
+                             |  "defaultLuceneMatchVersion": "4.10.4",
+                             |  "analyzers": [{
+                             |    "name": "StdTok_max3",
+                             |    "tokenizer": {
+                             |      "type": "standard",
+                             |      "maxTokenLength": "3"
+                             |    }
+                             |  }],
+                             |  "fields": [{
+                             |    "regex": ".+",
+                             |    "analyzer": "StdTok_max3"
+                             |  }]
+                             |}""".stripMargin
+    val analyzer2 = new LuceneTextAnalyzer(stdTokMax3Schema)
+    assertExpectedTokens(analyzer2, new StringReader("Test for tokenization."),
+      Array("Tes", "t", "for", "tok", "eni", "zat", "ion"))
+    assertExpectedTokens(analyzer2, new StringReader("Te,st.  punct"), Array("Te", "st", "pun", "ct"))
   }
 }

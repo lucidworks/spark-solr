@@ -24,7 +24,6 @@ class TestIndexing extends TestSuiteBuilder {
       // Explicit commit to make sure all docs are visible
       val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
       solrCloudClient.commit(collectionName, true, true)
-      solrCloudClient.close()
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert (solrDF.count() == 999)

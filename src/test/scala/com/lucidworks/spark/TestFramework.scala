@@ -96,7 +96,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
     super.beforeAll()
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, numShards, cloudClient, sc)
     EventsimUtil.defineSchemaForEventSim(zkHost, collectionName)
-    EventsimUtil.loadEventSimDataSet(zkHost, collectionName)
+    EventsimUtil.loadEventSimDataSet(zkHost, collectionName, sqlContext)
   }
 
 
@@ -107,7 +107,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
 
   def eventSimCount: Int = 1000
 
-  def fieldsCount: Int = 18
+  def fieldsCount: Int = 19
 
   def numShards: Int = 2
 }
