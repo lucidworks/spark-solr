@@ -129,6 +129,29 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(timeQueryDF.count() == 11)
   }
 
+  test("Length range filter queries") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .load()
+    df.registerTempTable("events")
+
+    val timeQueryDF = sqlContext.sql("SELECT * from events WHERE `length` >= '700' and `length` <= '1000'")
+    assert(timeQueryDF.count() == 1)
+  }
+
+  // Ignored since Spark is not passing timestamps filters to the buildScan method. Range timestamp filtering is being done at Spark layer
+  ignore("Timestamp range filter queries") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .load()
+    df.registerTempTable("events")
+
+    val timeQueryDF = sqlContext.sql("SELECT * from events WHERE `registration` >= '2015-05-28' AND `registration` <= '2015-05-29' ")
+    assert(timeQueryDF.count() == 21)
+  }
+
   def testCommons(solrRDD: SolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 
@@ -136,6 +159,5 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(sparkCount == solrRDD.solrCount.toLong)
     assert(sparkCount == eventSimCount)
   }
-
 
 }
