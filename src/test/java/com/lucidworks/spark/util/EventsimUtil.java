@@ -91,7 +91,7 @@ public class EventsimUtil {
     // Registering an UDF and re-using it via DataFrames is not available through Java right now.
     DataFrame newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
       "length, level, location, method, page, sessionId, song,  " +
-      "ts2ISO(registration) AS registration, ts2ISO(ts) AS timestamp1, status from jdbcDF");
+      "ts2ISO(registration) AS registration, ts2ISO(ts) AS ts, status from jdbcDF");
 
     HashMap<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
