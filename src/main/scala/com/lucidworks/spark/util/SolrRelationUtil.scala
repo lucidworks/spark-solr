@@ -1,6 +1,7 @@
 package com.lucidworks.spark.util
 
 import java.sql.Timestamp
+import java.time.format.DateTimeFormatter
 import java.util.Date
 
 import org.apache.solr.client.solrj.SolrQuery
@@ -10,6 +11,8 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{RowFactory, Row}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
@@ -131,6 +134,20 @@ object SolrRelationUtil extends Logging {
    }
   }
 
+  def getFilterValue(attr: String, value: String, baseSchema: StructType) = {
+    val fieldType = baseSchema(attr)
+    fieldType.dataType match {
+      case TimestampType => convertToISO(value)
+      case _ => value
+    }
+  }
+
+  def convertToISO(ts: String): String = {
+    val unixSeconds = Timestamp.valueOf(ts).getTime
+    val isoValue = ISODateTimeFormat.dateTime().withZoneUTC().print(unixSeconds)
+    String.format("\"%s\"", isoValue)
+  }
+
   def fq(filter: Filter, baseSchema: StructType): String = {
     var negate = ""
     var crit : Option[String] = None
@@ -139,22 +156,22 @@ object SolrRelationUtil extends Logging {
     filter match {
       case f: EqualTo =>
         attr = Some(f.attribute)
-        crit = Some(String.valueOf(f.value))
+        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
       case f: EqualNullSafe =>
         attr = Some(f.attribute)
-        crit = Some(String.valueOf(f.value))
+        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
       case f: GreaterThan =>
         attr = Some(f.attribute)
-        crit = Some("{" + f.value + " TO *]")
+        crit = Some("{" + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ " TO *]")
       case f: GreaterThanOrEqual =>
         attr = Some(f.attribute)
-        crit = Some("[" + f.value + " TO *]")
+        crit = Some("[" + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ " TO *]")
       case f: LessThan =>
         attr = Some(f.attribute)
-        crit = Some("[* TO " + f.value + "}")
+        crit = Some("[* TO " + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ "}")
       case f: LessThanOrEqual =>
         attr = Some(f.attribute)
-        crit = Some("[* TO " + f.value + "]")
+        crit = Some("[* TO " + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ "]")
       case f: In =>
         attr = Some(f.attribute)
         val sb = new StringBuilder()

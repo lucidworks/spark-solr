@@ -17,13 +17,13 @@
 
 package com.lucidworks.spark.analysis
 
-import java.io.{PrintWriter, StringWriter}
+import java.io.{PrintWriter, Reader, StringWriter}
 import java.util.regex.Pattern
 
 import com.lucidworks.spark.util.Utils
 import org.apache.lucene.analysis.custom.CustomAnalyzer
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.lucene.analysis.{DelegatingAnalyzerWrapper, Analyzer}
+import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper, TokenStream}
 import org.apache.lucene.util.{Version => LuceneVersion}
 import org.json4s.jackson.JsonMethods._
 
@@ -78,9 +78,9 @@ import scala.util.control.NonFatal
   * }
   * }}}
   */
-class LuceneTextAnalyzer(analysisSchema: String) extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
-  private val analyzerSchema = new AnalyzerSchema(analysisSchema)
-  private val analyzerCache = mutable.Map.empty[String, Analyzer]
+class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
+  @transient private lazy val analyzerSchema = new AnalyzerSchema(analysisSchema)
+  @transient private lazy val analyzerCache = mutable.Map.empty[String, Analyzer]
   def isValid: Boolean = analyzerSchema.isValid
   def invalidMessages: String = analyzerSchema.invalidMessages.result()
   /** Returns the analyzer mapped to the given field in the configured analysis schema, if any. */
@@ -91,14 +91,14 @@ class LuceneTextAnalyzer(analysisSchema: String) extends DelegatingAnalyzerWrapp
   def analyze(field: String, str: String): Seq[String] = {
     if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
     if (str == null) return Seq.empty[String]
-    val builder = Seq.newBuilder[String]
-    val inputStream = tokenStream(field, str)
-    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
-    inputStream.reset()
-    while (inputStream.incrementToken) builder += charTermAttr.toString
-    inputStream.end()
-    inputStream.close()
-    builder.result()
+    analyze(analyzerWrapper.tokenStream(field, str))
+  }
+  /** Looks up the analyzer mapped to the given field from the configured analysis schema,
+    * uses it to perform analysis on the given reader, returning the produced token sequence.
+    */
+  def analyze(field: String, reader: Reader): Seq[String] = {
+    if ( ! isValid) throw new IllegalArgumentException(invalidMessages)
+    analyze(analyzerWrapper.tokenStream(field, reader))
   }
   /** For each of the field->value pairs in fieldValues, looks up the analyzer mapped
     * to the field from the configured analysis schema, and uses it to perform analysis on the
@@ -135,6 +135,12 @@ class LuceneTextAnalyzer(analysisSchema: String) extends DelegatingAnalyzerWrapp
   def analyzeJava(field: String, str: String): java.util.List[String] = {
     seqAsJavaList(analyze(field, str))
   }
+  /** Java-friendly version: looks up the analyzer mapped to the given field from the configured
+    * analysis schema, uses it to perform analysis on the given reader, returning the produced
+    * token sequence. */
+  def analyzeJava(field: String, reader: Reader): java.util.List[String] = {
+    seqAsJavaList(analyze(field, reader))
+  }
   /** Java-friendly version: for each of the field->value pairs in fieldValues, looks up the
     * analyzer mapped to the field from the configured analysis schema, and uses it to perform
     * analysis on the value.  Returns a map from the fields to the produced token sequences.
@@ -165,19 +171,38 @@ class LuceneTextAnalyzer(analysisSchema: String) extends DelegatingAnalyzerWrapp
     for ((field, values) <- fieldValues) output.put(field, analyzeMVJava(field, values))
     java.util.Collections.unmodifiableMap(output)
   }
-  override protected def getWrappedAnalyzer(field: String): Analyzer = {
-    analyzerCache.synchronized {
-      var analyzer = analyzerCache.get(field)
-      if (analyzer.isEmpty) {
-        if (isValid) analyzer = analyzerSchema.getAnalyzer(field)
-        if ( ! isValid) throw new IllegalArgumentException(invalidMessages) // getAnalyzer can make isValid false
-        if (analyzer.isEmpty) throw new IllegalArgumentException(s"No analyzer defined for field '$field'")
-        analyzerCache.put(field, analyzer.get)
+  /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
+    * for the analyzer to tokenize the contents of `text`. */
+  def tokenStream(fieldName: String, text: String) = analyzerWrapper.tokenStream(fieldName, text)
+  /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
+    * for the analyzer to tokenize the contents of `reader`. */
+  def tokenStream(fieldName: String, reader: Reader) = analyzerWrapper.tokenStream(fieldName, reader)
+  @transient private lazy val analyzerWrapper = new AnalyzerWrapper
+  private class AnalyzerWrapper extends DelegatingAnalyzerWrapper(Analyzer.PER_FIELD_REUSE_STRATEGY) {
+    override protected def getWrappedAnalyzer(field: String): Analyzer = {
+      analyzerCache.synchronized {
+        var analyzer = analyzerCache.get(field)
+        if (analyzer.isEmpty) {
+          if (isValid) analyzer = analyzerSchema.getAnalyzer(field)
+          if ( ! isValid) throw new IllegalArgumentException(invalidMessages) // getAnalyzer can make isValid false
+          if (analyzer.isEmpty) throw new IllegalArgumentException(s"No analyzer defined for field '$field'")
+          analyzerCache.put(field, analyzer.get)
+        }
+        analyzer.get
       }
-      analyzer.get
     }
   }
+  private def analyze(inputStream: TokenStream): Seq[String] = {
+    val builder = Seq.newBuilder[String]
+    val charTermAttr = inputStream.addAttribute(classOf[CharTermAttribute])
+    inputStream.reset()
+    while (inputStream.incrementToken) builder += charTermAttr.toString
+    inputStream.end()
+    inputStream.close()
+    builder.result()
+  }
 }
+
 private class AnalyzerSchema(val analysisSchema: String) {
   implicit val formats = org.json4s.DefaultFormats    // enable extract
   val schemaConfig = parse(analysisSchema).extract[SchemaConfig]

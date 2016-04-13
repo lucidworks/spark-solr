@@ -3,7 +3,7 @@ package com.lucidworks.spark
 import java.util.UUID
 
 import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.{SolrQuerySupport, ConfigurationConstants, SolrCloudUtil}
+import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport, ConfigurationConstants, SolrCloudUtil}
 
 class TestIndexing extends TestSuiteBuilder {
 
@@ -20,6 +20,10 @@ class TestIndexing extends TestSuiteBuilder {
 
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, ConfigurationConstants.GENERATE_UNIQUE_KEY -> "true")
       csvDF.write.format("solr").options(solrOpts).mode(org.apache.spark.sql.SaveMode.Overwrite).save()
+
+      // Explicit commit to make sure all docs are visible
+      val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
+      solrCloudClient.commit(collectionName, true, true)
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert (solrDF.count() == 999)
