@@ -1,22 +1,20 @@
 package com.lucidworks.spark.util
 
 import java.sql.Timestamp
-import java.time.format.DateTimeFormatter
 import java.util.Date
 
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{RowFactory, Row}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 
 object SolrRelationUtil extends Logging {
 
