@@ -9,7 +9,7 @@ import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
-import org.apache.solr.common.params.ModifiableSolrParams
+import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -71,9 +71,17 @@ class SolrRelation(
     rdd
   }
 
+  val arbitraryParams = conf.getArbitrarySolrParams
+  val solrFields: Array[String] = {
+    if (arbitraryParams.getParameterNames.contains(CommonParams.FL)) {
+      arbitraryParams.getParams(CommonParams.FL)
+    } else {
+      conf.getFields
+    }
+  }
   val baseSchema: StructType =
     SolrRelationUtil.getBaseSchema(
-      conf.getFields.toSet,
+      solrFields.toSet,
       conf.getZkHost.get,
       conf.getCollection.get,
       conf.escapeFieldNames.getOrElse(false),
@@ -105,6 +113,9 @@ class SolrRelation(
         if (conf.docValues.getOrElse(false)) {
           fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
           query.setFields(fields: _*)
+        } else {
+          // Reset any existing fields from previous query and set the fields from 'config' option
+          query.setFields(solrFields:_*)
         }
       } else {
         fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
@@ -260,10 +271,9 @@ class SolrRelation(
 
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
-    val fields = conf.getFields
 
-    if (fields.nonEmpty) {
-      query.setFields(fields:_*)
+    if (solrFields.nonEmpty) {
+      query.setFields(solrFields:_*)
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       if (conf.docValues.getOrElse(false))
