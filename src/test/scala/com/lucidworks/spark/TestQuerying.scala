@@ -49,7 +49,7 @@ class TestQuerying extends TestSuiteBuilder {
         .load(csvFileLocation)
       assert(csvDF.count == 3)
 
-      val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "fields" -> "id,one_txt,two_txt")
+      val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "solr.params" -> "fl=id,one_txt,two_txt")
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
       // Explicit commit to make sure all docs are visible
@@ -59,9 +59,13 @@ class TestQuerying extends TestSuiteBuilder {
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
       assert(solrDF.schema.fields.length === 3)
+
+      // Query for one column
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
-      val firstRow = solrDF.head.toSeq                        // query for all columns
+
+      // Query for all columns
+      val firstRow = solrDF.head.toSeq
       assert(firstRow.size === 3)
       firstRow.foreach(col => assert(col != null))            // no missing values
     } finally {
