@@ -18,6 +18,7 @@ import org.apache.spark.mllib.feature.StandardScaler
 import org.apache.spark.mllib.feature.StandardScalerModel
 import scala.collection.JavaConverters._
 import scala.collection
+import com.lucidworks.spark.fusion.FusionMLModelSupport
 
 import scala.collection.immutable
 
@@ -30,16 +31,16 @@ import scala.collection.immutable
  * The SVM Model is trained after the above transformations and is tested for the given test data (using same transformations).
  */
 
-object SVMExampleScala {
+object SVMExample {
   val DEFAULT_NUM_FEATURES = "1000000"
   val DEFAULT_NUM_ITERATIONS = "200"
   val DefaultZkHost = "localhost:9983"
   val DefaultCollection = "twitter_sentiment"
 }
 
-class SVMExampleScala extends SparkApp.RDDProcessor  {
+class SVMExample extends SparkApp.RDDProcessor  {
 
-  import SVMExampleScala._
+  import SVMExample._
   def getName = "mllib-svm-scala"
   def getOptions = Array(
     Option.builder().longOpt("indexTrainingData").hasArg.required(false).desc(
@@ -53,7 +54,15 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     Option.builder().longOpt("numIterations").hasArg.required(false).desc(
       s"Number of iterations; default is $DEFAULT_NUM_ITERATIONS").build(),
     Option.builder().longOpt("modelOutput").hasArg.required(false).desc(
-      s"Model output path; default is mllib-svm-sentiment").build()
+      s"Model output path; default is mllib-svm-sentiment").build(),
+    Option.builder().longOpt("fusionHostAndPort").hasArg.required(false).desc(
+      s"Fusion host and port; Example localhost:8764").build(),
+    Option.builder().longOpt("fusionUser").hasArg.required(false).desc(
+      s"Fusion user name").build(),
+    Option.builder().longOpt("fusionPassword").hasArg.required(false).desc(
+      s"Fusion password").build(),
+    Option.builder().longOpt("fusionRealm").hasArg.required(false).desc(
+      s"Fusion Realm").build()
   )
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
@@ -157,7 +166,26 @@ class SVMExampleScala extends SparkApp.RDDProcessor  {
     val auROC = metrics.areaUnderROC
     println("Area under ROC = " + auROC)
 
-    model.save(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"))
+    if (cli.getOptionValue("fusionHostAndPort") != null) {
+      var metadata = new java.util.HashMap[String, String]()
+      metadata.put("numFeatures", "1000000")
+      metadata.put("featureFields", "tweet_txt")
+      metadata.put("analyzerJson", stdTokLowerSchema)
+      metadata.put("normalizer", "Y")
+      metadata.put("standardscaler", "Y")
+      metadata.put("mean", standardScaler.mean.toString)
+      metadata.put("std", standardScaler.std.toString)
+
+      if (cli.getOptionValue("fusionUser") != null && cli.getOptionValue("fusionPassword") != null) {
+        FusionMLModelSupport.saveModelInFusion(cli.getOptionValue("fusionHostAndPort"), cli.getOptionValue("fusionUser"), cli.getOptionValue("fusionPassword"),
+          cli.getOptionValue("fusionRealm", "native"), sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
+      } else {
+        FusionMLModelSupport.saveModelInLocalFusion(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
+      }
+    }
+    else {
+      model.save(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"))
+    }
 
     return 0
   }
