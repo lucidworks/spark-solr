@@ -60,7 +60,7 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         assert fieldNames.length == 19 + 1 + 1; // extra fields are id and _version_
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
-        Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.IntegerType.typeName());
+        Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
