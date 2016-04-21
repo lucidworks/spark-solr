@@ -3,7 +3,7 @@
     "name": "userId", "type": "string", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
-    "name": "sessionId", "type": "int", "indexed": "true", "stored": "true"
+    "name": "sessionId", "type": "tint", "indexed": "true", "stored": "true"
   },
   {
     "name": "page", "type": "string", "indexed": "true", "stored": "true"
@@ -15,7 +15,7 @@
     "name": "method", "type": "string", "indexed": "true", "stored": "true"
   },
   {
-    "name": "status", "type": "int", "indexed": "true", "stored": "true"
+    "name": "status", "type": "int", "indexed": "true", "stored": "true", "docValues": "true"
   },
   {
     "name": "level", "type": "string", "indexed": "true", "stored": "true"
