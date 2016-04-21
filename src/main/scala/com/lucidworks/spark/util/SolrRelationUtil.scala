@@ -290,8 +290,8 @@ object SolrRelationUtil extends Logging {
             case f: java.util.ArrayList[_] =>
               val jlist = f.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
-                case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
-                case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
+                case i: java.lang.Integer => new java.lang.Long(i.longValue())
+                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
               }
               val arr = jlist.toArray
@@ -301,8 +301,8 @@ object SolrRelationUtil extends Logging {
             case f: Iterable[_] =>
               val iterableValues = f.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
-                case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
-                case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
+                case i: java.lang.Integer => new java.lang.Long(i.longValue())
+                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
               }
               val arr = iterableValues.toArray
