@@ -88,6 +88,8 @@ class SolrRelation(
       conf.flattenMultivalued.getOrElse(true))
 
   val query: SolrQuery = buildQuery
+  // Preserve the initial filters if any present in arbitrary config
+  val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
@@ -123,17 +125,19 @@ class SolrRelation(
       }
     }
 
-    // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
+    // We use aliasing to retrieve docValues (that are indexed and not stored). This can be removed after upgrading to 5.5
     if (query.getFields != null && query.getFields.length > 0) {
       if (conf.docValues.getOrElse(false)) {
         SolrRelationUtil.setAliases(query.getFields.split(","), query, baseSchema)
       }
     }
 
-    // Clear all existing filters
+    // Clear all existing filters except the original filters set in the config.
     if (!filters.isEmpty) {
-      query.remove("fq")
+      query.setFilterQueries(queryFilters:_*)
       filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, baseSchema))
+    } else {
+      query.setFilterQueries(queryFilters:_*)
     }
 
     if (log.isInfoEnabled) {
