@@ -152,6 +152,32 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(timeQueryDF.count() == 21)
   }
 
+  test("Streaming query with int field") {
+    val df: DataFrame = sqlContext.read.format("solr")
+    .option("zkHost", zkHost)
+    .option("collection", collectionName)
+    .option(USE_EXPORT_HANDLER, "true")
+    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=userId desc") // The test will fail without the fl param here
+    .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
+    val values = queryDF.collect()
+  }
+
+  test("Non streaming query with int field") {
+    val df: DataFrame = sqlContext.read.format("solr")
+    .option("zkHost", zkHost)
+    .option("collection", collectionName)
+    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=id desc") // The test will fail without the fl param here
+    .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
+    val values = queryDF.collect()
+    assert(values(0)(0) == 3)
+  }
+
   def testCommons(solrRDD: SolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 
