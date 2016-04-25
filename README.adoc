@@ -1,6 +1,7 @@
 = Lucidworks Spark/Solr Integration
 :toc:
 :toc-placement!:
+:toc-title:
 
 This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
 
@@ -73,11 +74,30 @@ The first is what you'd want to use if you were using spark-solr in your own pro
 
 == Features
 
-* Send objects from a Spark Streaming application into Solr. The schema will be created using Schema API.
+* Send objects from a Spark (Streaming or DataFrames) into Solr.
 * Read the results from a Solr query as a Spark RDD or DataFrame
 * Stream documents from Solr using /export handler. (Only works for exporting fields that have docValues enabled0
 * Read large result sets from Solr using cursors or with export handler
 * Data locality. If Spark workers and Solr processes are co-located on the same nodes, the partitions are placed on the nodes where the replicas are located
+
+== Querying
+
+=== Cursors
+
+https://cwiki.apache.org/confluence/display/solr/Pagination+of+Results[Cursors] are used by default to pull documents out of Solr. By default, the number of tasks allocated will be the number of shards available for the collection.
+
+If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See [query.split.field] and [query.splits.per.shard]
+
+Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr params in `solr.params`
+
+=== Streaming API (/export)
+
+If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors
+
+== Indexing
+
+Objects can be sent to Solr via Spark Streaming or DataFrames. The schema is inferred from the DataFrame and any fields that do not exist in Solr schema will be added via Schema API. See https://cwiki.apache.org/confluence/display/solr/Schema+Factory+Definition+in+SolrConfig[ManagedIndexSchemaFactory]
+See [Indexing params] for configuration and tuning
 
 == Examples
 
@@ -85,9 +105,7 @@ The first is what you'd want to use if you were using spark-solr in your own pro
 
 Once the shaded artifact is downloaded or built, it can be imported to the spark-shell by using the `--jars` config
 
-[source]
-./bin/spark-shell --jars spark-solr-2.1.0-SNAPSHOT-shaded.jar
-
+    ./bin/spark-shell --jars spark-solr-2.1.0-SNAPSHOT-shaded.jar
 
 === Writing data to Solr
 
@@ -108,7 +126,7 @@ var csvDF = sqlContext.read.format("com.databricks.spark.csv")
 * Clean up the data and create `pickup_latitude`, `dropoff_latitude` fields
 
 [source,scala]
---------------------------------------------------------------------------------------------
+--------------
 // Filter out invalid lat/lon cols
 csvDF = csvDF.filter("pickup_latitude >= -90 AND pickup_latitude <= 90 AND pickup_longitude >= -180 AND pickup_longitude <= 180")
 csvDF = csvDF.filter("dropoff_latitude >= -90 AND dropoff_latitude <= 90 AND dropoff_longitude >= -180 AND dropoff_longitude <= 180")
@@ -116,12 +134,12 @@ csvDF = csvDF.filter("dropoff_latitude >= -90 AND dropoff_latitude <= 90 AND dro
 // concat the lat/lon cols into a single value expected by solr location fields
 csvDF = csvDF.withColumn("pickup", concat_ws(",", col("pickup_latitude"),col("pickup_longitude"))).drop("pickup_latitude").drop("pickup_longitude")
 csvDF = csvDF.withColumn("dropoff", concat_ws(",", col("dropoff_latitude"),col("dropoff_longitude"))).drop("dropoff_latitude").drop("dropoff_longitude")
---------------------------------------------------------------------------------------------
+--------------
 
 * Write data to Solr. Before writing data to Solr, spark-solr tries to create the fields that exist in the csvDF but not in Solr via Schema API. For schema API to be usable in Solr, the https://cwiki.apache.org/confluence/display/solr/Schema+Factory+Definition+in+SolrConfig[ManagedIndexSchemaFactory] should be enabled. If you do not want to enable managed schema, then please manually create all the fields in the csv file in Solr
 
 [source,scala]
-----------------------------------------------------------------------------------------------
+--------------
 val options = Map(
   "zkhost" -> "localhost:9983",
   "collection" -> "test-spark-solr",
@@ -130,11 +148,11 @@ val options = Map(
 
 // Write to Solr
 csvDF.write.format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save
-----------------------------------------------------------------------------------------------
+--------------
 
-* The 999 documents should appear in Solr. If the docs are not yet visible, then an explicit commit should take place.
+* The 999 documents should appear in Solr. If all the docs are not yet visible, then an explicit commit can be done via HTTP call.
 
-=== Reading data from Solr
+=== Reading data
 
 In this section, we will try to read the csv data that is indexed to the Solr collection `test-spark-solr`
 
@@ -176,7 +194,31 @@ root
  |-- pickup_datetime: timestamp (nullable = true)
  |-- mta_tax: double (nullable = true)
 
+* To be able to query with SQL syntax, we need to register this DataFrame as a table
 
+[source,scala]
+df.registerTempTable("trips")
+
+* Fire off SQL queries
+
+[source,scala]
+--------------
+// Cache the DataFrame for efficiency. See http://spark.apache.org/docs/latest/sql-programming-guide.html#caching-data-in-memory
+scala>df.cache()
+scala> sqlContext.sql("SELECT avg(tip_amount), avg(fare_amount) FROM trips").show()
++-----------------+-----------------+
+|              _c0|              _c1|
++-----------------+-----------------+
+|1.630050050050051|12.27087087087087|
++-----------------+-----------------+
+
+scala>  sqlContext.sql("SELECT max(tip_amount), max(fare_amount) FROM trips WHERE trip_distance > 10").show()
++-----+----+
+|  _c0| _c1|
++-----+----+
+|16.44|83.5|
++-----+----+
+--------------
 
 == Configuration and Tuning
 
