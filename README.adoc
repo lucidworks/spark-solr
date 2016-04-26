@@ -356,7 +356,7 @@ The SparkApp framework allows you to pass the path to a JAAS authentication conf
 
 For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
 
-[source,scala]
+[source]
 Client {
   com.sun.security.auth.module.Krb5LoginModule required
   useKeyTab=true
@@ -369,7 +369,7 @@ Client {
 
 To use this configuration to authenticate to Solr, you simply need to pass the path to `jaas-client.conf` created above using the `-solrJaasAuthConfig option`, such as:
 
-[source,scala]
+[source]
 spark-submit --master yarn-server \
   --class com.lucidworks.spark.SparkApp \
   $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
