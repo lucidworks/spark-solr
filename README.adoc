@@ -252,6 +252,13 @@ You can use the "rows" option to specify the number of rows to retrieve from Sol
 Usage: `option("rows","10000")`
 Default: 1000
 
+==== use_export_handler
+
+This option is disabled by default and can be used to export results from Solr via `/export` handler which streams data out of Solr. See [Export Handler]. The `/export` handler needs fields to be explicitly specified. Please use `fields` option or specify the fields in the query.
+
+Usage: `option("use_export_handler", "true")`
+Default: true
+
 ==== Shard Splitting
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. The sub range splitting enables faster fetching from Solr by increasing the number of tasks in Solr. This should only be used if there are enough computing resources in the Spark cluster.
@@ -289,12 +296,12 @@ This option is enabled by default and flattens multi valued fields from Solr.
 Usage: `option("flatten_multivalued", "false")`
 Default: true
 
-==== use_export_handler
+==== dv
 
-This option is disabled by default and can be used to export results from Solr via `/export` handler which streams data out of Solr. See [Export Handler]. The `/export` handler needs fields to be explicitly specified. Please use `fields` option or specify the fields in the query.
+The "dv" option will fetch the docValues that are indexed but not stored by using function queries. Should be used for Solr versions < 5.5.0
 
-Usage: `option("use_export_handler", "true")`
-Default: true
+Usage: `option("dv", "true")`
+Default: false
 
 === Index parameters
 
@@ -314,13 +321,58 @@ Default: 500
 
 ==== gen_uniq_key
 
-If the documents are missing the unique key (in Solr schema), then this option will generate a unique value for each documentt before indexing to Solr.
+If the documents are missing the unique key (derived from Solr schema), then this option will generate a unique value for each document before indexing to Solr.
 
 Usage: `option("gen_uniq_key", "true")
 Default: false
 
+=== solr.params
+
+This option can be used to specify any arbitrary Solr params in the form of a Solr query.
+
+Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")
+
 == Developing a Spark Application
+
+The `com.lucidworks.spark.SparkApp` provides a simple framework for implementing Spark applications in Java. The class saves you from having to duplicate boilerplate code needed to run a Spark application, giving you more time to focus on the business logic of your application.
+
+To leverage this framework, you need to develop a concrete class that either implements RDDProcessor or extends StreamProcessor depending on the type of application you're developing.
+
+=== RDDProcessor
+
+Implement the `com.lucidworks.spark.SparkApp$RDDProcessor` interface for building a Spark application that operates on a JavaRDD, such as one pulled from a Solr query (see SolrQueryProcessor as an example).
+
+=== StreamProcessor
+
+Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to build a Spark streaming application.
+
+See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` or `com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor` for examples of how to write a StreamProcessor.
 
 == Authenticating with Kerberized Solr
 
-== Frequently Asked Questions
+For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security.
+
+The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
+
+For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
+
+[source,scala]
+Client {
+  com.sun.security.auth.module.Krb5LoginModule required
+  useKeyTab=true
+  keyTab="/keytabs/solr.keytab"
+  storeKey=true
+  useTicketCache=true
+  debug=true
+  principal="solr";
+};
+
+To use this configuration to authenticate to Solr, you simply need to pass the path to `jaas-client.conf` created above using the `-solrJaasAuthConfig option`, such as:
+
+[source,scala]
+spark-submit --master yarn-server \
+  --class com.lucidworks.spark.SparkApp \
+  $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
+  hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
+  -hdfsPath /user/spark/testdata/syn_sample_50k \
+  -solrJaasAuthConfig=/path/to/jaas-client.conf
