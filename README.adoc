@@ -150,7 +150,7 @@ val options = Map(
 csvDF.write.format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save
 --------------
 
-* The 999 documents should appear in Solr. If all the docs are not yet visible, then an explicit commit can be done via HTTP call.
+* 999 documents should appear in Solr. If all the docs are not yet visible, then an explicit commit can be done via HTTP call.
 
 === Reading data
 
@@ -222,6 +222,80 @@ scala>  sqlContext.sql("SELECT max(tip_amount), max(fare_amount) FROM trips WHER
 
 == Configuration and Tuning
 
+The Solr DataSource supports a number of optional parameters that allow you to optimize performance when reading data from Solr. The only required parameters for the DataSource are `zkhost` and `collection`.
+
+=== Query parameters
+
+==== query
+
+Probably the most obvious option is to specify a Solr query that limits the rows you want to load into Spark.
+For instance, if we only wanted to load documents that mention "solr", we would do:
+
+Usage: `option("query","body_t:solr")`
+Default: `\*:*`
+
+If you don't specify the "query" option, then all rows are read using the match all documents query (`\*:*`).
+
+=== fields
+
+You can use the "fields" option to specify a subset of fields to retrieve for each document in your results:
+
+Usage: `option("fields","id,author_s,favorited_b,...")`
+
+By default, all fields for each document are pulled back from Solr.
+
+=== rows
+
+You can use the "rows" option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implementation uses deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows. By default, the implementation uses 1000 but if your documents are smaller, you can increase this to 10000. Using too large a value can put pressure on the Solr JVM's garbage collector.
+
+Usage: `option("rows","10000")`
+Default: 1000
+
+==== Shard Splitting
+
+If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. The sub range splitting enables faster fetching from Solr by increasing the number of tasks in Solr. This should only be used if there are enough computing resources in the Spark cluster.
+Shard splitting is disabled by default.
+
+==== splits
+
+Enable shard splitting on default field `_version_`
+
+Usage: `option("splits", "true")`
+Default: false
+
+The above option is equivalent to `option("split_field", "_version_")`
+
+==== split_field
+
+The field to split on can be changed using `split_field` option.
+
+Usage: `option("split_field", "id")`
+Default: `_version_`
+
+==== splits_per_shard
+
+Behind the scenes, the DataSource implementation tries to split the shard into evenly sized splits using filter queries. You can also split on a string-based keyword field but it should have sufficient variance in the values to allow for creating enough splits to be useful. In other words, if your Spark cluster can handle 10 splits per shard, but there are only 3 unique values in a keyword field, then you will only get 3 splits.
+
+Keep in mind that this is only a hint to the split calculator and you may end up with a slightly different number of splits than what was requested.
+
+Usage: `option("splits_per_shard", "30")`
+Default: 20
+
+=== flatten_multivalued
+
+This option is enabled by default and flattens multi valued fields from Solr.
+
+Usage: `option("flatten_multivalued", "false")`
+Default: true
+
+=== use_export_handler
+
+This option is disabled by default and can be used to export results from Solr via `/export` handler which uses the Streaming API underneath.
+
+Usage: `option("use_export_handler", "true")`
+Default: true
+
+=== Index parameters
 
 == Developing a Spark Application
 
