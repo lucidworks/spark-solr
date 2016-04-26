@@ -1,7 +1,7 @@
 = Lucidworks Spark/Solr Integration
 :toc:
+:toclevels: 4
 :toc-placement!:
-:toclevels:4
 :toc-title:
 
 This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
@@ -252,7 +252,7 @@ You can use the "rows" option to specify the number of rows to retrieve from Sol
 Usage: `option("rows","10000")`
 Default: 1000
 
-==== Shard Splitting
+=== Shard Splitting
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. The sub range splitting enables faster fetching from Solr by increasing the number of tasks in Solr. This should only be used if there are enough computing resources in the Spark cluster.
 Shard splitting is disabled by default.
