@@ -124,7 +124,7 @@ var csvDF = sqlContext.read.format("com.databricks.spark.csv")
   .option("inferSchema", "true")
   .load(csvFileLocation)
 
-* Clean up the data and create `pickup_latitude`, `dropoff_latitude` fields
+* Clean up the data and create `pickup`, `dropoff` fields
 
 [source,scala]
 --------------
