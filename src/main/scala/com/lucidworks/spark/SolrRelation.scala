@@ -208,18 +208,20 @@ class SolrRelation(
     solrParams.add("updateTimeoutSecs","30")
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
 
-    logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+    if (fieldsToAddToSolr.nonEmpty) {
+      logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
 
-    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
-      addFieldsUpdateRequest.process(cloudClient, collectionId)
-    if (updateResponse.getStatus >= 400) {
-      val errMsg = "Schema update request failed due to: "+updateResponse
-      logError(errMsg)
-      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+      val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
+        addFieldsUpdateRequest.process(cloudClient, collectionId)
+      if (updateResponse.getStatus >= 400) {
+        val errMsg = "Schema update request failed due to: "+updateResponse
+        logError(errMsg)
+        throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+      }
     }
 
-    logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
     if (conf.softAutoCommitSecs.isDefined) {
+      logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
       val softAutoCommitSecs = conf.softAutoCommitSecs.get
       val softAutoCommitMs = softAutoCommitSecs * 1000
       var configApi = solrBaseUrl
