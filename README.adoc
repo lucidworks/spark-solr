@@ -151,7 +151,7 @@ Shard splitting is disabled by default.
 
 ===== splits
 
-Enable shard splitting on default field `_version_`
+Enable shard splitting on default field `\_version_`
 
 Usage: `option("splits", "true")`
 Default: false
@@ -163,7 +163,7 @@ The above option is equivalent to `option("split_field", "\_version_")`
 The field to split on can be changed using `split_field` option.
 
 Usage: `option("split_field", "id")`
-Default: `_version_`
+Default: `\_version_`
 
 ===== splits_per_shard
 
