@@ -16,6 +16,7 @@ toc::[]
 [source]
 cd $SPARK_HOME
 ./bin/spark-shell --packages "com.lucidworks.solr:spark-solr:2.0.0"
+                          or 
 ./bin/spark-shell --jars spark-solr-2.0.0.jar
 
 === Connect to your SolrCloud instance
