@@ -23,7 +23,7 @@ cd $SPARK_HOME
 
 ==== via DataFrame
 
-[source]
+[source,scala]
 val options = Map(
   "collection" -> "{solr_collection_name}",
   "zkhost" -> "{zk_connect_string}"
@@ -34,18 +34,22 @@ val df = sqlContext.read.format("solr")
 
 ==== via RDD
 
-[source]
+[source,scala]
 import com.lucidworks.spark.rdd.SolrRDD
 val solrRDD = new SolrRDD(zkHost, collectionName, sc)
 
 SolrRDD is an RDD of https://lucene.apache.org/solr/5_4_1/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
 
-==== via RDD ([line-through]#Java#)
+==== via RDD (Java)
 
-[source]
+[source,java]
+--------------
+import com.lucidworks.spark.rdd.SolrJavaRDD;
+import org.apache.spark.api.java.JavaRDD;
+
 SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
 JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
-
+--------------
 //end::getting-started[]
 
 //tag::build-jar[]
@@ -241,7 +245,7 @@ Default: 500
 
 ==== gen_uniq_key
 
-If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr.
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
 
 Usage: `option("gen_uniq_key", "true")`
 
