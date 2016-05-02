@@ -8,6 +8,7 @@ This project includes tools for reading data from Solr as a Spark RDD and indexi
 
 toc::[]
 
+//tag::getting-started[]
 == Getting started
 
 === Import jar file via spark-shell
@@ -15,6 +16,7 @@ toc::[]
 [source]
 cd $SPARK_HOME
 ./bin/spark-shell --packages "com.lucidworks.solr:spark-solr:2.0.0"
+./bin/spark-shell --jars spark-solr-2.0.0.jar
 
 === Connect to your SolrCloud instance
 
@@ -43,6 +45,9 @@ SolrRDD is an RDD of https://lucene.apache.org/solr/5_4_1/solr-solrj/org/apache/
 SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
 JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
 
+//end::getting-started[]
+
+//tag::build-jar[]
 == Download/Build the jar files
 
 === Maven Central
@@ -73,6 +78,9 @@ This will build 2 jars in the `target` directory:
 (where `${VERSION}` will be something like 2.1.0-SNAPSHOT, for development builds)
 The first is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
 
+//end::build-jar[]
+
+//tag::features[]
 == Features
 
 * Send objects from a Spark (Streaming or DataFrames) into Solr.
@@ -81,31 +89,44 @@ The first is what you'd want to use if you were using spark-solr in your own pro
 * Read large result sets from Solr using cursors or with export handler
 * Data locality. If Spark workers and Solr processes are co-located on the same nodes, the partitions are placed on the nodes where the replicas are located
 
+//end::features[]
+
+//tag::querying[]
 == Querying
 
 === Cursors
 
 https://cwiki.apache.org/confluence/display/solr/Pagination+of+Results[Cursors] are used by default to pull documents out of Solr. By default, the number of tasks allocated will be the number of shards available for the collection.
 
-If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See [query.split.field] and [query.splits.per.shard]
+If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See <<splits>> for enabling intra shard splitting querying.
 
-Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr params in `solr.params`
+Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr params in <<solr.params>>
 
 === Streaming API (/export)
 
 If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors
 
+//end::querying[]
+
+//tag::indexing[]
 == Indexing
 
 Objects can be sent to Solr via Spark Streaming or DataFrames. The schema is inferred from the DataFrame and any fields that do not exist in Solr schema will be added via Schema API. See https://cwiki.apache.org/confluence/display/solr/Schema+Factory+Definition+in+SolrConfig[ManagedIndexSchemaFactory]
-See [Indexing params] for configuration and tuning
+See <<Index parameters>> for configuration and tuning
 
+//end::indexing[]
+
+//tag::spark-examples[]
 == Examples
 
 ==== link:docs/examples/twitter.adoc[Indexing and Querying twitter data]
 
 ==== link:docs/examples/csv.adoc[Indexing and Querying NYC yellow taxi csv data]
 
+//end::spark-examples[]
+
+//tag::spark-devdocs[]
+//tag::tuning[]
 == Configuration and Tuning
 
 The Solr DataSource supports a number of optional parameters that allow you to optimize performance when reading data from Solr. The only required parameters for the DataSource are `zkhost` and `collection`.
@@ -217,6 +238,9 @@ This option can be used to specify any arbitrary Solr params in the form of a So
 
 Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
+//end::tuning[]
+
+//tag::spark-app[]
 == Developing a Spark Application
 
 The `com.lucidworks.spark.SparkApp` provides a simple framework for implementing Spark applications in Java. The class saves you from having to duplicate boilerplate code needed to run a Spark application, giving you more time to focus on the business logic of your application.
@@ -233,6 +257,9 @@ Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to bui
 
 See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` or `com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor` for examples of how to write a StreamProcessor.
 
+//end::spark-app[]
+
+//tag::spark-auth[]
 == Authenticating with Kerberized Solr
 
 For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security.
@@ -257,7 +284,10 @@ To use this configuration to authenticate to Solr, you simply need to pass the p
 [source]
 spark-submit --master yarn-server \
   --class com.lucidworks.spark.SparkApp \
-  $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
+  $SPARK_SOLR_PROJECT/target/spark-solr-${VERSION}-shaded.jar \
   hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
   -hdfsPath /user/spark/testdata/syn_sample_50k \
   -solrJaasAuthConfig=/path/to/jaas-client.conf
+
+//end::spark-auth[]
+//end::spark-devdocs[]
