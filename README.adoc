@@ -144,7 +144,7 @@ This option is disabled by default and can be used to export results from Solr v
 Usage: `option("use_export_handler", "true")`
 Default: true
 
-==== Shard Splitting
+==== Increase Read Parallelism using Intra-Shard splits
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. The sub range splitting enables faster fetching from Solr by increasing the number of tasks in Solr. This should only be used if there are enough computing resources in the Spark cluster.
 Shard splitting is disabled by default.
