@@ -148,7 +148,7 @@ class SolrRelation(
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
       if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
         // Determine whether to use Streaming API (/export handler) when 'use_export_handler' option is not set
-        val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query, solrRDD.uniqueKey)
+        val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query)
         val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -336,7 +336,7 @@ object SolrRelation extends Logging {
     unknownParams
   }
 
-  def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery, uniqueKey: String): Boolean = {
+  def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery): Boolean = {
     // Check if all the fields in the querySchema have docValues enabled
     for (structField <- querySchema.fields) {
       val metadata = structField.metadata

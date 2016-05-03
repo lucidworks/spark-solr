@@ -2,6 +2,7 @@ package com.lucidworks.spark
 
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.SolrRelationUtil
 import org.apache.spark.sql.DataFrame
 
 class EventsimTestSuite extends EventsimBuilder {
@@ -176,6 +177,17 @@ class EventsimTestSuite extends EventsimBuilder {
     val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
     val values = queryDF.collect()
     assert(values(0)(0) == 3)
+  }
+
+  test("Test if auto check streaming feature works") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName
+    )
+    val solrRelation = new SolrRelation(options, sqlContext, None)
+    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema)
+    val streamingPossible = SolrRelation.isStreamingPossible(querySchema, solrRelation.baseSchema, solrRelation.query)
+    assert(streamingPossible)
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {
