@@ -2,10 +2,12 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
+import com.lucidworks.spark.SolrRelation._
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
@@ -16,7 +18,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
-import scala.collection.{mutable, JavaConversions}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -101,6 +102,7 @@ class SolrRelation(
       }
     }
   }
+  val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
 
   override def schema: StructType = querySchema
 
@@ -146,7 +148,9 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      val docs = solrRDD.query(query)
+      // Determine whether to use Streaming API (/export handler) or page cursors for querying
+      val useStreamingAPI: Boolean = isStreamingPossible(querySchema, baseSchema, query)
+      val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
       val rows = SolrRelationUtil.toRows(querySchema, docs)
       rows
     } catch {
@@ -239,7 +243,7 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-    val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
+
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
@@ -275,6 +279,52 @@ class SolrRelation(
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
   }
 
+  protected def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery): Boolean = {
+    // Check if all the fields in the querySchema have docValues enabled
+    for (structField <- querySchema.fields) {
+      val metadata = structField.metadata
+      if (!metadata.contains("docValues"))
+        return false
+      if (metadata.contains("docValues") && !metadata.getBoolean("doValues"))
+        return false
+    }
+
+
+    val sortClauses = query.getSorts
+
+    if (!sortClauses.isEmpty) {
+      // Check if the sorted field (if exists) has docValue enabled
+      for (sortClause: SortClause <- sortClauses) {
+        val sortField = sortClause.getItem
+        if (baseSchema.contains(sortField)) {
+          val sortFieldMetadata = baseSchema(sortField).metadata
+          if (!sortFieldMetadata.contains("docValues"))
+            return false
+          if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("doValues"))
+            return false
+        } else {
+          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          return false
+        }
+      }
+    } else {
+      // Check if the uniqueKey has docValues enabled
+      if (baseSchema.contains(uniqueKey)) {
+        val uniqueKeyMetadata = baseSchema(uniqueKey).metadata
+        if (!uniqueKeyMetadata.contains("docValues"))
+          return false
+        if (uniqueKeyMetadata.contains("docValues") && !uniqueKeyMetadata.getBoolean("doValues"))
+          return false
+        // Since the uniqueKey has docValues enabled, we will sort on the uniqueKey
+        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
+      } else {
+        log.warn("Base schema does not contain unique key '" + uniqueKey + "'")
+      }
+    }
+
+    true
+  }
+
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
 
@@ -299,7 +349,7 @@ class SolrRelation(
 
 }
 
-object SolrRelation {
+object SolrRelation extends Logging {
   def checkUnknownParams(keySet: Set[String]): Set[String] = {
     var knownParams = Set.empty[String]
     var unknownParams = Set.empty[String]
@@ -323,5 +373,7 @@ object SolrRelation {
     })
     unknownParams
   }
+
+
 }
 

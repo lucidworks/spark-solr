@@ -130,6 +130,8 @@ class SolrRDD(
 
   def useExportHandler: SolrRDD = copy(exportHandler = Some(true))
 
+  def useExportHandler(exportHandler: Boolean): SolrRDD = copy(exportHandler = Some(exportHandler))
+
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
 
   def buildQuery: SolrQuery = {
