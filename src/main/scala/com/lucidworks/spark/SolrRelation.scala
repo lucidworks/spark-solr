@@ -146,11 +146,18 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      // Determine whether to use Streaming API (/export handler) or page cursors for querying
-      val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query, solrRDD.uniqueKey)
-      val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
-      val rows = SolrRelationUtil.toRows(querySchema, docs)
-      rows
+      if (solrRDD.exportHandler.isDefined && !solrRDD.exportHandler.get) {
+        // Determine whether to use Streaming API (/export handler) when 'use_export_handler' option is not set
+        val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query, solrRDD.uniqueKey)
+        val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
+        val rows = SolrRelationUtil.toRows(querySchema, docs)
+        rows
+      } else {
+        val docs = solrRDD.query(query)
+        val rows = SolrRelationUtil.toRows(querySchema, docs)
+        rows
+      }
+
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
@@ -368,6 +375,7 @@ object SolrRelation extends Logging {
         query.addSort(uniqueKey, SolrQuery.ORDER.asc)
       } else {
         log.warn("Base schema does not contain unique key '" + uniqueKey + "'")
+        return false
       }
     }
 

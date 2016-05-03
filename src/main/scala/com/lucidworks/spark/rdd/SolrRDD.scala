@@ -19,7 +19,7 @@ class SolrRDD(
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
-    exportHandler: Option[Boolean] = None,
+    val exportHandler: Option[Boolean] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
