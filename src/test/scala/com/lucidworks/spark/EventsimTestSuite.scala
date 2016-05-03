@@ -170,8 +170,21 @@ class EventsimTestSuite extends EventsimBuilder {
     val df: DataFrame = sqlContext.read.format("solr")
     .option("zkHost", zkHost)
     .option("collection", collectionName)
-    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=id desc") // The test will fail without the fl param here
+    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=id desc")
     .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
+    val values = queryDF.collect()
+    assert(values(0)(0) == 3)
+  }
+
+  test("Non streaming query with cursor marks option") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(USE_CURSOR_MARKS, "true")
+      .load()
     df.registerTempTable("events")
 
     val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
