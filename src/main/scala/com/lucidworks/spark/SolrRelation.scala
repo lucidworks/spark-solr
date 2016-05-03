@@ -101,7 +101,6 @@ class SolrRelation(
       }
     }
   }
-  val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
 
   override def schema: StructType = querySchema
 
@@ -148,7 +147,7 @@ class SolrRelation(
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
       // Determine whether to use Streaming API (/export handler) or page cursors for querying
-      val useStreamingAPI: Boolean = isStreamingPossible(querySchema, baseSchema, query)
+      val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query, solrRDD.uniqueKey)
       val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
       val rows = SolrRelationUtil.toRows(querySchema, docs)
       rows
@@ -242,6 +241,7 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
+    val uniqueKey: String = solrRDD.uniqueKey
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
@@ -278,50 +278,7 @@ class SolrRelation(
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
   }
 
-  protected def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery): Boolean = {
-    // Check if all the fields in the querySchema have docValues enabled
-    for (structField <- querySchema.fields) {
-      val metadata = structField.metadata
-      if (!metadata.contains("docValues"))
-        return false
-      if (metadata.contains("docValues") && !metadata.getBoolean("doValues"))
-        return false
-    }
 
-    val sortClauses = query.getSorts.asScala.toList
-
-    if (sortClauses.nonEmpty) {
-      // Check if the sorted field (if exists) has docValue enabled
-      for (sortClause: SortClause <- sortClauses) {
-        val sortField = sortClause.getItem
-        if (baseSchema.contains(sortField)) {
-          val sortFieldMetadata = baseSchema(sortField).metadata
-          if (!sortFieldMetadata.contains("docValues"))
-            return false
-          if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("doValues"))
-            return false
-        } else {
-          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
-          return false
-        }
-      }
-    } else {
-      // Check if the uniqueKey has docValues enabled
-      if (baseSchema.contains(uniqueKey)) {
-        val uniqueKeyMetadata = baseSchema(uniqueKey).metadata
-        if (!uniqueKeyMetadata.contains("docValues"))
-          return false
-        if (uniqueKeyMetadata.contains("docValues") && !uniqueKeyMetadata.getBoolean("doValues"))
-          return false
-        // Since the uniqueKey has docValues enabled, we will sort on the uniqueKey
-        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
-      } else {
-        log.warn("Base schema does not contain unique key '" + uniqueKey + "'")
-      }
-    }
-
-    true
-  }
 
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
@@ -372,6 +329,50 @@ object SolrRelation extends Logging {
     unknownParams
   }
 
+  def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery, uniqueKey: String): Boolean = {
+    // Check if all the fields in the querySchema have docValues enabled
+    for (structField <- querySchema.fields) {
+      val metadata = structField.metadata
+      if (!metadata.contains("docValues"))
+        return false
+      if (metadata.contains("docValues") && !metadata.getBoolean("docValues"))
+        return false
+    }
+
+    val sortClauses = query.getSorts.asScala.toList
+
+    if (sortClauses.nonEmpty) {
+      // Check if the sorted field (if exists) has docValue enabled
+      for (sortClause: SortClause <- sortClauses) {
+        val sortField = sortClause.getItem
+        if (baseSchema.contains(sortField)) {
+          val sortFieldMetadata = baseSchema(sortField).metadata
+          if (!sortFieldMetadata.contains("docValues"))
+            return false
+          if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("docValues"))
+            return false
+        } else {
+          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          return false
+        }
+      }
+    } else {
+      // Check if the uniqueKey has docValues enabled
+      if (baseSchema.contains(uniqueKey)) {
+        val uniqueKeyMetadata = baseSchema(uniqueKey).metadata
+        if (!uniqueKeyMetadata.contains("docValues"))
+          return false
+        if (uniqueKeyMetadata.contains("docValues") && !uniqueKeyMetadata.getBoolean("docValues"))
+          return false
+        // Since the uniqueKey has docValues enabled, we will sort on the uniqueKey
+        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
+      } else {
+        log.warn("Base schema does not contain unique key '" + uniqueKey + "'")
+      }
+    }
+
+    true
+  }
 
 }
 
