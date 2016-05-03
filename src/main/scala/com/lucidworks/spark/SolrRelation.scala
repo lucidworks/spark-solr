@@ -2,7 +2,6 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.SolrRelation._
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
@@ -289,10 +288,9 @@ class SolrRelation(
         return false
     }
 
+    val sortClauses = query.getSorts.asScala.toList
 
-    val sortClauses = query.getSorts
-
-    if (!sortClauses.isEmpty) {
+    if (sortClauses.nonEmpty) {
       // Check if the sorted field (if exists) has docValue enabled
       for (sortClause: SortClause <- sortClauses) {
         val sortField = sortClause.getItem
