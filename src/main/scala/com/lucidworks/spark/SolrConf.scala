@@ -98,6 +98,13 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def useCursorMarks: Option[Boolean] = {
+    if (config.contains(USE_CURSOR_MARKS) && config.get(USE_CURSOR_MARKS).isDefined) {
+      return Some(config.get(USE_CURSOR_MARKS).get.toBoolean)
+    }
+    None
+  }
+
   def genUniqKey: Option[Boolean] = {
     if (config.contains(GENERATE_UNIQUE_KEY) && config.get(GENERATE_UNIQUE_KEY).isDefined) {
       return Some(config.get(GENERATE_UNIQUE_KEY).get.toBoolean)

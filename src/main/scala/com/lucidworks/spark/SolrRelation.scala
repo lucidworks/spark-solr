@@ -146,7 +146,7 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      if (solrRDD.exportHandler.isDefined && !solrRDD.exportHandler.get) {
+      if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
         // Determine whether to use Streaming API (/export handler) when 'use_export_handler' option is not set
         val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query, solrRDD.uniqueKey)
         val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
@@ -364,19 +364,10 @@ object SolrRelation extends Logging {
         }
       }
     } else {
-      // Check if the uniqueKey has docValues enabled
-      if (baseSchema.contains(uniqueKey)) {
-        val uniqueKeyMetadata = baseSchema(uniqueKey).metadata
-        if (!uniqueKeyMetadata.contains("docValues"))
-          return false
-        if (uniqueKeyMetadata.contains("docValues") && !uniqueKeyMetadata.getBoolean("docValues"))
-          return false
-        // Since the uniqueKey has docValues enabled, we will sort on the uniqueKey
-        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
-      } else {
-        log.warn("Base schema does not contain unique key '" + uniqueKey + "'")
-        return false
-      }
+      // If no sort query is specified, then we will use one of the fields from the querySchema
+      val sortField = querySchema.fieldNames(0)
+      query.addSort(sortField, SolrQuery.ORDER.asc)
+      log.info("Added sort param '" + query.getSortField + "' to the query")
     }
 
     true
