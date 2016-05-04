@@ -52,24 +52,25 @@ JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
 --------------
 //end::getting-started[]
 
-//tag::build-jar[]
+//tag::build[]
 == Download/Build the jar Files
 
 === Maven Central
 
-The released jar files (1.1.2, 2.0.0) can be downloaded from http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[maven central]. Maven central also holds the shaded, sources, javadoc for each release.
+The released jar files (1.1.2, 2.0.0) can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central repository]. Maven Central also holds the shaded, sources, and javadoc .jars for each release.
 
 [source]
 <dependency>
-    <groupId>com.lucidworks.spark</groupId>
-    <artifactId>spark-solr</artifactId>
-    <version>2.0.0</version>
+   <groupId>com.lucidworks.spark</groupId>
+   <artifactId>spark-solr</artifactId>
+   <version>2.0.0</version>
 </dependency>
 
 ==== Snapshots
 
-spark-solr snapshots are built for every commit on master branch. The snapshots can be accessed from https://oss.sonatype.org/content/repositories/snapshots/com/lucidworks/spark/spark-solr/[OSS Sonatype].
+Snapshots of spark-solr are built for every commit on master branch. The snapshots can be accessed from https://oss.sonatype.org/content/repositories/snapshots/com/lucidworks/spark/spark-solr/[OSS Sonatype].
 
+//tag::build-source[]
 === Build from Source
 
 [source]
@@ -83,8 +84,8 @@ This will build 2 jars in the `target` directory:
 `${VERSION}` will be something like 2.1.0-SNAPSHOT, for development builds.
 
 The first .jar is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
-
-//end::build-jar[]
+//end::build-source[]
+//end::build[]
 
 //tag::features[]
 == Features
