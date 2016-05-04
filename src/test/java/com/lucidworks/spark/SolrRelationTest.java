@@ -31,6 +31,35 @@ import static org.junit.Assert.*;
 public class SolrRelationTest extends RDDProcessorTestBase {
 
   @Test
+  public void testSampleIndex() throws Exception {
+    String testCollection = "testSampleIndex";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      deleteCollection(testCollection);
+      int numShards = 3;
+      int numDocs = 100;
+      String zkHost = cluster.getZkServer().getZkAddress();
+      buildCollection(zkHost, testCollection, numDocs, numShards);
+
+      Map<String, String> options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      options.put(SAMPLE_SEED(), "5150");
+      options.put(SAMPLE_PCT(), "0.1");
+      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      long count = fromSolr.count();
+
+      System.out.println("\n\n"+count+"\n\n");
+      assertTrue(count >= 8 && count <= 12); // not exact because of shard imbalance
+
+      deleteCollection(testCollection);
+    } finally {
+      deleteCollection(testCollection);
+    }
+  }
+
+  @Test
   public void testIndexOneusagovDataFrame() throws Exception {
     String testCollection = "testIndexOneusagovDataFrame";
     try {
