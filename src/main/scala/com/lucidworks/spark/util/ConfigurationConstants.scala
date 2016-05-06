@@ -22,5 +22,8 @@ object ConfigurationConstants {
   val BATCH_SIZE: String = "batch_size"
   val GENERATE_UNIQUE_KEY: String = "gen_uniq_key"
 
+  val SAMPLE_SEED: String = "sample_seed"
+  val SAMPLE_PCT: String = "sample_pct"
+
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
 }

@@ -140,6 +140,17 @@ class SolrRelation(
       query.setFilterQueries(queryFilters:_*)
     }
 
+    if (conf.sampleSeed.isDefined) {
+      // can't support random sampling & intra-shard splitting
+      if (conf.splits.getOrElse(false) || conf.getSplitField.isDefined) {
+        throw new IllegalStateException("Cannot do sampling if intra-shard splitting feature is enabled!");
+      }
+
+      query.addSort(SolrQuery.SortClause.asc("random_"+conf.sampleSeed.get))
+      query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey));
+      query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
+    }
+
     if (log.isInfoEnabled) {
       log.info("Constructed SolrQuery: " + query)
     }

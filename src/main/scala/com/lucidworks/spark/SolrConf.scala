@@ -105,6 +105,20 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def sampleSeed: Option[Int] = {
+    if (config.contains(SAMPLE_SEED) && config.get(SAMPLE_SEED).isDefined) {
+      return Some(config.get(SAMPLE_SEED).get.toInt)
+    }
+    None
+  }
+
+  def samplePct: Option[Float] = {
+    if (config.contains(SAMPLE_PCT) && config.get(SAMPLE_PCT).isDefined) {
+      return Some(config.get(SAMPLE_PCT).get.toFloat)
+    }
+    None
+  }
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
