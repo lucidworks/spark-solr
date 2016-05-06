@@ -84,6 +84,13 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def commitWithin: Option[Int] = {
+    if (config.contains(COMMIT_WITHIN_MILLI_SECS) && config.get(COMMIT_WITHIN_MILLI_SECS).isDefined) {
+      return Some(config.get(COMMIT_WITHIN_MILLI_SECS).get.toInt)
+    }
+    None
+  }
+
   def batchSize: Option[Int] = {
     if (config.contains(BATCH_SIZE) && config.get(BATCH_SIZE).isDefined) {
       return Some(config.get(BATCH_SIZE).get.toInt)

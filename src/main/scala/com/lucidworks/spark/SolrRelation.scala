@@ -283,7 +283,7 @@ class SolrRelation(
       }
       doc
     })
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
+    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
   }
 
   private def buildQuery: SolrQuery = {
