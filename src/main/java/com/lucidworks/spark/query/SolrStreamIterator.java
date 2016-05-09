@@ -10,6 +10,7 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.params.CommonParams;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -59,12 +60,27 @@ public class SolrStreamIterator extends ResultsIterator {
     public Map<String, Object> getAll(SolrQuery solrQuery, Map<String, Object> sink, String... params) {
         if(sink == null) sink = new LinkedHashMap<>();
         for (String param : params) {
-            String[] v = solrQuery.getParams(param);
-            if(v != null && v.length>0 ) {
-                if(v.length == 1) {
-                    sink.put(param, v[0]);
+           String[] values = solrQuery.getParams(param);
+            // Combine multiple FQ params in to a single FQ String. See SPAR-12 and SOLR-8467
+            if (param.equals(CommonParams.FQ) && values.length > 1) {
+                String fqResult = "";
+                for (int i =0; i < values.length; i++) {
+                    if (i != values.length-1) {
+                        fqResult += "(" + values[i] + ")" + " AND ";
+                    } else {
+                        fqResult += "(" + values[i] + ")";
+                    }
+                }
+                sink.put(param, fqResult);
+                log.info("Merged multiple FQ params in to a single param. Result: '" + fqResult + "'");
+                continue;
+            }
+
+            if(values != null && values.length>0 ) {
+                if(values.length == 1) {
+                    sink.put(param, values[0]);
                 } else {
-                    sink.put(param,v);
+                    sink.put(param,values);
                 }
             }
         }

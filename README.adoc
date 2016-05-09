@@ -1,343 +1,266 @@
 = Lucidworks Spark/Solr Integration
+:toc:
+:toclevels: 4
+:toc-placement!:
+:toc-title:
 
 This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
 
-// tag::features[]
-== Features
+toc::[]
 
-* Send objects from a Spark Streaming application into Solr
-* Read the results from a Solr query as a Spark RDD
-* Read a large results set from Solr using distributed deep paging as a Spark RDD
+//tag::getting-started[]
+== Getting started
 
-// end::features[]
-// tag::spark-build[]
+=== Import jar File via spark-shell
 
-== Availability on Maven Central
+[source]
+cd $SPARK_HOME
+./bin/spark-shell --packages "com.lucidworks.solr:spark-solr:2.0.0"
+                          or
+./bin/spark-shell --jars spark-solr-2.0.0.jar
 
-* All releases (Since 1.1.2) will be available on http://search.maven.org/#search%7Cga%7C1%7Cspark-solr[Maven Central].
+=== Connect to your SolrCloud Instance
 
-== Build the Jars
-First, build the Jar for this project:
+==== via DataFrame
 
-`mvn clean package -DskipTests`
+[source,scala]
+val options = Map(
+  "collection" -> "{solr_collection_name}",
+  "zkhost" -> "{zk_connect_string}"
+)
+val df = sqlContext.read.format("solr")
+  .options(options)
+  .load
 
-This will build 2 jars in the `/target` directory:
+==== via RDD
+
+[source,scala]
+import com.lucidworks.spark.rdd.SolrRDD
+val solrRDD = new SolrRDD(zkHost, collectionName, sc)
+
+SolrRDD is an RDD of https://lucene.apache.org/solr/5_4_1/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
+
+==== via RDD (Java)
+
+[source,java]
+--------------
+import com.lucidworks.spark.rdd.SolrJavaRDD;
+import org.apache.spark.api.java.JavaRDD;
+
+SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
+--------------
+//end::getting-started[]
+
+//tag::build[]
+== Download/Build the jar Files
+
+=== Maven Central
+
+The released jar files (1.1.2, 2.0.0) can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central repository]. Maven Central also holds the shaded, sources, and javadoc .jars for each release.
+
+[source]
+<dependency>
+   <groupId>com.lucidworks.spark</groupId>
+   <artifactId>spark-solr</artifactId>
+   <version>2.0.0</version>
+</dependency>
+
+==== Snapshots
+
+Snapshots of spark-solr are built for every commit on master branch. The snapshots can be accessed from https://oss.sonatype.org/content/repositories/snapshots/com/lucidworks/spark/spark-solr/[OSS Sonatype].
+
+//tag::build-source[]
+=== Build from Source
+
+[source]
+mvn clean package -DskipTests
+
+This will build 2 jars in the `target` directory:
 
 * `spark-solr-${VERSION}.jar`
 * `spark-solr-${VERSION}-shaded.jar`
 
-(where ${VERSION} will be something like 1.2.0-SNAPSHOT, for development builds)
-The first is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
+`${VERSION}` will be something like 2.1.0-SNAPSHOT, for development builds.
 
-// end::spark-build[]
+The first .jar is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
+//end::build-source[]
+//end::build[]
 
-// tag::spark-devdocs[]
-// tag::spark-example[]
+//tag::features[]
+== Features
 
-== Example Applications
+* Send objects from a Spark (Streaming or DataFrames) into Solr.
+* Read the results from a Solr query as a Spark RDD or DataFrame.
+* Stream documents from Solr using `/export` handler (only works for exporting fields that have docValues enabled).
+* Read large result sets from Solr using cursors or with `/export` handler.
+* Data locality. If Spark workers and Solr processes are co-located on the same nodes, the partitions are placed on the nodes where the replicas are located.
 
-After the jars are built, let's populate a SolrCloud index with tweets (be sure to update the command shown below with your Twitter API credentials):
+//end::features[]
 
-Start Solr running in Cloud mode and create a collection named “socialdata” partitioned into two shards:
+//tag::querying[]
+== Querying
 
-[source]
-bin/solr -c && bin/solr create -c socialdata -shards 2
+=== Cursors
 
-NOTE: The remaining sections in this document assume Solr is running in cloud mode on port 8983 with embedded ZooKeeper listening on `localhost:9983`.
+https://cwiki.apache.org/confluence/display/solr/Pagination+of+Results[Cursors] are used by default to pull documents out of Solr. By default, the number of tasks allocated will be the number of shards available for the collection.
 
-Also, to ensure you can see tweets as they are indexed in near real-time, you should enable auto soft-commits using Solr’s Config API.
-(tested with 5.4.0, but trunk as of Jan '15 is 6.0.0, which uses a newer set of API endpoints for the Config API and this command will need to be modified)
-Specifically, for this exercise, we’ll commit tweets every 2 seconds.
+If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See <<splits>> section to enable and configure intra shard splitting.
 
-[source]
-curl -X POST http://localhost:8983/solr/socialdata/config \
- -d '{"set-property":{"updateHandler.autoSoftCommit.maxTime":"2000"}}'
+Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr parameters using <<solr.params>>.
 
-Now, let’s populate Solr with tweets using Spark streaming:
+=== Streaming API (/export)
 
-[source]
-$SPARK_HOME/bin/spark-submit --master $SPARK_MASTER \
- --conf "spark.executor.extraJavaOptions=-Dtwitter4j.oauth.consumerKey=? -Dtwitter4j.oauth.consumerSecret=? -Dtwitter4j.oauth.accessToken=? -Dtwitter4j.oauth.accessTokenSecret=?" \
- --class com.lucidworks.spark.SparkApp \
- ./target/spark-solr-1.0-SNAPSHOT-shaded.jar \
- twitter-to-solr -zkHost localhost:9983 -collection socialdata
+If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<use_export_handler>> allows you to enable Streaming API via DataFrame.
 
-Replace `$SPARK_MASTER` with the URL of your Spark master server. If you don’t have access to a Spark cluster, you can run the Spark job in local mode by passing:
+//end::querying[]
 
-[source]
---master local[2]
+//tag::indexing[]
+== Indexing
 
-However, when running in local mode, there is no executor, so you’ll need to pass the Twitter credentials in the `spark.driver.extraJavaOptions` parameter instead of `spark.executor.extraJavaOptions`.
+Objects can be sent to Solr via Spark Streaming or DataFrames. The schema is inferred from the DataFrame and any fields that do not exist in Solr schema will be added via Schema API. See https://cwiki.apache.org/confluence/display/solr/Schema+Factory+Definition+in+SolrConfig[ManagedIndexSchemaFactory].
 
-Tweets will start flowing into Solr; be sure to let the streaming job run for a few minutes to build up a few thousand tweets in your socialdata collection. You can kill the job using ctrl-C.
+See <<Index parameters>> for configuration and tuning.
 
-[NOTE]
-====
-The sample command above includes properties for Twitter API credentials which need to be provided by you.
+//end::indexing[]
 
-If you don't already have your Twitter API credentials, you will need to set up a Twitter app (https://apps.twitter.com) and get your user and access tokens.
+//tag::spark-examples[]
+== Examples
 
-This link is a good Spark-related walkthrough of the process:
-https://databricks-training.s3.amazonaws.com/realtime-processing-with-spark-streaming.html#twitter-credential-setup.
-====
+==== link:docs/examples/twitter.adoc[Indexing and Querying Twitter data]
 
-// end::spark-example[]
-// tag::spark-shell[]
+==== link:docs/examples/csv.adoc[Indexing and Querying NYC yellow taxi CSV data]
 
-== Working at the Spark Shell
+//end::spark-examples[]
 
-Let’s start up the Spark Scala REPL shell to do some interactive data exploration with our indexed tweets:
+//tag::spark-devdocs[]
+//tag::tuning[]
+== Configuration and Tuning
 
-[source]
-cd $SPARK_HOME
-bin/spark-shell --jars $PROJECT_HOME/target/spark-solr-${VERSION}-shaded.jar
+The Solr DataSource supports a number of optional parameters that allow you to optimize performance when reading data from Solr. The only required parameters for the DataSource are `zkhost` and `collection`.
 
-`$PROJECT_HOME` is the location where you cloned the spark-solr project. You should (but might not, depending on logging config) see a message like this from Spark during shell initialization:
+=== Query Parameters
 
-[source]
-15/05/27 10:07:53 INFO SparkContext: Added JAR file:/spark-solr/target/spark-solr-1.0-SNAPSHOT-shaded.jar at http://192.168.1.3:57936/jars/spark-solr-1.0-SNAPSHOT-shaded.jar with timestamp 1432742873044
+==== query
 
-Let’s load the socialdata collection into Spark by executing the following Scala code in the shell:
+Probably the most obvious option is to specify a Solr query that limits the rows you want to load into Spark. For instance, if we only wanted to load documents that mention "solr", we would do:
 
-[source]
-----
-val tweets = sqlContext.read.format("solr").options(
- Map("zkHost" -> "localhost:9983", "collection" -> "socialdata")
- ).load
- .filter("provider_s='twitter'")
-----
+Usage: `option("query","body_t:solr")`
 
-On line 1, we use the sqlContext object loaded into the shell automatically by Spark to load a DataSource named “solr”. Behind the scenes, Spark locates the `solr.DefaultSource class` in the project JAR file we added to the shell using the --jars parameter.
+Default: `\*:*`
 
-On line 2, we pass configuration parameters needed by the Solr DataSource to connect to Solr using a Scala Map. At a minimum, we need to pass the ZooKeeper connection string (`zkHost`) and collection name (`collection`). By default, the DataSource matches all documents in the collection, but you can pass a Solr query to the DataSource using an optional `query` parameter. This allows to you restrict the documents seen by the DataSource using a Solr query.
+If you don't specify the "query" option, then all rows are read using the "match all documents" query (`\*:*`).
 
-On line 3, while it appears that we're perhaps loading the data into some truly materialized set of objects, we're still lazy at this point: we have a DataFrame (read on)
+==== fields
 
-On line 4, we use a filter to only select documents that come from Twitter (`provider_s='twitter'`).
+You can use the `fields` option to specify a subset of fields to retrieve for each document in your results:
 
-At this point, we have a Spark SQL DataFrame object that can read tweets from Solr. In Spark, a DataFrame is a distributed collection of data organized into named columns (see: https://databricks.com/blog/2015/02/17/introducing-dataframes-in-spark-for-large-scale-data-science.html). Conceptually, DataFrames are similar to tables in a relational database except they are partitioned across multiple nodes in a Spark cluster.
-
-It’s important to understand that Spark does not actually load the socialdata collection into memory at this point. We’re only setting up to perform some analysis on that data; the actual data isn’t loaded into Spark until it is needed to perform some calculation later in the job. This allows Spark to perform the necessary column and partition pruning operations to optimize data access into Solr.
-
-Every DataFrame has a schema. You can use the `printSchema()` function to get information about the fields available for the tweets DataFrame:
-
-[source]
-tweets.printSchema()
-
-Behind the scenes, our DataSource implementation uses Solr’s Schema API to determine the fields and field types for the collection automatically.
-
-[source,scala]
-----
-scala> tweets.printSchema()
- root
- |-- _indexed_at_tdt: timestamp (nullable = true)
- |-- _version_: long (nullable = true)
- |-- accessLevel_i: integer (nullable = true)
- |-- author_s: string (nullable = true)
- |-- createdAt_tdt: timestamp (nullable = true)
- |-- currentUserRetweetId_l: long (nullable = true)
- |-- favorited_b: boolean (nullable = true)
- |-- id: string (nullable = false)
- |-- id_l: long (nullable = true)
- ...
-----
-
-Next, let’s register the tweets DataFrame as a temp table so that we can use it in SQL queries:
-
-[source]
-tweets.registerTempTable("tweets")
-
-For example, we can count the number of retweets by doing:
-
-[source]
-sqlContext.sql("SELECT COUNT(type_s) FROM tweets WHERE type_s='echo'").show()
-
-If you check your Solr log, you’ll see the following query was generated by the Solr DataSource to process the SQL statement (note I added the newlines between parameters to make it easier to read the query):
-
-[source]
-----
- q=*:*&
- fq=provider_s:twitter&
- fq=type_s:echo&
- distrib=false&
- fl=type_s,provider_s&
- cursorMark=*&
- start=0&
- sort=id+asc&
- collection=socialdata&
- rows=1000
-----
-
-There are a couple of interesting aspects of this query.
-
-First, notice that the `provider_s` field filter we used when we declared the DataFrame translated into a Solr filter query parameter (`fq=provider_s:twitter`). Solr will cache an efficient data structure for this filter that can be reused across queries, which improves performance when reading data from Solr to Spark.
-
-In addition, the SQL statement included a WHERE clause that also translated into an additional filter query (`fq=type_s:echo`). Our DataSource implementation handles the translation of SQL clauses to Solr specific query constructs. On the backend, Spark handles the distribution and optimization of the logical plan to execute a job that accesses data sources.
-
-Even though there are many fields available for each tweet in our collection, Spark ensures that only the fields needed to satisfy the query are retrieved from the data source, which in this case is only `type_s` and `provider_s`. In general, it’s a good idea to only request the specific fields you need access to when reading data in Spark.
-
-The query also uses deep-paging cursors to efficiently read documents deep into the result set. If you’re curious how deep paging cursors work in Solr, please read: https://lucidworks.com/blog/coming-soon-to-solr-efficient-cursor-based-iteration-of-large-result-sets/. Also, matching documents are streamed back from Solr, which improves performance because the client side (Spark task) does not have to wait for a full page of documents (1000) to be constructed on the Solr side before receiving data. In other words, documents are streamed back from Solr as soon as the first hit is identified.
-
-The last interesting aspect of this query is the `distrib=false` parameter. Behind the scenes, the Solr DataSource will read data from all shards in a collection in parallel from different Spark tasks. In other words, if you have a collection with ten shards, then the Solr DataSource implementation will use 10 Spark tasks to read from each shard in parallel. The `distrib=false` parameter ensures that each shard will only execute the query locally instead of distributing it to other shards.
-
-However, reading from all shards in parallel does not work for Top N type use cases where you need to read documents from Solr in ranked order across all shards. You can disable the parallelization feature by setting the `parallel_shards` parameter to false. When set to false, the Solr DataSource will execute a standard distributed query. Consequently, you should use caution when disabling this feature, especially when reading very large result sets from Solr.
-
-Beyond SQL, the Spark API exposes a number of functional operations you can perform on a DataFrame. For example, if we wanted to determine the top authors based on the number of posts, we could use the following SQL:
-
-[source,sql]
-sqlContext.sql("select author_s, COUNT(author_s) num_posts from tweets where type_s='post' group by author_s order by num_posts desc limit 10").show()
-
-[source,sql]
-tweets.filter("type_s='post'").groupBy("author_s").count().orderBy(desc("count")).limit(10).show()
-
-Another subtle aspect of working with DataFrames is that you as a developer need to decide when to cache the DataFrame based on how expensive it was to create it. For instance, if you load 10’s of millions of rows from Solr and then perform some costly transformation that trims your DataFrame down to 10,000 rows, then it would be wise to cache the smaller DataFrame so that you won’t have to re-read millions of rows from Solr again. On the other hand, caching the original millions of rows pulled from Solr is probably not very useful, as that will consume too much memory. The general advice I follow is to cache DataFrames when you need to reuse them for additional computation and they require some computation to generate.
-
-// end::spark-shell[]
-// tag::tuning[]
-
-== Tuning the Solr SparkSQL DataSource
-
-The Solr DataSource supports a number of optional parameters to allow you to optimize performance when reading data from Solr. Let's start with the most basic definition of the Solr DataSource and build up the options as we progress through this section:
-
-[source]
-var solr = sqlContext.read.format("solr").option("zkhost", "localhost:9983").option("collection","socialdata").load()
-
-=== query
-
-Probably the most obvious option is to specify a Solr query that limits the rows you want to load into Spark.
-For instance, if we only wanted to load documents that mention "solr", we would do:
-
-[source]
-option("query","body_t:solr")
-
-If you don't specify the "query" option, then all rows are read using the match all documents query (`*:*`).
-
-=== fields
-
-You can use the "query.fields" option to specify a subset of fields to retrieve for each document in your results:
-
-[source]
-option("query.fields","id,author_s,favorited_b,...")
+Usage: `option("fields","id,author_s,favorited_b,...")`
 
 By default, all fields for each document are pulled back from Solr.
 
-=== query.rows
+==== rows
 
-You can use the "query.rows" option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implemenation uses deep paging cursors and response streaming, so it is usually safe to specify a large number of rows. By default, the implementation uses 1000 but if your documents are smaller, you can increase this to 5000. Using too large a value can put pressure on the Solr JVM's garbage collector.
+You can use the `rows` option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implementation uses either deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows.
 
-[source]
-option("query.rows","5000")
+By default, the implementation uses 1000 rows but if your documents are smaller, you can increase this to 10000. Using too large a value can put pressure on the Solr JVM's garbage collector.
 
-=== query.split.field
+Usage: `option("rows","10000")`
+Default: 1000
 
-If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the `_version_` field that is attached to every document by the shard leader during indexing.
+==== use_export_handler
 
-[source]
-option("query.split.field","_version_")
+This option is disabled by default and can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://cwiki.apache.org/confluence/display/solr/Exporting+Result+Sets[Exporting Result Sets] for more information.
+
+The `/export` handler needs fields to be explicitly specified. Please use the `fields` option or specify the fields in the query.
+
+Usage: `option("use_export_handler", "true")`
+Default: true
+
+==== Increase Read Parallelism using Intra-Shard Splits
+
+If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. The sub range splitting enables faster fetching from Solr by increasing the number of tasks in Solr. This should only be used if there are enough computing resources in the Spark cluster.
+
+Shard splitting is disabled by default.
+
+===== splits
+
+Enable shard splitting on default field `\_version_`.
+
+Usage: `option("splits", "true")`
+
+Default: false
+
+The above option is equivalent to `option("split_field", "\_version_")`
+
+===== split_field
+
+The field to split on can be changed using `split_field` option.
+
+Usage: `option("split_field", "id")`
+Default: `\_version_`
+
+===== splits_per_shard
 
 Behind the scenes, the DataSource implementation tries to split the shard into evenly sized splits using filter queries. You can also split on a string-based keyword field but it should have sufficient variance in the values to allow for creating enough splits to be useful. In other words, if your Spark cluster can handle 10 splits per shard, but there are only 3 unique values in a keyword field, then you will only get 3 splits.
 
-=== query.splits.per.shard
-
-The "query.splits.per.shard" option provides a hint to the shard split planner on how many splits to create per shard. This should be based on the number of available executor slots in your Spark cluster divided by the number of shards in the collection you're querying. For instance, if you're querying into a 5 shard collection and your Spark cluster has 20 available executor slots to run the job, then you'll want to use:
-
-[source]
-option("query.splits.per.shard","4")
-
 Keep in mind that this is only a hint to the split calculator and you may end up with a slightly different number of splits than what was requested.
 
-// end::tuning[]
-// tag::solr-read[]
+Usage: `option("splits_per_shard", "30")`
 
-=== escape_fieldnames
+Default: 20
 
-The "escape_fieldnames" option will transform field names in Solr. Any dots ('.') inside the field name are replaced with '_'
+==== flatten_multivalued
 
-[source]
-option("escape_fieldnames", "true")
+This option is enabled by default and flattens multi valued fields from Solr.
 
-=== splits
+Usage: `option("flatten_multivalued", "false")`
 
-The "splits" option will enable the parallelism by splitting on default field '_version_'.
+Default: true
 
-[source]
-option("splits", "true")
+==== dv
 
-The above option is equivalent to
+The `dv` option will fetch the docValues that are indexed but not stored by using function queries. Should be used for Solr versions lower than 5.5.0.
 
-[source]
-option("split_field", "_version_")
+Usage: `option("dv", "true")`
 
-=== dv
+Default: false
 
-The "dv" option will fetch the doc values that are not stored.by using function queries.
+=== Index parameters
 
-[source]
-option("dv", "true")
+==== soft_commit_secs
 
-Since 5.5.0 Solr will return non-stored docValues by default. This option is only needed for versions that are older than 5.5
+If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
+
+Usage: `option("soft_commit_secs", "10")`
+
+Default: None
+
+==== batch_size
+
+The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
+
+Usage: `option("batch_size", "10000")`
+
+Default: 500
+
+==== gen_uniq_key
+
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
+
+Usage: `option("gen_uniq_key", "true")`
+
+Default: false
 
 === solr.params
 
-The "solr.params" option is used for providing arbitrary Solr query parameters (just like a normal Solr query)
+The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
 
-[source]
-option("solr.params", "defType=edismax&timeAllowed=0")
+Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
-The params provided here will override the common Solr params 'fields', 'query', 'rows'
+//end::tuning[]
 
-== Reading data from Solr as a Spark RDD
-
-The `com.lucidworks.spark.rdd.SolrRDD` class transforms the results of a Solr query into a Spark RDD.
-
-=== Scala:
-
-[source]
-import com.lucidworks.spark.rdd.SolrRDD
-val solrRDD = new SolrRDD(zkHost, collection, sc)
-val words = solrRDD.flatMap(doc => {
-  val tweet = doc.get("text_t")
-  var tweetStr = if (tweet != null) tweet.toString() else ""
-  tweetStr = tweetStr.toLowerCase().replaceAll("[.,!?\n]", " ")
-  tweetStr.split(" ")
-  })
-
-See `com.lucidworks.spark.example.query.WordCount` example for full code
-
-=== Java
-
-[source]
-SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
-JavaRDD<SolrDocument> resultsRDD = solrRDD.queryShards(solrQuery);
-
-Once you've converted the results in an RDD, you can use the Spark API to perform analytics against the data from Solr. For instance, the following code extracts terms from the tweet_s field of each document in the results:
-
-[source]
-JavaRDD<String> words = resultsRDD.flatMap(new FlatMapFunction<SolrDocument, String>() {
-  public Iterable<String> call(SolrDocument doc) {
-    Object tweet_s = doc.get("tweet_s");
-    String str = tweet_s != null ? tweet_s.toString() : "";
-    str = str.toLowerCase().replaceAll("[.,!?\n]", " ");
-    return Arrays.asList(str.split(" "));
-  }
-});
-
-// end::solr-read[]
-// tag::solr-write[]
-
-== Writing data to Solr from Spark Streaming
-
-The `com.lucidworks.spark.SolrSupport` class provides static helper functions for send data to Solr from a Spark streaming application. The `TwitterToSolrStreamProcessor` class provides a good example of how to use the SolrSupport API. For sending documents directly to Solr, you need to build-up a `SolrInputDocument` in your Spark streaming application code.
-
-[source]
-    String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
-    String collection = cli.getOptionValue("collection", "collection1");
-    int batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
-    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs);
-
-// end::solr-write[]
-// tag::spark-app[]
-
+//tag::spark-app[]
 == Developing a Spark Application
 
 The `com.lucidworks.spark.SparkApp` provides a simple framework for implementing Spark applications in Java. The class saves you from having to duplicate boilerplate code needed to run a Spark application, giving you more time to focus on the business logic of your application.
@@ -354,16 +277,16 @@ Extend the `com.lucidworks.spark.SparkApp$StreamProcessor` abstract class to bui
 
 See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` or `com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor` for examples of how to write a StreamProcessor.
 
-// end::spark-app[]
-// tag::spark-auth[]
+//end::spark-app[]
 
+//tag::spark-auth[]
 == Authenticating with Kerberized Solr
 
 For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security.
 
 The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
 
-For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS config file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
+For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS configuration  file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
 
 [source]
 Client {
@@ -381,10 +304,10 @@ To use this configuration to authenticate to Solr, you simply need to pass the p
 [source]
 spark-submit --master yarn-server \
   --class com.lucidworks.spark.SparkApp \
-  $SPARK_SOLR_PROJECT/target/lucidworks-spark-rdd-2.0.3.jar \
+  $SPARK_SOLR_PROJECT/target/spark-solr-${VERSION}-shaded.jar \
   hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
   -hdfsPath /user/spark/testdata/syn_sample_50k \
   -solrJaasAuthConfig=/path/to/jaas-client.conf
 
-// end::spark-auth[]
-// end::spark-devdocs[]
+//end::spark-auth[]
+//end::spark-devdocs[]
