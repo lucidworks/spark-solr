@@ -1,8 +1,15 @@
 package com.lucidworks.spark
 
+import java.util.Collections
+
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.SolrRelationUtil
+import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.spark.sql.DataFrame
+
+import scala.collection.JavaConverters._
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -169,13 +176,46 @@ class EventsimTestSuite extends EventsimBuilder {
     val df: DataFrame = sqlContext.read.format("solr")
     .option("zkHost", zkHost)
     .option("collection", collectionName)
-    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=id desc") // The test will fail without the fl param here
+    .option(ARBITRARY_PARAMS_STRING, "fl=status,length&sort=id desc")
     .load()
     df.registerTempTable("events")
 
     val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
     val values = queryDF.collect()
     assert(values(0)(0) == 3)
+  }
+
+  test("Non streaming query with cursor marks option") {
+    val df: DataFrame = sqlContext.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(USE_CURSOR_MARKS, "true")
+      .load()
+    df.registerTempTable("events")
+
+    val queryDF = sqlContext.sql("SELECT count(distinct status), avg(length) FROM events")
+    val values = queryDF.collect()
+    assert(values(0)(0) == 3)
+  }
+
+  test("Test if auto check streaming feature works") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName
+    )
+    val solrRelation = new SolrRelation(options, sqlContext, None)
+    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema)
+    val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
+    assert(areFieldsDocValues)
+
+    solrRelation.query.addSort("registration", SolrQuery.ORDER.asc)
+    val sortClauses = solrRelation.query.getSorts.asScala.toList
+    val isSortFieldDocValue = SolrRelation.checkSortFieldsForDV(solrRelation.baseSchema, sortClauses)
+    assert(!isSortFieldDocValue)
+
+    solrRelation.query.setSorts(Collections.emptyList())
+    SolrRelation.addSortField(querySchema, solrRelation.query)
+    assert(solrRelation.query.getSorts == Collections.singletonList(new SortClause("userId", SolrQuery.ORDER.asc)))
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {
