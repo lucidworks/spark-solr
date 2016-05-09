@@ -7,13 +7,14 @@ import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{RowFactory, Row}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+import org.joda.time.format.ISODateTimeFormat
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 
 object SolrRelationUtil extends Logging {
 
@@ -131,6 +132,20 @@ object SolrRelationUtil extends Logging {
    }
   }
 
+  def getFilterValue(attr: String, value: String, baseSchema: StructType) = {
+    val fieldType = baseSchema(attr)
+    fieldType.dataType match {
+      case TimestampType => convertToISO(value)
+      case _ => value
+    }
+  }
+
+  def convertToISO(ts: String): String = {
+    val unixSeconds = Timestamp.valueOf(ts).getTime
+    val isoValue = ISODateTimeFormat.dateTime().withZoneUTC().print(unixSeconds)
+    String.format("\"%s\"", isoValue)
+  }
+
   def fq(filter: Filter, baseSchema: StructType): String = {
     var negate = ""
     var crit : Option[String] = None
@@ -139,22 +154,22 @@ object SolrRelationUtil extends Logging {
     filter match {
       case f: EqualTo =>
         attr = Some(f.attribute)
-        crit = Some(String.valueOf(f.value))
+        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
       case f: EqualNullSafe =>
         attr = Some(f.attribute)
-        crit = Some(String.valueOf(f.value))
+        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
       case f: GreaterThan =>
         attr = Some(f.attribute)
-        crit = Some("{" + f.value + " TO *]")
+        crit = Some("{" + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ " TO *]")
       case f: GreaterThanOrEqual =>
         attr = Some(f.attribute)
-        crit = Some("[" + f.value + " TO *]")
+        crit = Some("[" + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ " TO *]")
       case f: LessThan =>
         attr = Some(f.attribute)
-        crit = Some("[* TO " + f.value + "}")
+        crit = Some("[* TO " + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ "}")
       case f: LessThanOrEqual =>
         attr = Some(f.attribute)
-        crit = Some("[* TO " + f.value + "]")
+        crit = Some("[* TO " + getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)+ "]")
       case f: In =>
         attr = Some(f.attribute)
         val sb = new StringBuilder()
@@ -256,6 +271,8 @@ object SolrRelationUtil extends Logging {
           if (fieldValues != null) {
             val iterableValues = fieldValues.iterator().map {
               case d: Date => new Timestamp(d.getTime)
+              case i: java.lang.Integer => new java.lang.Long(i.longValue())
+              case f: java.lang.Float => new java.lang.Double(f.doubleValue())
               case a => a
             }
             values.add(iterableValues.toArray)
@@ -268,9 +285,13 @@ object SolrRelationUtil extends Logging {
           fieldValue match {
             case f: String => values.add(f)
             case f: Date => values.add(new Timestamp(f.getTime))
+            case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
+            case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
             case f: java.util.ArrayList[_] =>
               val jlist = f.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
+                case i: java.lang.Integer => new java.lang.Long(i.longValue())
+                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
               }
               val arr = jlist.toArray
@@ -280,6 +301,8 @@ object SolrRelationUtil extends Logging {
             case f: Iterable[_] =>
               val iterableValues = f.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
+                case i: java.lang.Integer => new java.lang.Long(i.longValue())
+                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
               }
               val arr = iterableValues.toArray

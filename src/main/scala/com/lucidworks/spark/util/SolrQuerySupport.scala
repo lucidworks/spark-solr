@@ -69,9 +69,9 @@ object SolrQuerySupport extends Logging {
     "solr.StrField" -> DataTypes.StringType,
     "solr.TextField" -> DataTypes.StringType,
     "solr.BoolField" -> DataTypes.BooleanType,
-    "solr.TrieIntField" -> DataTypes.IntegerType,
+    "solr.TrieIntField" -> DataTypes.LongType,
     "solr.TrieLongField" -> DataTypes.LongType,
-    "solr.TrieFloatField" -> DataTypes.FloatType,
+    "solr.TrieFloatField" -> DataTypes.DoubleType,
     "solr.TrieDoubleField" -> DataTypes.DoubleType,
     "solr.TrieDateField" -> DataTypes.TimestampType,
     "solr.BinaryField" -> DataTypes.BinaryType

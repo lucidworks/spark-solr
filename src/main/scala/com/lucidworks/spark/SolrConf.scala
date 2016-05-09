@@ -84,6 +84,13 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def commitWithin: Option[Int] = {
+    if (config.contains(COMMIT_WITHIN_MILLI_SECS) && config.get(COMMIT_WITHIN_MILLI_SECS).isDefined) {
+      return Some(config.get(COMMIT_WITHIN_MILLI_SECS).get.toInt)
+    }
+    None
+  }
+
   def batchSize: Option[Int] = {
     if (config.contains(BATCH_SIZE) && config.get(BATCH_SIZE).isDefined) {
       return Some(config.get(BATCH_SIZE).get.toInt)
@@ -98,9 +105,30 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def useCursorMarks: Option[Boolean] = {
+    if (config.contains(USE_CURSOR_MARKS) && config.get(USE_CURSOR_MARKS).isDefined) {
+      return Some(config.get(USE_CURSOR_MARKS).get.toBoolean)
+    }
+    None
+  }
+
   def genUniqKey: Option[Boolean] = {
     if (config.contains(GENERATE_UNIQUE_KEY) && config.get(GENERATE_UNIQUE_KEY).isDefined) {
       return Some(config.get(GENERATE_UNIQUE_KEY).get.toBoolean)
+    }
+    None
+  }
+
+  def sampleSeed: Option[Int] = {
+    if (config.contains(SAMPLE_SEED) && config.get(SAMPLE_SEED).isDefined) {
+      return Some(config.get(SAMPLE_SEED).get.toInt)
+    }
+    None
+  }
+
+  def samplePct: Option[Float] = {
+    if (config.contains(SAMPLE_PCT) && config.get(SAMPLE_PCT).isDefined) {
+      return Some(config.get(SAMPLE_PCT).get.toFloat)
     }
     None
   }

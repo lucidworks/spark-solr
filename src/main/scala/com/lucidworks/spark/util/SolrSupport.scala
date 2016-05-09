@@ -147,7 +147,14 @@ object SolrSupport extends Logging {
       zkHost: String,
       collection: String,
       batchSize: Int,
-      rdd: RDD[SolrInputDocument]) = {
+      rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, rdd, None)
+
+  def indexDocs(
+      zkHost: String,
+      collection: String,
+      batchSize: Int,
+      rdd: RDD[SolrInputDocument],
+      commitWithin: Option[Int]): Unit = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
@@ -160,21 +167,31 @@ object SolrSupport extends Logging {
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
-          sendBatchToSolr(solrClient, collection, batch)
+          sendBatchToSolr(solrClient, collection, batch, commitWithin)
           batch.clear
         }
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
-        sendBatchToSolr(solrClient, collection, batch)
+        sendBatchToSolr(solrClient, collection, batch, commitWithin)
         batch.clear
       }
     })
   }
 
-  def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit = {
+  def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit =
+    sendBatchToSolr(solrClient, collection, batch, None)
+
+  def sendBatchToSolr(
+      solrClient: SolrClient,
+      collection: String,
+      batch: Iterable[SolrInputDocument],
+      commitWithin: Option[Int]): Unit = {
     val req = new UpdateRequest()
     req.setParam("collection", collection)
+
+    if (commitWithin.isDefined)
+      req.setCommitWithin(commitWithin.get)
 
     if (log.isDebugEnabled) {
       log.debug("Sending batch of " + batch.size + " to collection " + collection)

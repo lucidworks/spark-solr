@@ -11,6 +11,8 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
+import org.apache.solr.core.CoreDescriptor;
+import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
 
 import org.apache.log4j.Logger;
@@ -26,7 +28,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   public static final EmbeddedSolrServerFactory singleton = new EmbeddedSolrServerFactory();
 
-  private transient Map<String, EmbeddedSolrServer> servers = new HashMap<>();
+  private transient Map<String, EmbeddedSolrServer> servers = new HashMap<String, EmbeddedSolrServer>();
 
   public synchronized EmbeddedSolrServer getEmbeddedSolrServer(String zkHost, String collection) {
 
@@ -87,11 +89,12 @@ public class EmbeddedSolrServerFactory implements Serializable {
     log.info(String.format("Attempting to bootstrap EmbeddedSolrServer instance in dir: %s",
       instanceDir.getAbsolutePath()));
 
-    SolrResourceLoader solrResourceLoader = new SolrResourceLoader(solrHomeDir.toPath());
+    SolrResourceLoader solrResourceLoader =
+      new SolrResourceLoader(solrHomeDir.getAbsolutePath());
     CoreContainer coreContainer = new CoreContainer(solrResourceLoader);
     coreContainer.load();
 
-    coreContainer.create(coreName, instanceDir.toPath(), Collections.<String,String>emptyMap());
+    SolrCore core = coreContainer.create(coreName, instanceDir.toPath(), Collections.<String, String>emptyMap());
     return new EmbeddedSolrServer(coreContainer, coreName);
   }
 

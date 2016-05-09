@@ -1,7 +1,9 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.Constants;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
@@ -27,6 +29,35 @@ import static org.junit.Assert.*;
  * Tests for the SolrRelation implementation.
  */
 public class SolrRelationTest extends RDDProcessorTestBase {
+
+  @Test
+  public void testSampleIndex() throws Exception {
+    String testCollection = "testSampleIndex";
+    try {
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      deleteCollection(testCollection);
+      int numShards = 3;
+      int numDocs = 100;
+      String zkHost = cluster.getZkServer().getZkAddress();
+      buildCollection(zkHost, testCollection, numDocs, numShards);
+
+      Map<String, String> options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      options.put(SAMPLE_SEED(), "5150");
+      options.put(SAMPLE_PCT(), "0.1");
+      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      long count = fromSolr.count();
+
+      System.out.println("\n\n"+count+"\n\n");
+      assertTrue(count >= 8 && count <= 12); // not exact because of shard imbalance
+
+      deleteCollection(testCollection);
+    } finally {
+      deleteCollection(testCollection);
+    }
+  }
 
   @Test
   public void testIndexOneusagovDataFrame() throws Exception {
@@ -323,7 +354,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
     sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
-    Thread.sleep(1000);
+
+    // Explicit commit to make sure all docs are visible
+    CloudSolrClient solrCloudClient = SolrSupport.getCachedCloudClient(zkHost);
+    solrCloudClient.commit(testCollection, true, true);
 
     SolrQuery q = new SolrQuery("*:*");
     q.setRows(100);
@@ -385,7 +419,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       if (fieldName.equals("id") || fieldName.endsWith("_s")) {
         assertEquals("Field '" + fieldName + "' should be a string but has type '" + type + "' instead!", "string", type.typeName());
       } else if (fieldName.endsWith("_i")) {
-        assertEquals("Field '" + fieldName + "' should be an integer but has type '" + type + "' instead!", "integer", type.typeName());
+        assertEquals("Field '" + fieldName + "' should be an integer but has type '" + type + "' instead!", "long", type.typeName());
       } else if (fieldName.endsWith("_ss")) {
         assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
         ArrayType arrayType = (ArrayType)type;
@@ -395,7 +429,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
         assertEquals("Field '"+fieldName+"' should be an array but has '"+type+"' instead!", "array", type.typeName());
         ArrayType arrayType = (ArrayType)type;
         assertEquals("Field '"+fieldName+"' should have an integer element type but has '"+arrayType.elementType()+
-          "' instead!", "integer", arrayType.elementType().typeName());
+          "' instead!", "long", arrayType.elementType().typeName());
       }
     }
   }

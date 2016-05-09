@@ -34,13 +34,13 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
       String zkHost = cluster.getZkServer().getZkAddress();
 
+      SQLContext sqlContext = new SQLContext(jsc.sc());
+      HashMap<String, String> options = new HashMap<>();
+
       deleteCollection(testCollectionName);
       buildCollection(zkHost, testCollectionName, null, 2);
       EventsimUtil.defineSchemaForEventSim(zkHost, testCollectionName);
-      EventsimUtil.loadEventSimDataSet(zkHost, testCollectionName);
-
-      SQLContext sqlContext = new SQLContext(jsc.sc());
-      HashMap<String, String> options = new HashMap<>();
+      EventsimUtil.loadEventSimDataSet(zkHost, testCollectionName, sqlContext);
 
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollectionName);
@@ -56,15 +56,15 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         assert records.count() == 1000;
 
         String[] fieldNames = schema.fieldNames();
-        // list of fields are present in src/test/resources/eventsim/fields_schema.json
-        assert fieldNames.length == 18 + 1 + 1; // extra fields are id and _version_
+        // list of fields that are present in src/test/resources/eventsim/fields_schema.json
+        assert fieldNames.length == 19 + 1 + 1; // extra fields are id and _version_
 
-        Assert.assertEquals(schema.apply("timestamp").dataType().typeName(), DataTypes.TimestampType.typeName());
-        Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.IntegerType.typeName());
+        Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
+        Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert rows.get(0).length() == 20;
+        assert rows.get(0).length() == 21;
       }
 
       // Filter using SQL syntax and escape field names
@@ -72,7 +72,7 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
         eventsim.registerTempTable("eventsim");
 
-        DataFrame records = sqlContext.sql("SELECT `userId`, `timestamp` from eventsim WHERE `gender` = 'M'");
+        DataFrame records = sqlContext.sql("SELECT `userId`, `ts` from eventsim WHERE `gender` = 'M'");
         assert records.count() == 567;
       }
 

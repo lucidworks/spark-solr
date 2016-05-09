@@ -6,17 +6,17 @@ import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
-import org.apache.solr.common.params.ModifiableSolrParams
+import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
-import scala.collection.{mutable, JavaConversions}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -71,15 +71,25 @@ class SolrRelation(
     rdd
   }
 
+  val arbitraryParams = conf.getArbitrarySolrParams
+  val solrFields: Array[String] = {
+    if (arbitraryParams.getParameterNames.contains(CommonParams.FL)) {
+      arbitraryParams.getParams(CommonParams.FL)
+    } else {
+      conf.getFields
+    }
+  }
   val baseSchema: StructType =
     SolrRelationUtil.getBaseSchema(
-      conf.getFields.toSet,
+      solrFields.toSet,
       conf.getZkHost.get,
       conf.getCollection.get,
       conf.escapeFieldNames.getOrElse(false),
       conf.flattenMultivalued.getOrElse(true))
 
   val query: SolrQuery = buildQuery
+  // Preserve the initial filters if any present in arbitrary config
+  val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
@@ -105,6 +115,9 @@ class SolrRelation(
         if (conf.docValues.getOrElse(false)) {
           fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
           query.setFields(fields: _*)
+        } else {
+          // Reset any existing fields from previous query and set the fields from 'config' option
+          query.setFields(solrFields:_*)
         }
       } else {
         fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
@@ -112,17 +125,30 @@ class SolrRelation(
       }
     }
 
-    // We set aliasing to retrieve docValues from function queries. This can be removed after Solr version 5.5 is released
+    // We use aliasing to retrieve docValues (that are indexed and not stored). This can be removed after upgrading to 5.5
     if (query.getFields != null && query.getFields.length > 0) {
       if (conf.docValues.getOrElse(false)) {
         SolrRelationUtil.setAliases(query.getFields.split(","), query, baseSchema)
       }
     }
 
-    // Clear all existing filters
+    // Clear all existing filters except the original filters set in the config.
     if (!filters.isEmpty) {
-      query.remove("fq")
+      query.setFilterQueries(queryFilters:_*)
       filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, baseSchema))
+    } else {
+      query.setFilterQueries(queryFilters:_*)
+    }
+
+    if (conf.sampleSeed.isDefined) {
+      // can't support random sampling & intra-shard splitting
+      if (conf.splits.getOrElse(false) || conf.getSplitField.isDefined) {
+        throw new IllegalStateException("Cannot do sampling if intra-shard splitting feature is enabled!");
+      }
+
+      query.addSort(SolrQuery.SortClause.asc("random_"+conf.sampleSeed.get))
+      query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey));
+      query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
     if (log.isInfoEnabled) {
@@ -131,9 +157,32 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      val docs = solrRDD.query(query)
-      val rows = SolrRelationUtil.toRows(querySchema, docs)
-      rows
+      if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
+        log.info("Checking the query and sort fields to determine if streaming is possible")
+        // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
+        val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
+        val sortClauses = query.getSorts.asScala.toList
+        val isSDV: Boolean =
+          if (sortClauses.nonEmpty)
+            SolrRelation.checkSortFieldsForDV(baseSchema, sortClauses)
+          else
+            if (isFDV) {
+              SolrRelation.addSortField(querySchema, query)
+              true
+            }
+            else
+              false
+        val useStreamingAPI = if (isFDV && isSDV) true else false
+        log.info("useStreamingAPI is '" +  useStreamingAPI + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
+        val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
+        val rows = SolrRelationUtil.toRows(querySchema, docs)
+        rows
+      } else {
+        val docs = solrRDD.query(query)
+        val rows = SolrRelationUtil.toRows(querySchema, docs)
+        rows
+      }
+
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
@@ -193,18 +242,20 @@ class SolrRelation(
     solrParams.add("updateTimeoutSecs","30")
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
 
-    logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+    if (fieldsToAddToSolr.nonEmpty) {
+      logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
 
-    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
-      addFieldsUpdateRequest.process(cloudClient, collectionId)
-    if (updateResponse.getStatus >= 400) {
-      val errMsg = "Schema update request failed due to: "+updateResponse
-      logError(errMsg)
-      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+      val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
+        addFieldsUpdateRequest.process(cloudClient, collectionId)
+      if (updateResponse.getStatus >= 400) {
+        val errMsg = "Schema update request failed due to: "+updateResponse
+        logError(errMsg)
+        throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+      }
     }
 
-    logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
     if (conf.softAutoCommitSecs.isDefined) {
+      logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
       val softAutoCommitSecs = conf.softAutoCommitSecs.get
       val softAutoCommitMs = softAutoCommitSecs * 1000
       var configApi = solrBaseUrl
@@ -222,7 +273,8 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-    val uniqueKey = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, conf.getCollection.get)
+    val uniqueKey: String = solrRDD.uniqueKey
+
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
@@ -255,15 +307,16 @@ class SolrRelation(
       }
       doc
     })
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs)
+    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
   }
+
+
 
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
-    val fields = conf.getFields
 
-    if (fields.nonEmpty) {
-      query.setFields(fields:_*)
+    if (solrFields.nonEmpty) {
+      query.setFields(solrFields:_*)
     } else {
       // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
       if (conf.docValues.getOrElse(false))
@@ -283,7 +336,7 @@ class SolrRelation(
 
 }
 
-object SolrRelation {
+object SolrRelation extends Logging {
   def checkUnknownParams(keySet: Set[String]): Set[String] = {
     var knownParams = Set.empty[String]
     var unknownParams = Set.empty[String]
@@ -307,5 +360,46 @@ object SolrRelation {
     })
     unknownParams
   }
+
+  def checkQueryFieldsForDV(querySchema: StructType) : Boolean = {
+    // Check if all the fields in the querySchema have docValues enabled
+    for (structField <- querySchema.fields) {
+      val metadata = structField.metadata
+      if (!metadata.contains("docValues"))
+        return false
+      if (metadata.contains("docValues") && !metadata.getBoolean("docValues"))
+        return false
+    }
+    true
+  }
+
+  def checkSortFieldsForDV(baseSchema: StructType, sortClauses: List[SortClause]): Boolean = {
+
+    if (sortClauses.nonEmpty) {
+      // Check if the sorted field (if exists) has docValue enabled
+      for (sortClause: SortClause <- sortClauses) {
+        val sortField = sortClause.getItem
+        if (baseSchema.contains(sortField)) {
+          val sortFieldMetadata = baseSchema(sortField).metadata
+          if (!sortFieldMetadata.contains("docValues"))
+            return false
+          if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("docValues"))
+            return false
+        } else {
+          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          return false
+        }
+      }
+      true
+    } else {
+      false
+   }
+  }
+
+  def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
+    query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
+    log.info("Added sort field '" + query.getSortField + "' to the query")
+  }
+
 }
 

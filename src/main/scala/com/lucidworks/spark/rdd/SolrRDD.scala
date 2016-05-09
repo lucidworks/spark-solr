@@ -19,7 +19,7 @@ class SolrRDD(
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
-    exportHandler: Option[Boolean] = None,
+    val exportHandler: Option[Boolean] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
@@ -62,16 +62,19 @@ class SolrRDD(
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
-        log.info("Using the shard url " + url + " for getting partition data for split: "+split)
+        log.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
         val resultsIterator: ResultsIterator =
-          if (exportHandler.isDefined && exportHandler.get)
+          if (exportHandler.isDefined && exportHandler.get) {
+            log.info("Using export handler to fetch documents from Solr")
             getExportHandlerBasedIterator(url, query)
-          else
+          }
+          else {
+            log.info("Using cursorMarks to fetch documents from Solr")
             new StreamingResultsIterator(
               SolrSupport.getHttpSolrClient(url),
               partition.query,
               partition.cursorMark)
-
+          }
         context.addTaskCompletionListener { (context) =>
           log.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
@@ -85,11 +88,12 @@ class SolrRDD(
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    if (!(exportHandler.isDefined && exportHandler.get))
+    if (!exportHandler.getOrElse(false))
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    log.info(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    if (log.isDebugEnabled)
+      log.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     partitions
   }
 
@@ -128,6 +132,8 @@ class SolrRDD(
   def splitsPerShard(splitsPerShard: Int): SolrRDD = copy(splitsPerShard = Some(splitsPerShard))
 
   def useExportHandler: SolrRDD = copy(exportHandler = Some(true))
+
+  def useExportHandler(exportHandler: Boolean): SolrRDD = copy(exportHandler = Some(exportHandler))
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
 
