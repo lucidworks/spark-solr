@@ -147,8 +147,22 @@ class SolrRelation(
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
       if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
-        // Determine whether to use Streaming API (/export handler) when 'use_export_handler' option is not set
-        val useStreamingAPI: Boolean = SolrRelation.isStreamingPossible(querySchema, baseSchema, query)
+        log.info("Checking the query and sort fields to determine if streaming is possible")
+        // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
+        val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
+        val sortClauses = query.getSorts.asScala.toList
+        val isSDV: Boolean =
+          if (sortClauses.nonEmpty)
+            SolrRelation.checkSortFieldsForDV(baseSchema, sortClauses)
+          else
+            if (isFDV) {
+              SolrRelation.addSortField(querySchema, query)
+              true
+            }
+            else
+              false
+        val useStreamingAPI = if (isFDV && isSDV) true else false
+        log.info("useStreamingAPI is '" +  useStreamingAPI + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
         val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -336,7 +350,7 @@ object SolrRelation extends Logging {
     unknownParams
   }
 
-  def isStreamingPossible(querySchema: StructType, baseSchema: StructType, query: SolrQuery): Boolean = {
+  def checkQueryFieldsForDV(querySchema: StructType) : Boolean = {
     // Check if all the fields in the querySchema have docValues enabled
     for (structField <- querySchema.fields) {
       val metadata = structField.metadata
@@ -345,8 +359,10 @@ object SolrRelation extends Logging {
       if (metadata.contains("docValues") && !metadata.getBoolean("docValues"))
         return false
     }
+    true
+  }
 
-    val sortClauses = query.getSorts.asScala.toList
+  def checkSortFieldsForDV(baseSchema: StructType, sortClauses: List[SortClause]): Boolean = {
 
     if (sortClauses.nonEmpty) {
       // Check if the sorted field (if exists) has docValue enabled
@@ -363,14 +379,15 @@ object SolrRelation extends Logging {
           return false
         }
       }
+      true
     } else {
-      // If no sort query is specified, then we will use one of the fields from the querySchema
-      val sortField = querySchema.fieldNames(0)
-      query.addSort(sortField, SolrQuery.ORDER.asc)
-      log.info("Added sort param '" + query.getSortField + "' to the query")
-    }
+      false
+   }
+  }
 
-    true
+  def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
+    query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
+    log.info("Added sort field '" + query.getSortField + "' to the query")
   }
 
 }
