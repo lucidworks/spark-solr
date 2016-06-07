@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <config>
-  <luceneMatchVersion>4.10.3</luceneMatchVersion>
+  <luceneMatchVersion>5.0.0</luceneMatchVersion>
   <dataDir>${solr.data.dir:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.NRTCachingDirectoryFactory}"/>
   <codecFactory class="solr.SchemaCodecFactory"/>
@@ -11,9 +11,7 @@
   </schemaFactory>
   <indexConfig>
     <lockType>${solr.lock.type:native}</lockType>
-    <unlockOnStartup>true</unlockOnStartup>
     <infoStream>false</infoStream>
-    <checkIntegrityAtMerge>false</checkIntegrityAtMerge>
   </indexConfig>
   <updateHandler class="solr.DirectUpdateHandler2">
     <updateLog>
@@ -108,9 +106,6 @@
   <requestHandler name="/analysis/document" 
                   class="solr.DocumentAnalysisRequestHandler" 
                   startup="lazy" />
-
-  <requestHandler name="/admin/" 
-                  class="solr.admin.AdminHandlers" />
 
   <requestHandler name="/admin/ping" class="solr.PingRequestHandler">
     <lst name="invariants">
