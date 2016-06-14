@@ -449,19 +449,20 @@ object SolrSupport extends Logging {
     val zkStateReader: ZkStateReader = solrClient.getZkStateReader
     val clusterState: ClusterState = zkStateReader.getClusterState
     var collections = Array.empty[String]
-
-    if (clusterState.hasCollection(collection)) {
-      collections = Array(collection)
+for(col <- collection.split(",")) {
+  if (clusterState.hasCollection(col)) {
+    collections = collections :+ col
+  }
+  else {
+    val aliases: Aliases = zkStateReader.getAliases
+    val aliasedCollections: String = aliases.getCollectionAlias(col)
+    if (aliasedCollections == null) {
+      throw new IllegalArgumentException("Collection " + col + " not found!")
     }
-    else {
-      val aliases: Aliases = zkStateReader.getAliases
-      val aliasedCollections: String = aliases.getCollectionAlias(collection)
-      if (aliasedCollections == null) {
-        throw new IllegalArgumentException("Collection " + collection + " not found!")
-      }
-      collections = aliasedCollections.split(",")
-    }
+    collections = aliasedCollections.split(",")
+  }
 
+}
     val liveNodes  = clusterState.getLiveNodes
 
     val shards = new ListBuffer[SolrShard]()
