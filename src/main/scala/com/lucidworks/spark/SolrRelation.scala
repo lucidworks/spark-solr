@@ -50,6 +50,9 @@ class SolrRelation(
 
   val sc = sqlContext.sparkContext
 
+
+
+
   val solrRDD = {
     var rdd = new SolrRDD(
       conf.getZkHost.get,

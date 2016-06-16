@@ -133,6 +133,34 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+  def timeSeriesPartitionOn: Option[Boolean]={
+    if (config.contains(TIME_SERIES_PARTITION_ON) && config.get(TIME_SERIES_PARTITION_ON).isDefined) {
+      return Some(config.get(TIME_SERIES_PARTITION_ON).get.toBoolean)
+    }
+    None
+  }
+
+  def getTSFieldName: Option[String]={
+    if (config.contains(TS_FIELD_NAME) && config.get(TS_FIELD_NAME).isDefined) return (config.get(TS_FIELD_NAME))
+    None
+  }
+
+  def getTimePeriod: Option[String]={
+    if (config.contains(TIME_PERIOD) && config.get(TIME_PERIOD).isDefined) return (config.get(TIME_PERIOD))
+    None
+  }
+
+  def getDateTimePattern: Option[String]={
+    if (config.contains(DATETIME_PATTERN) && config.get(DATETIME_PATTERN).isDefined) return (config.get(DATETIME_PATTERN))
+    None
+  }
+
+  def getTimeZoneId: Option[String]={
+    if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
+    None
+  }
+
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
