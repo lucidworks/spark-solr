@@ -5,11 +5,11 @@ import java.util.Locale
 
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.util.SolrSupport
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.cli.CommandLine
 import org.apache.commons.cli.Option.{builder => OptionBuilder} // Avoid clash with Scala Option
 import org.apache.solr.common.SolrInputDocument
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.Logging
 import org.apache.spark.input.PortableDataStream
 import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatterBuilder, ISODateTimeFormat}
@@ -81,7 +81,7 @@ import scala.util.control.NonFatal
   *   target/spark-solr-2.0.0-SNAPSHOT-shaded.jar newsgroups2solr --help
   * }}}
   */
-class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
+class NewsgroupsIndexer extends SparkApp.RDDProcessor with LazyLogging {
   import NewsgroupsIndexer._
   def getName = "newsgroups2solr"
   def getOptions = Array(
@@ -104,7 +104,7 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with Logging {
       def sendBatch(): Unit = {
         SolrSupport.sendBatchToSolr(solrServer, collection, batch.toList)
         numDocs += batch.size
-        log.info(s"Sent $numDocs docs to Solr from $path")
+        logger.info(s"Sent $numDocs docs to Solr from $path")
         batch.clear()
       }
       rows.foreach(row => {  // each row is a Tuple: (path, PortableDataStream)
@@ -188,7 +188,7 @@ object NewsgroupsIndexer {
   * a set of date formats known to be present in the 20 newsgroups data, then converts them
   * to ISO8601 format.
   */
-private object DateConverter extends Serializable with Logging {
+private object DateConverter extends Serializable with LazyLogging {
   // Map of time zone abbreviations to time zone IDs, from <http://www.timeanddate.com/time/zones/>,
   // <http://www.worldtimezone.com>, and Joda-Time v2.2 DateTimeZone.getAvailableIds()
   val ZoneMap = Map("+3000" -> "Europe/Moscow", // 19 Apr 93 16:15:19 +3000 <- invalid offset, should be +0300
@@ -228,7 +228,7 @@ private object DateConverter extends Serializable with Logging {
         ""}) // remove time zone abbreviations
       Some(Formatter.withZone(zone).parseDateTime(dateNoZone).toString(ISODateTimeFormat.dateTimeNoMillis()))
     } catch {
-      case NonFatal(e) => log.error(s"Failed to parse date '$date': $e")
+      case NonFatal(e) => logger.error(s"Failed to parse date '$date': $e")
         None
     }
   }

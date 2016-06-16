@@ -4,6 +4,7 @@ import java.util.UUID
 
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
@@ -15,7 +16,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.Logging
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -36,7 +36,7 @@ class SolrRelation(
   with TableScan
   with PrunedFilteredScan
   with InsertableRelation
-  with Logging {
+  with LazyLogging {
 
   def this(parameters: Map[String, String], sqlContext: SQLContext) {
     this(parameters, sqlContext, None)
@@ -46,7 +46,7 @@ class SolrRelation(
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
-    log.warn("Unknown parameters passed to query: " + unknownParams.toString())
+    logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
   val sc = sqlContext.sparkContext
   val solrRDD = {
@@ -108,8 +108,8 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
-    log.info("Fields passed down from scanner: " + fields.mkString(","))
-    log.info("Filters passed down from scanner: " + filters.mkString(","))
+    logger.info("Fields passed down from scanner: " + fields.mkString(","))
+    logger.info("Filters passed down from scanner: " + filters.mkString(","))
     if (fields != null && fields.length > 0) {
       // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
       if (this.baseSchema.size == fields.length) {
@@ -153,14 +153,12 @@ class SolrRelation(
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
-    if (log.isInfoEnabled) {
-      log.info("Constructed SolrQuery: " + query)
-    }
+    logger.info("Constructed SolrQuery: " + query)
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
       if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
-        log.info("Checking the query and sort fields to determine if streaming is possible")
+        logger.info("Checking the query and sort fields to determine if streaming is possible")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
         val sortClauses: List[SortClause] = query.getSorts.asScala.toList
@@ -176,7 +174,7 @@ class SolrRelation(
           }
         }
 
-        log.info("Existing sort clauses: " + sortClauses.mkString(","))
+        logger.info("Existing sort clauses: " + sortClauses.mkString(","))
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(baseSchema, sortClauses)
@@ -188,7 +186,7 @@ class SolrRelation(
             else
               false
         val useStreamingAPI = if (isFDV && isSDV) true else false
-        log.info("useStreamingAPI is '" +  useStreamingAPI + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
+        logger.info("useStreamingAPI is '" +  useStreamingAPI + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
         val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -258,19 +256,19 @@ class SolrRelation(
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
 
     if (fieldsToAddToSolr.nonEmpty) {
-      logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+      logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
 
       val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
         addFieldsUpdateRequest.process(cloudClient, collectionId)
       if (updateResponse.getStatus >= 400) {
         val errMsg = "Schema update request failed due to: "+updateResponse
-        logError(errMsg)
+        logger.error(errMsg)
         throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
       }
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
-      logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
+      logger.info("softAutoCommitSecs? "+conf.softAutoCommitSecs)
       val softAutoCommitSecs = conf.softAutoCommitSecs.get
       val softAutoCommitMs = softAutoCommitSecs * 1000
       var configApi = solrBaseUrl
@@ -282,7 +280,7 @@ class SolrRelation(
       val postRequest = new org.apache.http.client.methods.HttpPost(configApi)
       val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
       postRequest.setEntity(new StringEntity(configJson))
-      logInfo("POSTing: "+configJson+" to "+configApi)
+      logger.info("POSTing: "+configJson+" to "+configApi)
       SolrJsonSupport.doJsonRequest(cloudClient.getLbClient.getHttpClient, configApi, postRequest)
     }
 
@@ -351,7 +349,7 @@ class SolrRelation(
 
 }
 
-object SolrRelation extends Logging {
+object SolrRelation extends LazyLogging {
   def checkUnknownParams(keySet: Set[String]): Set[String] = {
     var knownParams = Set.empty[String]
     var unknownParams = Set.empty[String]
@@ -401,7 +399,7 @@ object SolrRelation extends Logging {
           if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("docValues"))
             return false
         } else {
-          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          logger.warn("The sort field '" + sortField + "' does not exist in the base schema")
           return false
         }
       }
@@ -413,7 +411,7 @@ object SolrRelation extends Logging {
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
     query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
-    log.info("Added sort field '" + query.getSortField + "' to the query")
+    logger.info("Added sort field '" + query.getSortField + "' to the query")
   }
 
 }

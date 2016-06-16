@@ -3,9 +3,9 @@ package com.lucidworks.spark.util
 import java.sql.Timestamp
 import java.util.Date
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
-import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
@@ -16,7 +16,7 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-object SolrRelationUtil extends Logging {
+object SolrRelationUtil extends LazyLogging {
 
   def getBaseSchema(
       zkHost: String,
@@ -92,10 +92,10 @@ object SolrRelationUtil extends Logging {
         if (fieldMap.get(field).isDefined) {
           listOfFields.add(fieldMap.get(field).get)
         } else {
-          log.info("No structField definition found for field '" + field + "'")
+          logger.info("No structField definition found for field '" + field + "'")
         }
       } else {
-        log.info("Base schema does not contain field '" + field + "'")
+        logger.info("Base schema does not contain field '" + field + "'")
       }
     }
 
@@ -247,11 +247,11 @@ object SolrRelationUtil extends Logging {
           }
         } else {
           fieldList.add(field)
-          log.info("StructField def. not found for field '" + field + "' in the base schema")
+          logger.info("StructField def. not found for field '" + field + "' in the base schema")
         }
       } else {
         fieldList.add(field)
-        log.info("Field '" + field + "' not found in the schema")
+        logger.info("Field '" + field + "' not found in the schema")
       }
     }
     solrQuery.setFields(fieldList.toList:_*)

@@ -6,6 +6,7 @@ import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, Streamin
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -27,7 +28,7 @@ class SolrRDD(
     splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
     solrQuery: Option[SolrQuery] = None)
   extends RDD[SolrDocument](sc, Seq.empty)
-  with Logging {
+  with LazyLogging {
 
   val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
 
@@ -57,26 +58,26 @@ class SolrRDD(
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     split match {
       case partition: SolrRDDPartition =>
-        log.info("Computing the partition " + partition.index + " on host name " + context.taskMetrics().hostname)
+//        logger.info("Computing the partition " + partition.index + " on host name " + context.taskMetrics().hostname)
 
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
-        log.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
+        logger.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
         val resultsIterator: ResultsIterator =
           if (exportHandler.isDefined && exportHandler.get) {
-            log.info("Using export handler to fetch documents from Solr")
+            logger.info("Using export handler to fetch documents from Solr")
             getExportHandlerBasedIterator(url, query)
           }
           else {
-            log.info("Using cursorMarks to fetch documents from Solr")
+            logger.info("Using cursorMarks to fetch documents from Solr")
             new StreamingResultsIterator(
               SolrSupport.getHttpSolrClient(url),
               partition.query,
               partition.cursorMark)
           }
         context.addTaskCompletionListener { (context) =>
-          log.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
+          logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
 
@@ -92,8 +93,7 @@ class SolrRDD(
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    if (log.isDebugEnabled)
-      log.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    logger.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     partitions
   }
 
@@ -101,7 +101,7 @@ class SolrRDD(
     val urls: Seq[String] = Seq.empty
     split match {
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: AnyRef => log.warn("Unknown partition type '" + partition.getClass + "'")
+      case partition: AnyRef => logger.warn("Unknown partition type '" + partition.getClass + "'")
     }
     urls
   }
@@ -110,7 +110,7 @@ class SolrRDD(
     try {
       return InetAddress.getAllByName(hostName)
     } catch {
-      case e: Exception => log.info("Exception while resolving IP address for host name '" + hostName + "' with exception " + e)
+      case e: Exception => logger.info("Exception while resolving IP address for host name '" + hostName + "' with exception " + e)
     }
     Array.empty[InetAddress]
   }

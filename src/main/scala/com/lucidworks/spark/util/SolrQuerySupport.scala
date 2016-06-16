@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
@@ -16,7 +17,7 @@ import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, DataFrame}
-import org.apache.spark.{SparkContext, Logging}
+import org.apache.spark.SparkContext
 import org.apache.spark.sql.types.{StructField, StructType, DataTypes, DataType}
 
 import scala.collection.JavaConversions._
@@ -63,7 +64,7 @@ class QueryResultsIterator(
   override protected def processQueryResponse(resp: QueryResponse): util.List[SolrDocument] = resp.getResults
 }
 
-object SolrQuerySupport extends Logging {
+object SolrQuerySupport extends LazyLogging {
 
   val SOLR_DATA_TYPES: Map[String, DataType] = HashMap(
     "solr.StrField" -> DataTypes.StringType,
@@ -93,10 +94,10 @@ object SolrQuerySupport extends Logging {
       }
       catch {
         case solrExc: SolrException =>
-          log.warn("Can't get uniqueKey for " + collection + " due to solr: " + solrExc)
+          logger.warn("Can't get uniqueKey for " + collection + " due to solr: " + solrExc)
       }
     } catch {
-      case e: Exception => log.warn("Can't get uniqueKey for " + collection + " due to: " + e)
+      case e: Exception => logger.warn("Can't get uniqueKey for " + collection + " due to: " + e)
     }
     QueryConstants.DEFAULT_REQUIRED_FIELD
   }
@@ -188,7 +189,7 @@ object SolrQuerySupport extends Logging {
       }
     } catch {
       case e: Exception =>
-        log.error("Query [" + solrQuery + "] failed due to: " + e)
+        logger.error("Query [" + solrQuery + "] failed due to: " + e)
 
         //re-try once in the event of a communications error with the server
         if (SolrSupport.shouldRetry(e)) {
@@ -206,10 +207,10 @@ object SolrQuerySupport extends Logging {
             }
           } catch {
             case execOnRetry: SolrServerException =>
-              log.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry)
+              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry)
               throw execOnRetry
             case execOnRetry1: Exception =>
-              log.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry1)
+              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry1)
               throw new SolrServerException(execOnRetry1)
           }
         } else {
@@ -332,22 +333,20 @@ object SolrQuerySupport extends Logging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              if (log.isDebugEnabled)
-                log.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+              logger.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
           } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              if (log.isDebugEnabled)
-                log.debug("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              logger.debug("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
-        case somethingElse: Any => log.warn("Unknown class type '" + somethingElse.getClass.toString + "'")
+        case somethingElse: Any => logger.warn("Unknown class type '" + somethingElse.getClass.toString + "'")
       }
     }
 
     if (fieldTypeMap.isEmpty)
-      log.warn("No readable fields found!")
+      logger.warn("No readable fields found!")
     fieldTypeMap.toMap
   }
 
@@ -385,7 +384,7 @@ object SolrQuerySupport extends Logging {
 
     } catch {
       case e: Exception =>
-        log.error("Can't get field metadata from Solr using request '" + fieldsUrl + "' due to exception " + e)
+        logger.error("Can't get field metadata from Solr using request '" + fieldsUrl + "' due to exception " + e)
         e match {
           case e1: RuntimeException => throw e1
           case e2: Exception => throw new RuntimeException(e2)
@@ -403,10 +402,10 @@ object SolrQuerySupport extends Logging {
           if (fieldName.isDefined) {
             fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
           } else {
-            log.info("value for key 'name' is not defined in the payload " + fieldInfo)
+            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
           }
         } else {
-          log.info("'name' is not defined in the payload " + fieldInfo)
+          logger.info("'name' is not defined in the payload " + fieldInfo)
         }
       case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass)
     }
@@ -427,7 +426,7 @@ object SolrQuerySupport extends Logging {
       }
     } catch {
       case e1: Exception =>
-        log.warn("Can't get schema fields from url " + lukeUrl + " due to: " + e1)
+        logger.warn("Can't get schema fields from url " + lukeUrl + " due to: " + e1)
         throw e1
     }
   }
@@ -446,7 +445,7 @@ object SolrQuerySupport extends Logging {
       }
     } catch {
       case e: Any =>
-        log.error("Error while validating query request: " + queryRequest.toString)
+        logger.error("Error while validating query request: " + queryRequest.toString)
         throw e
     }
   }
@@ -495,12 +494,12 @@ object SolrQuerySupport extends Logging {
                   }
               }
             }
-          case t: AnyRef => log.warn("Found unexpected object type '" + t + "' when parsing field types json")
+          case t: AnyRef => logger.warn("Found unexpected object type '" + t + "' when parsing field types json")
         }
       }
     } catch {
       case e: Exception =>
-        log.error("Can't get field type metadata from Solr url " + fieldTypeUrl)
+        logger.error("Can't get field type metadata from Solr url " + fieldTypeUrl)
         e match {
           case e1: RuntimeException => throw e1
           case e2: Exception => throw new RuntimeException(e2)
@@ -531,16 +530,16 @@ object SolrQuerySupport extends Logging {
             if (SOLR_DATA_TYPES.contains(solrFieldMeta.fieldTypeClass.get)) {
               fieldDataType = Some(SOLR_DATA_TYPES.get(solrFieldMeta.fieldTypeClass.get).get)
             } else {
-              log.warn("Cannot find spark type for solr field class '" + solrFieldMeta.fieldTypeClass.get + "'. " +
+              logger.warn("Cannot find spark type for solr field class '" + solrFieldMeta.fieldTypeClass.get + "'. " +
                 "Assuming it is a String!. The types dict is " + SOLR_DATA_TYPES)
               fieldDataType = Some(DataTypes.StringType)
             }
           } else {
-            log.warn("No field type class found for " + splitFieldName + ", assuming it is a String!")
+            logger.warn("No field type class found for " + splitFieldName + ", assuming it is a String!")
             fieldDataType = Some(DataTypes.StringType)
           }
         } else {
-          log.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
+          logger.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
           fieldDataType = Some(DataTypes.StringType)
         }
       } else {
@@ -565,7 +564,7 @@ object SolrQuerySupport extends Logging {
       }
 
       val splits = splitStrategy.get.getSplits(shardUrl, query, splitFieldName, splitsPerShard)
-      log.info("Found " + splits.size + " splits for " + splitFieldName + ": " + splits)
+      logger.info("Found " + splits.size + " splits for " + splitFieldName + ": " + splits)
 
       splits.toList
     })

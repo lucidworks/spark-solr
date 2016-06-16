@@ -18,14 +18,14 @@
 package com.lucidworks.spark.ml.feature
 
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.spark.Logging
 import org.apache.spark.ml.{TransformerParamsReader, HasInputColsTransformer}
 import org.apache.spark.ml.param.Param
 import org.apache.spark.sql.types.ArrayType
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, DataFrame}
+import org.apache.spark.sql.{Dataset, Row, DataFrame}
 import org.apache.spark.sql.functions._
 import org.apache.spark.annotation.{Since, Experimental}
 import org.apache.spark.ml.param._
@@ -43,7 +43,7 @@ import scala.util.control.NonFatal
  * See [[LuceneTextAnalyzer]] for a description of the schema format.
  */
 @Experimental
-class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputColsTransformer with Logging with MLWritable {
+class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputColsTransformer with LazyLogging with MLWritable {
   def this() = this(Identifiable.randomUID("LuceneAnalyzer"))
 
   /** @group setParam */
@@ -122,7 +122,7 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
     }
     StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
   }
-  override def transform(dataset: DataFrame): DataFrame = {
+  override def transform(dataset: Dataset[_]): DataFrame = {
     val schema = dataset.schema
     val existingInputCols = $(inputCols).filter(schema.fieldNames.contains(_))
     val outputSchema = transformSchema(schema)

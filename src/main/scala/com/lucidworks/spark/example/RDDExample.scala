@@ -3,11 +3,12 @@ package com.lucidworks.spark.example
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.SparkApp
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
-import org.apache.spark.{Logging, SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext}
 
-class RDDExample extends SparkApp.RDDProcessor with Logging {
+class RDDExample extends SparkApp.RDDProcessor with LazyLogging {
 
   override def getName: String = "old-rdd-example"
 
@@ -31,7 +32,7 @@ class RDDExample extends SparkApp.RDDProcessor with Logging {
     val rdd = new SolrRDD(zkHost, collection, sc)
     val count = rdd.query(queryStr).count()
 
-    log.info("Count is " + count)
+    logger.info("Count is " + count)
     sc.stop()
     0
   }

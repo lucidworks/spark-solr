@@ -137,7 +137,7 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
     val loadedCvModel = CrossValidatorModel.load("ml-pipeline-model")
 
     val predictions = loadedCvModel.transform(testData)
-    predictions.cache
+    predictions.cache()
 
     val accuracyCrossFold = evaluator.evaluate(predictions)
     println(s"Cross-Fold Test Error = ${1.0 - accuracyCrossFold}")
@@ -147,8 +147,10 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
       println(s"${r(0)}: actual=${r(1)}, predicted=${r(2)}")
     }
 
-    val metrics = new MulticlassMetrics(predictions.select(PredictionCol, LabelCol)
-      .map(r => (r.getDouble(0), r.getDouble(1))))
+    val metrics = new MulticlassMetrics(
+      predictions
+        .select(PredictionCol, LabelCol).rdd
+        .map(r => (r.getDouble(0), r.getDouble(1))))
 
     // output the Confusion Matrix
     println(s"""Confusion Matrix
