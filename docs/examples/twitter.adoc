@@ -11,7 +11,6 @@ bin/solr -c && bin/solr create -c socialdata -shards 2
 NOTE: The remaining sections in this document assume Solr is running in cloud mode on port 8983 with embedded ZooKeeper listening on `localhost:9983`.
 
 Also, to ensure you can see tweets as they are indexed in near real-time, you should enable auto soft-commits using Solr’s Config API.
-(tested with 5.4.0, but trunk as of Jan '15 is 6.0.0, which uses a newer set of API endpoints for the Config API and this command will need to be modified)
 Specifically, for this exercise, we’ll commit tweets every 2 seconds.
 
 [source]
