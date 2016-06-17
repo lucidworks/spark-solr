@@ -3,7 +3,7 @@ package com.lucidworks.spark
 import org.apache.solr.common.params.ModifiableSolrParams
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config: Map[String, String]) {
+class SolrConf(config:Map[String, String]) {
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
@@ -17,6 +17,7 @@ class SolrConf(config: Map[String, String]) {
     if (config.contains(SOLR_COLLECTION_PARAM)) return config.get(SOLR_COLLECTION_PARAM)
     None
   }
+
 
   def getQuery: Option[String] = {
     if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
@@ -159,7 +160,10 @@ class SolrConf(config: Map[String, String]) {
     if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
     None
   }
-
+  def getMaxActivePartitions: Option[String]={
+    if (config.contains(MAX_ACTIVE_PARTITIONS) && config.get(MAX_ACTIVE_PARTITIONS).isDefined) return (config.get(MAX_ACTIVE_PARTITIONS))
+    None
+  }
 
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()

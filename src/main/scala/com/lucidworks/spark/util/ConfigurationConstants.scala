@@ -35,6 +35,7 @@ object ConfigurationConstants {
   val TIME_PERIOD:String="time_period"
   val DATETIME_PATTERN:String="datetime_pattern"
   val TIMEZONE_ID:String="timezone_Id"
+  val MAX_ACTIVE_PARTITIONS:String="max_active_partitions"
 
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
 

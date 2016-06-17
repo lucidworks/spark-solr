@@ -17,6 +17,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -24,6 +25,7 @@ import scala.reflect.runtime.universe._
 
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.PartitionByTimeAssignmentStrategy
 
 class SolrRelation(
     val parameters: Map[String, String],
@@ -41,7 +43,7 @@ class SolrRelation(
   def this(parameters: Map[String, String], sqlContext: SQLContext) {
     this(parameters, sqlContext, None)
   }
-
+  var collection=conf.getCollection.get
   checkRequiredParams()
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
@@ -50,13 +52,18 @@ class SolrRelation(
 
   val sc = sqlContext.sparkContext
 
+ if(conf.timeSeriesPartitionOn.getOrElse(false)) {
+   val p=new PartitionByTimeAssignmentStrategy(conf.getZkHost.get,conf.getTSFieldName,conf.getTimePeriod,conf.getTimeZoneId,conf.getDateTimePattern,conf.getCollection.get,conf.getMaxActivePartitions,conf.getQuery.getOrElse("*:*"))
+   val allCollections=p.getPartitionsForQuery()
+   collection=allCollections mkString ","
 
+   }
 
 
   val solrRDD = {
     var rdd = new SolrRDD(
       conf.getZkHost.get,
-      conf.getCollection.get,
+      collection,
       sc,
       exportHandler = conf.useExportHandler)
 
@@ -329,7 +336,7 @@ class SolrRelation(
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
     query.add(conf.getArbitrarySolrParams)
-    query.set("collection", conf.getCollection.get)
+    query.set("collection", collection)
     query
   }
 
