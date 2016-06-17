@@ -63,8 +63,8 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
   }
 
   def getPartitions(activeOnly: Boolean):List[String]= {
-    var partitions: List[String] = findPartitions
-    if (activeOnly) {
+    val partitions: List[String] = findPartitions
+    /* if (activeOnly) {
       val max_active_partitions=maxActivePartitions.getOrElse(null)
       if (maxActivePartitions != null) {
         val max_active_partitions_int=max_active_partitions.toInt
@@ -72,6 +72,7 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
         if (numToRemove > 0) partitions = partitions.slice(numToRemove, partitions.size)
       }
     }
+    */
     return partitions
   }
 

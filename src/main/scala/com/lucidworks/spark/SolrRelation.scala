@@ -25,7 +25,7 @@ import scala.reflect.runtime.universe._
 
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
-import com.lucidworks.spark.PartitionByTimeAssignmentStrategy
+
 
 class SolrRelation(
     val parameters: Map[String, String],
@@ -90,11 +90,12 @@ class SolrRelation(
       conf.getFields
     }
   }
+  log.warn("haha"+collection+"haha")
   val baseSchema: StructType =
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,
       conf.getZkHost.get,
-      conf.getCollection.get.split(",")(0),
+      collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
       conf.flattenMultivalued.getOrElse(true))
 
