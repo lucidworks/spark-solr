@@ -15,13 +15,7 @@ import org.apache.spark.Logging
   */
 class PartitionByTimeFeature(val conf:SolrConf) extends Logging {
   private val TIME_PERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS)$")
-  private val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
-    override protected def initialValue: SimpleDateFormat = {
-      val sdf: SimpleDateFormat = new SimpleDateFormat(conf.getDateTimePattern.getOrElse(DEFAULT_DATETIME_PATTERN))
-      sdf.setTimeZone(TimeZone.getTimeZone(conf.getTimeZoneId.getOrElse(DEFAULT_TIMEZONE_ID)))
-      sdf
-    }
-  }
+
   private var timestampFieldName: String = null
   private var timezoneId: String = null
   private var timeFrame: Int = 0
@@ -46,7 +40,13 @@ class PartitionByTimeFeature(val conf:SolrConf) extends Logging {
   timeFrameMs = TimeUnit.MILLISECONDS.convert(timeFrame, timeUnit)
   dateTimePattern = conf.getDateTimePattern.getOrElse(getDefaultDateTimePattern(timeUnit))
 
-
+  private val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
+    override protected def initialValue: SimpleDateFormat = {
+      val sdf: SimpleDateFormat = new SimpleDateFormat(dateTimePattern)
+      sdf.setTimeZone(TimeZone.getTimeZone(dateTimePattern))
+      sdf
+    }
+  }
 
 
   maxActivePartitions = conf.getMaxActivePartitions.getOrElse(null)

@@ -57,7 +57,6 @@ class SolrRelation(
    val p=new PartitionByTimeAssignmentStrategy(feature,conf)
    val allCollections=p.getPartitionsForQuery()
    collection=allCollections mkString ","
-
    }
 
 
@@ -102,7 +101,10 @@ class SolrRelation(
 
   val query: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
-  val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+  var queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+
+
+
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema

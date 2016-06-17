@@ -3,11 +3,11 @@ package com.lucidworks.spark
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Collections, Date, TimeZone}
 
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrRelationUtil, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import com.lucidworks.spark.util.QueryConstants._
 
-import scala.util.control.Breaks._
+import scala.util.control._
 import java.util.regex.Pattern
 
 import scala.collection.JavaConversions._
@@ -27,39 +27,54 @@ import org.apache.spark.Logging
 class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val conf: SolrConf) extends Logging{
 
   val solrCloudClient = SolrSupport.getCachedCloudClient(conf.getZkHost.get)
-  val query:SolrQuery=SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
-  val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+  val query:SolrQuery=buildQuery
+  val loop = new Breaks
+  var queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
 
+  private def buildQuery: SolrQuery = {
+    val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
+
+
+    query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
+    query.add(conf.getArbitrarySolrParams)
+    query.set("collection", conf.getCollection.get)
+    query
+  }
 
   def getPartitionsForQuery():List[String]= {
     val prefixMatch=conf.getTSFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":"
     var rangeQuery:String=null
     if(!queryFilters.isEmpty) {
-       for(filter<-queryFilters){
-        if (filter.startsWith(prefixMatch)){
-          val rangeCrit= filter.substring(prefixMatch.length)
-          if (!("[* TO *]" == rangeCrit)) {
-            rangeQuery = filter
-            break
-          }
+      loop.breakable {
+        for (filter <- queryFilters) {
+          if (filter.startsWith(prefixMatch)) {
+            val rangeCrit = filter.substring(prefixMatch.length)
+            if (!("[* TO *]" == rangeCrit)) {
+              rangeQuery = filter
+              loop.break
+            }
 
+          }
         }
       }
     }
+
     val allPartitions:List[String] = getPartitions(true)
+
     if (allPartitions.isEmpty) {
       log.warn("No filter query found to determine partitions and no time-based partitions exist in Solr, " + "returning base collection: {}", conf.getCollection.get)
       return List(conf.getCollection.get)
     }
 
     if (rangeQuery == null) {
+
       if (log.isDebugEnabled) {
-        log.debug("No filter query available to select partitions, so using all partitions in Solr: {}", allPartitions)
+        log.warn("No filter query available to select partitions, so using all partitions in Solr: {}", allPartitions)
       }
       return allPartitions
     }
 
-    return getCollectionsForDateRangeQuery(rangeQuery, allPartitions)
+     getCollectionsForDateRangeQuery(rangeQuery, allPartitions)
   }
 
   def getPartitions(activeOnly: Boolean):List[String]= {
@@ -79,6 +94,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
 
       val allCollections = solrCloudClient.getZkStateReader.getClusterState.getCollections
       val partitionMatchRegex: Pattern = getPartitionMatchRegex
+
       var partitions= List[String]()
 
       for (next <- allCollections) {
@@ -123,11 +139,13 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
     val rq: TermRangeQuery = luceneQuery.asInstanceOf[TermRangeQuery]
     val lower: String = bref2str(rq.getLowerTerm)
     val upper: String = bref2str(rq.getUpperTerm)
+
     if (lower == null && upper == null) {
       return partitions
     }
     val fromIndex: Int = if ((lower != null)) mapDateToExistingCollectionIndex(lower, partitions)
     else 0
+
     val toIndex: Int = if ((upper != null)) mapDateToExistingCollectionIndex(upper, partitions)
     else partitions.size - 1
     partitions.slice(fromIndex, toIndex + 1)
@@ -135,6 +153,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
 
   @throws[ParseException]
   protected def mapDateToExistingCollectionIndex(dateCrit: String, partitions: List[String]): Int = {
+
     val collDate: Date = DateFormatUtil.parseMathLenient(null, dateCrit.toUpperCase, null)
     val coll: String = feature.getCollectionNameForDate(collDate)
     val size: Int = partitions.size
@@ -144,21 +163,22 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
     }
     var index: Int = -1
     var a: Int = 0
-    for(a <- 0 to size) {
-     if (coll == partitions.get(a)) {
-          index = a
-          break //todo: break is not supported
-        }
-        else {
-          if (a < lastIndex) {
-            if (coll.compareTo(partitions.get(a + 1)) < 0) {
-              index = a
-              break //todo: break is not supported
-            }
+    loop.breakable{
+    for (a <- 0 to size) {
+      if (coll == partitions.get(a)) {
+        index = a
+        loop.break
+      }
+      else {
+        if (a < lastIndex) {
+          if (coll.compareTo(partitions.get(a + 1)) < 0) {
+            index = a
+            loop.break
           }
         }
       }
-
+    }
+  }
      index
   }
 
