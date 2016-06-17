@@ -67,7 +67,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
 
     val analyzerConfig3 = """
                             |{
-                            |  "defaultLuceneMatchVersion": "4.10.4",
+                            |  "defaultLuceneMatchVersion": "5.0.0",
                             |  "analyzers": [{
                             |    "name": "StdTok_max3",
                             |    "tokenizer": {

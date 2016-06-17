@@ -90,7 +90,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
       instanceDir.getAbsolutePath()));
 
     SolrResourceLoader solrResourceLoader =
-      new SolrResourceLoader(solrHomeDir.getAbsolutePath());
+      new SolrResourceLoader(solrHomeDir.toPath());
     CoreContainer coreContainer = new CoreContainer(solrResourceLoader);
     coreContainer.load();
 

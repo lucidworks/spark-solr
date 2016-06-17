@@ -58,7 +58,7 @@ public abstract class PagedResultsIterator<T> implements Iterator<T>, Iterable<T
     boolean hasNext = (iterPos < currentPageSize);
     if (!hasNext && closeAfterIterating) {
       try {
-        solrServer.shutdown();
+        solrServer.close();
       } catch (Exception exc) {
         exc.printStackTrace();
       }

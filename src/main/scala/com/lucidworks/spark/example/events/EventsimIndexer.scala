@@ -6,7 +6,6 @@ import java.util.TimeZone
 import com.lucidworks.spark.SparkApp.RDDProcessor
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import org.apache.commons.cli.{Option, CommandLine}
-import org.apache.solr.common.util.DateUtil
 import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.sql.SQLContext
 
@@ -91,7 +90,7 @@ class EventsimIndexer extends RDDProcessor {
               ts = obj.asInstanceOf[Long]
               val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
               cal.setTimeInMillis(ts)
-              colValue = DateUtil.getThreadLocalDateFormat.format(cal.getTime)
+              colValue = cal.getTime.toInstant.toString
             } else if ("userId" == fieldName) {
               userId = obj.toString
             } else if ("sessionId" == fieldName) {
