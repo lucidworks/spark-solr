@@ -49,6 +49,7 @@ class SolrRelation(
     log.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
   val sc = sqlContext.sparkContext
+
   val solrRDD = {
     var rdd = new SolrRDD(
       conf.getZkHost.get,
@@ -83,7 +84,7 @@ class SolrRelation(
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,
       conf.getZkHost.get,
-      conf.getCollection.get,
+      conf.getCollection.get.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
       conf.flattenMultivalued.getOrElse(true))
 

@@ -29,7 +29,7 @@ class SolrRDD(
   extends RDD[SolrDocument](sc, Seq.empty)
   with Logging {
 
-  val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection)
+  val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
   protected def copy(
       exportHandler: Option[Boolean] = exportHandler,
