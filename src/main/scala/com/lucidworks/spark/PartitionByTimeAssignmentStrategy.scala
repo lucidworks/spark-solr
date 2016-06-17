@@ -63,17 +63,15 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
   }
 
   def getPartitions(activeOnly: Boolean):List[String]= {
-    val partitions: List[String] = findPartitions
-    /* if (activeOnly) {
-      val max_active_partitions=maxActivePartitions.getOrElse(null)
-      if (maxActivePartitions != null) {
-        val max_active_partitions_int=max_active_partitions.toInt
-        val numToRemove: Int = partitions.size - max_active_partitions_int
+    var partitions: List[String] = findPartitions
+     if (activeOnly) {
+      if (feature.getMaxActivePartitions != -1) {
+        val numToRemove: Int = partitions.size - feature.getMaxActivePartitions
         if (numToRemove > 0) partitions = partitions.slice(numToRemove, partitions.size)
       }
     }
-    */
-    return partitions
+
+   partitions
   }
 
   @throws[Exception]
@@ -93,12 +91,11 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
         partitions=partitions.sorted
       }
 
-
-    return partitions
+    partitions
   }
 
   protected def getPartitionMatchRegex: Pattern = {
-    var dtRegex: String =conf.getDateTimePattern.getOrElse(DEFAULT_DATETIME_PATTERN)
+    var dtRegex: String =feature.getDateTimePattern
     dtRegex = dtRegex.replace("yyyy", "(\\d{4})")
     dtRegex = dtRegex.replace("yy", "(\\d{2})")
     dtRegex = dtRegex.replace("MM", "(1[0-2]|0[1-9])")
@@ -116,7 +113,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
       }
     }
     dtRegex += "(" + underscore + "(2[0-3]|[0-1][0-9]))?(" + underscore + "([0-5][0-9]))?"
-    return Pattern.compile(conf.getCollection.get+"_"+dtRegex)
+    Pattern.compile(conf.getCollection.get+"_"+dtRegex)
   }
 
   @throws[Exception]
@@ -133,7 +130,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
     else 0
     val toIndex: Int = if ((upper != null)) mapDateToExistingCollectionIndex(upper, partitions)
     else partitions.size - 1
-    return partitions.slice(fromIndex, toIndex + 1)
+    partitions.slice(fromIndex, toIndex + 1)
   }
 
   @throws[ParseException]
@@ -162,12 +159,12 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
         }
       }
 
-    return index
+     index
   }
 
 
   private def bref2str(bytesRef: BytesRef): String = {
-    return if ((bytesRef != null)) bytesRef.utf8ToString
+    if ((bytesRef != null)) bytesRef.utf8ToString
     else null
   }
 }

@@ -91,7 +91,7 @@ class SolrRelation(
       conf.getFields
     }
   }
-  log.warn("haha"+collection+"haha")
+
   val baseSchema: StructType =
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,

@@ -8,11 +8,12 @@ import java.util.regex.{Matcher, Pattern}
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.spark.Logging
 
 /**
   * Created by akashmehta on 6/17/16.
   */
-class PartitionByTimeFeature(val conf:SolrConf) {
+class PartitionByTimeFeature(val conf:SolrConf) extends Logging {
   private val TIME_PERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS)$")
   private val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
     override protected def initialValue: SimpleDateFormat = {
@@ -31,6 +32,7 @@ class PartitionByTimeFeature(val conf:SolrConf) {
   private var maxActivePartitions: String = null
 
   val timePeriod: String = conf.getTimePeriod.getOrElse(DEFAULT_TIME_PERIOD)
+
   val matcher: Matcher = TIME_PERIOD_PATTERN.matcher(timePeriod)
   if (!matcher.matches) {
     throw new IllegalArgumentException("Invalid timePeriod "+ timePeriod)
@@ -66,6 +68,15 @@ class PartitionByTimeFeature(val conf:SolrConf) {
     return DEFAULT_DATETIME_PATTERN
   }
 
+  def getDateTimePattern:String ={
+     dateTimePattern
+  }
+
+  def getMaxActivePartitions:Int ={
+    if(maxActivePartitions==null) -1
+    else
+    maxActivePartitions.toInt
+  }
 
   def getCollectionNameForDate(date: Date):String ={
     return partitionNamePrefix + dateFormatter.get.format(date)
