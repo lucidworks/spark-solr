@@ -24,15 +24,15 @@ import org.apache.spark.Logging
 /**
   * Created by akashmehta on 6/16/16.
   */
-class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Option[String],val timePeriod:Option[String],val timeZone:Option[String],val dateTimePattern:Option[String],val baseCollection:String,val maxActivePartitions:Option[String],val queryOption:String) extends Logging{
+class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val conf: SolrConf) extends Logging{
 
-  val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
-  val query:SolrQuery=SolrQuerySupport.toQuery(queryOption)
+  val solrCloudClient = SolrSupport.getCachedCloudClient(conf.getZkHost.get)
+  val query:SolrQuery=SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
   val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
 
 
   def getPartitionsForQuery():List[String]= {
-    val prefixMatch=tsFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":"
+    val prefixMatch=conf.getTSFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":"
     var rangeQuery:String=null
     if(!queryFilters.isEmpty) {
        for(filter<-queryFilters){
@@ -48,8 +48,8 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
     }
     val allPartitions:List[String] = getPartitions(true)
     if (allPartitions.isEmpty) {
-      log.warn("No filter query found to determine partitions and no time-based partitions exist in Solr, " + "returning base collection: {}", baseCollection)
-      return List(baseCollection)
+      log.warn("No filter query found to determine partitions and no time-based partitions exist in Solr, " + "returning base collection: {}", conf.getCollection.get)
+      return List(conf.getCollection.get)
     }
 
     if (rangeQuery == null) {
@@ -98,7 +98,7 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
   }
 
   protected def getPartitionMatchRegex: Pattern = {
-    var dtRegex: String =dateTimePattern.getOrElse(DEFAULT_DATETIME_PATTERN)
+    var dtRegex: String =conf.getDateTimePattern.getOrElse(DEFAULT_DATETIME_PATTERN)
     dtRegex = dtRegex.replace("yyyy", "(\\d{4})")
     dtRegex = dtRegex.replace("yy", "(\\d{2})")
     dtRegex = dtRegex.replace("MM", "(1[0-2]|0[1-9])")
@@ -116,7 +116,7 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
       }
     }
     dtRegex += "(" + underscore + "(2[0-3]|[0-1][0-9]))?(" + underscore + "([0-5][0-9]))?"
-    return Pattern.compile(baseCollection+"_"+dtRegex)
+    return Pattern.compile(conf.getCollection.get+"_"+dtRegex)
   }
 
   @throws[Exception]
@@ -139,7 +139,7 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
   @throws[ParseException]
   protected def mapDateToExistingCollectionIndex(dateCrit: String, partitions: List[String]): Int = {
     val collDate: Date = DateFormatUtil.parseMathLenient(null, dateCrit.toUpperCase, null)
-    val coll: String = getCollectionNameForDate(collDate)
+    val coll: String = feature.getCollectionNameForDate(collDate)
     val size: Int = partitions.size
     val lastIndex: Int = size - 1
     if (coll.compareTo(partitions.get(lastIndex)) > 0) {
@@ -147,9 +147,8 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
     }
     var index: Int = -1
     var a: Int = 0
-    while (a < size) {
-      {
-        if (coll == partitions.get(a)) {
+    for(a <- 0 to size) {
+     if (coll == partitions.get(a)) {
           index = a
           break //todo: break is not supported
         }
@@ -162,23 +161,11 @@ class PartitionByTimeAssignmentStrategy(val zkHost: String,val tsFieldName:Optio
           }
         }
       }
-      ({
-        a += 1; a - 1
-      })
-    }
+
     return index
   }
 
-  private val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
-    override protected def initialValue: SimpleDateFormat = {
-      val sdf: SimpleDateFormat = new SimpleDateFormat(dateTimePattern.getOrElse(DEFAULT_DATETIME_PATTERN))
-      sdf.setTimeZone(TimeZone.getTimeZone(timeZone.getOrElse(DEFAULT_TIMEZONE_ID)))
-      return sdf
-    }
-  }
-  def getCollectionNameForDate(date: Date):String ={
-    return baseCollection + dateFormatter.get.format(date)
-  }
+
   private def bref2str(bytesRef: BytesRef): String = {
     return if ((bytesRef != null)) bytesRef.utf8ToString
     else null

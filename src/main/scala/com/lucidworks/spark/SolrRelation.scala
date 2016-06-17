@@ -53,7 +53,8 @@ class SolrRelation(
   val sc = sqlContext.sparkContext
 
  if(conf.timeSeriesPartitionOn.getOrElse(false)) {
-   val p=new PartitionByTimeAssignmentStrategy(conf.getZkHost.get,conf.getTSFieldName,conf.getTimePeriod,conf.getTimeZoneId,conf.getDateTimePattern,conf.getCollection.get,conf.getMaxActivePartitions,conf.getQuery.getOrElse("*:*"))
+   val feature=new PartitionByTimeFeature(conf)
+   val p=new PartitionByTimeAssignmentStrategy(feature,conf)
    val allCollections=p.getPartitionsForQuery()
    collection=allCollections mkString ","
 
