@@ -47,7 +47,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
     if(!queryFilters.isEmpty) {
       loop.breakable {
         for (filter <- queryFilters) {
-          if (filter.startsWith(prefixMatch)) {
+          if (filter.startsWith(conf.getTSFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":")) {
             val rangeCrit = filter.substring(prefixMatch.length)
             if (!("[* TO *]" == rangeCrit)) {
               rangeQuery = filter
@@ -145,7 +145,6 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
     }
     val fromIndex: Int = if ((lower != null)) mapDateToExistingCollectionIndex(lower, partitions)
     else 0
-
     val toIndex: Int = if ((upper != null)) mapDateToExistingCollectionIndex(upper, partitions)
     else partitions.size - 1
     partitions.slice(fromIndex, toIndex + 1)
@@ -156,6 +155,7 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
 
     val collDate: Date = DateFormatUtil.parseMathLenient(null, dateCrit.toUpperCase, null)
     val coll: String = feature.getCollectionNameForDate(collDate)
+    log.info("HHHHCOllname"+coll)
     val size: Int = partitions.size
     val lastIndex: Int = size - 1
     if (coll.compareTo(partitions.get(lastIndex)) > 0) {
