@@ -6,9 +6,9 @@ import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode._
 
 /**
-  * Created by akashmehta on 6/17/16.
+ This class is used to test the PartitionByTimeQuerySupport class
   */
-class TestPartitionByTimeAssignmentStrategy extends TestSuiteBuilder {
+class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
 
 
   test("Test partition selection for query") {

@@ -141,8 +141,8 @@ class SolrConf(config:Map[String, String]) {
     None
   }
 
-  def getTSFieldName: Option[String]={
-    if (config.contains(TS_FIELD_NAME) && config.get(TS_FIELD_NAME).isDefined) return (config.get(TS_FIELD_NAME))
+  def getTimeStampFieldName: Option[String]={
+    if (config.contains(TIME_STAMP_FIELD_NAME) && config.get(TIME_STAMP_FIELD_NAME).isDefined) return (config.get(TIME_STAMP_FIELD_NAME))
     None
   }
 

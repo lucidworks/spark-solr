@@ -52,12 +52,12 @@ class SolrRelation(
 
   val sc = sqlContext.sparkContext
 
- if(conf.timeSeriesPartitionOn.getOrElse(false)) {
-   val feature=new PartitionByTimeFeature(conf)
-   val p=new PartitionByTimeAssignmentStrategy(feature,conf)
-   val allCollections=p.getPartitionsForQuery()
-   collection=allCollections mkString ","
-   }
+  if (conf.timeSeriesPartitionOn.getOrElse(false)) {
+    val feature=new PartitionByTimeQueryParams(conf)
+    val p=new PartitionByTimeQuerySupport(feature,conf)
+    val allCollections=p.getPartitionsForQuery()
+    collection=allCollections mkString ","
+  }
 
 
   val solrRDD = {

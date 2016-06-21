@@ -22,9 +22,9 @@ import org.apache.spark.Logging
 
 
 /**
-  * Created by akashmehta on 6/16/16.
+  * This class is used to query multiple collections of time series data given a range query.
   */
-class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val conf: SolrConf) extends Logging{
+class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val conf: SolrConf) extends Logging{
 
   val solrCloudClient = SolrSupport.getCachedCloudClient(conf.getZkHost.get)
   val query:SolrQuery=buildQuery
@@ -42,12 +42,12 @@ class PartitionByTimeAssignmentStrategy(val feature: PartitionByTimeFeature,val 
   }
 
   def getPartitionsForQuery():List[String]= {
-    val prefixMatch=conf.getTSFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":"
+    val prefixMatch=conf.getTimeStampFieldName.getOrElse(DEFAULT_TIME_STAMP_FIELD_NAME) +":"
     var rangeQuery:String=null
     if(!queryFilters.isEmpty) {
       loop.breakable {
         for (filter <- queryFilters) {
-          if (filter.startsWith(conf.getTSFieldName.getOrElse(DEFAULT_TS_FIELD_NAME) +":")) {
+          if (filter.startsWith(conf.getTimeStampFieldName.getOrElse(DEFAULT_TIME_STAMP_FIELD_NAME) +":")) {
             val rangeCrit = filter.substring(prefixMatch.length)
             if (!("[* TO *]" == rangeCrit)) {
               rangeQuery = filter
