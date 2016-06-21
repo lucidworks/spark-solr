@@ -258,6 +258,8 @@ The `solr.params` option can be used to specify any arbitrary Solr parameters in
 
 Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
+=== Querying Time Series Data
+
 ====time_series_partition_on
 
 Set this option as true, in order to query mutiple time series collections, partitioned according to some time period
