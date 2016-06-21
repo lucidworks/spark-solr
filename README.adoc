@@ -258,7 +258,7 @@ The `solr.params` option can be used to specify any arbitrary Solr parameters in
 
 Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
-===time_series_partition_on
+====time_series_partition_on
 
 Set this option as true, in order to query mutiple time series collections, partitioned according to some time period
 
@@ -266,7 +266,7 @@ Usage: `option("time_series_partition_on", "true")`
 
 Default:false
 
-===time_period
+====time_period
 
 This is of the form X DAYS/HOURS/MINUTES.This should be the time period with which the partitions are created.
 
@@ -274,7 +274,7 @@ Usage: `option("time_period", "1MINUTES")`
 
 Default: 1DAYS
 
-===datetime_pattern
+====datetime_pattern
 
 This pattern can be inferred from time_period. But this option can be used to explicitly specify.
 
@@ -282,7 +282,7 @@ Usage: `option("datetime_pattern", "yyyy_MM_dd_HH_mm")`
 
 Default: yyyy_MM_dd
 
-===time_stamp_field_name
+====time_stamp_field_name
 
 This option is used to specify the field name in the indexed documents where time stamp is found.
 
@@ -290,7 +290,7 @@ Usage: `option("time_stamp_option", "ts")`
 
 Default: timestamp_tdt
 
-===timezone_Id
+====timezone_Id
 
 Used to specify the timezone.
 
@@ -298,7 +298,7 @@ Usage: `option("timezone_Id", "IST")`
 
 Default: UTC
 
-===max_active_partitions
+====max_active_partitions
 
 This option is used to specify the maximum number of partitons that must be allowed at a time.
 
