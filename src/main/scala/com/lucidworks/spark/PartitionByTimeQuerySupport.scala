@@ -155,7 +155,6 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
 
     val collDate: Date = DateFormatUtil.parseMathLenient(null, dateCrit.toUpperCase, null)
     val coll: String = feature.getCollectionNameForDate(collDate)
-    log.info("HHHHCOllname"+coll)
     val size: Int = partitions.size
     val lastIndex: Int = size - 1
     if (coll.compareTo(partitions.get(lastIndex)) > 0) {
