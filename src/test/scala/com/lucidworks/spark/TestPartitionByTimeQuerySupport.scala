@@ -49,19 +49,20 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
       solrCloudClient.commit(collection3Name, true, true)
 
       // No query, return all the partitons
-      var solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"time_series_partition_on" ->"true","time_period" -> "1MINUTES")
+      var solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES")
       var solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 100)
 
       //query to select all partitions
-      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"time_series_partition_on" ->"true","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[* TO *]")
+      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[* TO *]")
       solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 100)
 
       // querying a range
-      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"time_series_partition_on" ->"true","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[2014-11-24T17:30:00Z TO 2014-11-24T17:32:00Z]")
+      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[2014-11-24T17:30:00Z TO 2014-11-24T17:32:00Z]")
       solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 63)
+
 
     } finally {
       SolrCloudUtil.deleteCollection(collection1Name, cluster)

@@ -47,7 +47,6 @@ class PartitionByTimeQueryParams(val conf:SolrConf) extends Logging {
   if (maxActivePartitions!= null && maxActivePartitions.toInt <= 0) {
     throw new IllegalArgumentException("Value for  MAX_ACTIVE_PARTITIONS  must be strictly greater than zero!")
   }
-  val solrCloudClient = SolrSupport.getCachedCloudClient(conf.getZkHost.get)
   val query:SolrQuery=SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
   val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
 

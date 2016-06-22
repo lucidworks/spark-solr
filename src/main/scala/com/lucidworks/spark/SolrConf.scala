@@ -1,9 +1,11 @@
 package com.lucidworks.spark
 
+
+
 import org.apache.solr.common.params.ModifiableSolrParams
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config:Map[String, String]) {
+class SolrConf(config:Map[String, String]){
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
@@ -134,9 +136,9 @@ class SolrConf(config:Map[String, String]) {
     None
   }
 
-  def timeSeriesPartitionOn: Option[Boolean]={
-    if (config.contains(TIME_SERIES_PARTITION_ON) && config.get(TIME_SERIES_PARTITION_ON).isDefined) {
-      return Some(config.get(TIME_SERIES_PARTITION_ON).get.toBoolean)
+  def partition_by: Option[String]={
+    if (config.contains(PARTITION_BY) && config.get(PARTITION_BY).isDefined) {
+      return Some(config.get(PARTITION_BY).get.toString)
     }
     None
   }
