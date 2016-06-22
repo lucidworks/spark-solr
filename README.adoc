@@ -260,11 +260,11 @@ Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
 === Querying Time Series Data
 
-==== time_series_partition_on
+==== partition_by
 
 Set this option as true, in order to query mutiple time series collections, partitioned according to some time period
 
-Usage: `option("time_series_partition_on", "true")`
+Usage: `option("partition_by", "time")`
 
 Default:false
 
@@ -288,7 +288,7 @@ Default: yyyy_MM_dd
 
 This option is used to specify the field name in the indexed documents where time stamp is found.
 
-Usage: `option("time_stamp_option", "ts")`
+Usage: `option("time_stamp_field_name", "ts")`
 
 Default: timestamp_tdt
 
@@ -302,9 +302,9 @@ Default: UTC
 
 ==== max_active_partitions
 
-This option is used to specify the maximum number of partitons that must be allowed at a time.
+This option is used to specify the maximum number of partitions that must be allowed at a time.
 
-Usage: `option("max_active_partitons", "100")`
+Usage: `option("max_active_partitions", "100")`
 
 Default: null
 
