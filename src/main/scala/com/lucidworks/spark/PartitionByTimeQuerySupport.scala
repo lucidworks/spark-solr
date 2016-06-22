@@ -62,14 +62,16 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
     val allPartitions:List[String] = getPartitions(true)
 
     if (allPartitions.isEmpty) {
-      log.warn("No filter query found to determine partitions and no time-based partitions exist in Solr, " + "returning base collection: {}", conf.getCollection.get)
+      if(log.isWarnEnabled) {
+        log.warn(s"No filter query found to determine partitions and no time-based partitions exist in Solr returning base collection: ${conf.getCollection.get}")
+      }
       return List(conf.getCollection.get)
     }
 
     if (rangeQuery == null) {
 
-      if (log.isDebugEnabled) {
-        log.warn("No filter query available to select partitions, so using all partitions in Solr: {}", allPartitions)
+      if (log.isWarnEnabled) {
+        log.warn(s"No filter query available to select partitions, so using all partitions in Solr: ${allPartitions}")
       }
       return allPartitions
     }
