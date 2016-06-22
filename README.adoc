@@ -262,7 +262,7 @@ Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
 ==== partition_by
 
-Set this option as true, in order to query mutiple time series collections, partitioned according to some time period
+Set this option as time, in order to query mutiple time series collections, partitioned according to some time period
 
 Usage: `option("partition_by", "time")`
 
