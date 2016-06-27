@@ -266,7 +266,7 @@ Set this option as time, in order to query mutiple time series collections, part
 
 Usage: `option("partition_by", "time")`
 
-Default:false
+Default:none
 
 ==== time_period
 
@@ -292,11 +292,11 @@ Usage: `option("time_stamp_field_name", "ts")`
 
 Default: timestamp_tdt
 
-==== timezone_Id
+==== timezone_id
 
 Used to specify the timezone.
 
-Usage: `option("timezone_Id", "IST")`
+Usage: `option("timezone_id", "IST")`
 
 Default: UTC
 
