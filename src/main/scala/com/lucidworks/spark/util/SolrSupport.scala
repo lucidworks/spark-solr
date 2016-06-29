@@ -116,6 +116,11 @@ object SolrSupport extends Logging {
       fusionCredentials: String,
       docs: DStream[_],
       batchSize: Int): Unit = {
+
+    val urls = fusionUrl.split(",").distinct
+    val url = new URL(urls(0))
+    val pipelinePath = url.getPath
+
     docs.foreachRDD(rdd => {
       rdd.foreachPartition(docIter => {
         val creds = if (fusionCredentials != null) fusionCredentials.split(":") else null
@@ -128,13 +133,13 @@ object SolrSupport extends Logging {
           val inputDoc = docIter.next()
           batch.add(inputDoc)
           if (batch.size >= batchSize) {
-            fusionClient.postBatchToPipeline(batch)
+            fusionClient.postBatchToPipeline(pipelinePath, batch)
             batch = List.empty[Any]
           }
         }
 
         if (batch.nonEmpty) {
-          fusionClient.postBatchToPipeline(batch)
+          fusionClient.postBatchToPipeline(pipelinePath, batch)
           batch = List.empty[Any]
         }
 
