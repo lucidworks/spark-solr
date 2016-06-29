@@ -1,5 +1,6 @@
 package com.lucidworks.spark.port.example.events
 
+import java.net.URL
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -65,11 +66,14 @@ class EventsimIndexer extends RDDProcessor {
     val fusionRealm: String = cli.getOptionValue("fusionRealm", "native")
     val fusionBatchSize: Int = cli.getOptionValue("fusionBatchSize", "100").toInt
 
+    val urls = fusionEndpoints.split(",").distinct
+    val url = new URL(urls(0))
+    val pipelinePath = url.getPath
+
     val sc = new SparkContext(conf)
     val sqlContext: SQLContext = new SQLContext(sc)
 
     sqlContext.read.json(cli.getOptionValue("eventsimJson")).foreachPartition(rows => {
-
       val fusion: FusionPipelineClient =
         if (fusionAuthEnabled) new FusionPipelineClient(fusionEndpoints, fusionUser, fusionPass, fusionRealm)
         else new FusionPipelineClient(fusionEndpoints)
@@ -103,14 +107,14 @@ class EventsimIndexer extends RDDProcessor {
         batch += Map("id" -> s"$userId-$sessionId-$ts", "fields" -> fields)
 
         if (batch.size == fusionBatchSize) {
-          fusion.postBatchToPipeline(bufferAsJavaList(batch))
+          fusion.postBatchToPipeline(pipelinePath, bufferAsJavaList(batch))
           batch.clear
         }
       })
 
       // post the final batch if any left over
       if (!batch.isEmpty) {
-        fusion.postBatchToPipeline(bufferAsJavaList(batch))
+        fusion.postBatchToPipeline(pipelinePath, bufferAsJavaList(batch))
         batch.clear
       }
     })

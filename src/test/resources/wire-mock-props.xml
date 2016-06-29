@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<comment>Set useWireMockRule to 'false' if wanting to connect to an actual Fusion instance. A value of 'true'
+         will use WireMock features instead to fake the connection to Fusion.
+</comment>
+<entry key="useWireMockRule">true</entry>
+<entry key="fusionServerHttpString">http://</entry>
+<entry key="fusionHost">localhost</entry>
+<entry key="fusionApiPort">8764</entry>
+<entry key="fusionCollection">agentCollection</entry>
+<entry key="fusionIndexingPipeline">agentCollection-default</entry>
+<entry key="fusionProxyBaseUrl">/api/apollo</entry>
+<entry key="fusionIndexingPipelineUrlExtension">/index-pipelines</entry>
+<entry key="fusionUser">admin</entry>
+<entry key="fusionPass">password123</entry>
+<entry key="fusionSessionApi">/api/session?realmName=</entry>
+<entry key="fusionRealm">native</entry>
+<entry key="wireMockRuleHost">localhost</entry>
+<entry key="wireMockRulePort">8089</entry>
+<entry key="fusionSolrProxyUrlExtension">/solr</entry>
+</properties>
