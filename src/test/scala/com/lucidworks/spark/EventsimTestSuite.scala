@@ -94,7 +94,7 @@ class EventsimTestSuite extends EventsimBuilder {
     val df: DataFrame = sqlContext.read.format("solr")
       .option("zkHost", zkHost)
       .option("collection", collectionName)
-      .option(USE_EXPORT_HANDLER, "true")
+      .option(REQUEST_HANDLER, "/export")
       .option(ARBITRARY_PARAMS_STRING, "sort=userId desc")
       .load()
 
@@ -115,7 +115,7 @@ class EventsimTestSuite extends EventsimBuilder {
     val df: DataFrame = sqlContext.read.format("solr")
       .option("zkHost", zkHost)
       .option("collection", collectionName)
-      .option(USE_EXPORT_HANDLER, "true")
+      .option(REQUEST_HANDLER, "/export")
       .option(ARBITRARY_PARAMS_STRING, "fl=artist&sort=userId desc") // The test will fail without the fl param here
       .load()
     df.registerTempTable("events")

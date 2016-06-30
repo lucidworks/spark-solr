@@ -55,7 +55,7 @@ class SolrRelation(
       conf.getZkHost.get,
       conf.getCollection.get,
       sc,
-      exportHandler = conf.useExportHandler)
+      requestHandler = conf.requestHandler)
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
@@ -160,7 +160,7 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      if (!solrRDD.exportHandler.getOrElse(false) && !conf.useCursorMarks.getOrElse(false)) {
+      if (solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) != "/export" && !conf.useCursorMarks.getOrElse(false)) {
         log.info("Checking the query and sort fields to determine if streaming is possible")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
@@ -188,9 +188,9 @@ class SolrRelation(
             }
             else
               false
-        val useStreamingAPI = if (isFDV && isSDV) true else false
-        log.info("useStreamingAPI is '" +  useStreamingAPI + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
-        val docs = solrRDD.useExportHandler(useStreamingAPI).query(query)
+        val requestHandler = if (isFDV && isSDV) "/export" else DEFAULT_REQUEST_HANDLER
+        log.info("requestHandler is '" +  requestHandler + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
+        val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
       } else {
@@ -416,6 +416,5 @@ object SolrRelation extends Logging {
     query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
     log.info("Added sort field '" + query.getSortField + "' to the query")
   }
-
 }
 

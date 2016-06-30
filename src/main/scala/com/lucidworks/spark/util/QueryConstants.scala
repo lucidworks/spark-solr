@@ -6,4 +6,5 @@ object QueryConstants {
   val DEFAULT_QUERY: String = "*:*"
   val DEFAULT_SPLITS_PER_SHARD: Int = 20
   val DEFAULT_SPLIT_FIELD: String = "_version_"
+  val DEFAULT_REQUEST_HANDLER: String = "/select"
 }
