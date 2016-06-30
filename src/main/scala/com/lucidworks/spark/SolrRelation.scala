@@ -43,8 +43,9 @@ class SolrRelation(
   def this(parameters: Map[String, String], sqlContext: SQLContext) {
     this(parameters, sqlContext, None)
   }
-  var collection=conf.getCollection.get
+
   checkRequiredParams()
+  var collection=conf.getCollection.get
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
