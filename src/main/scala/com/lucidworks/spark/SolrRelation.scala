@@ -59,7 +59,6 @@ class SolrRelation(
     collection=allCollections mkString ","
   }
 
-
   val solrRDD = {
     var rdd = new SolrRDD(
       conf.getZkHost.get,
@@ -123,6 +122,8 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
+    log.info("Fields passed down from scanner: " + fields.mkString(","))
+    log.info("Filters passed down from scanner: " + filters.mkString(","))
     if (fields != null && fields.length > 0) {
       // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
       if (this.baseSchema.size == fields.length) {
@@ -162,7 +163,7 @@ class SolrRelation(
       }
 
       query.addSort(SolrQuery.SortClause.asc("random_"+conf.sampleSeed.get))
-      query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey));
+      query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey))
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
@@ -176,7 +177,20 @@ class SolrRelation(
         log.info("Checking the query and sort fields to determine if streaming is possible")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
-        val sortClauses = query.getSorts.asScala.toList
+        val sortClauses: List[SortClause] = query.getSorts.asScala.toList
+        if (sortClauses.isEmpty) {
+          val sortParams = query.getParams(CommonParams.SORT)
+          if (sortParams != null && sortParams.nonEmpty) {
+            for (sortString <- sortParams) {
+              val sortStringParams = sortString.split(" ")
+              if (sortStringParams.nonEmpty && sortStringParams.size == 2) {
+                sortClauses.::(new SortClause(sortStringParams(0), sortStringParams(1)))
+              }
+            }
+          }
+        }
+
+        log.info("Existing sort clauses: " + sortClauses.mkString(","))
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(baseSchema, sortClauses)
@@ -394,7 +408,7 @@ object SolrRelation extends Logging {
       // Check if the sorted field (if exists) has docValue enabled
       for (sortClause: SortClause <- sortClauses) {
         val sortField = sortClause.getItem
-        if (baseSchema.contains(sortField)) {
+        if (baseSchema.fieldNames.contains(sortField)) {
           val sortFieldMetadata = baseSchema(sortField).metadata
           if (!sortFieldMetadata.contains("docValues"))
             return false

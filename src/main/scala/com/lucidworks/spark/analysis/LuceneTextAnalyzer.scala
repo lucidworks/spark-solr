@@ -44,7 +44,7 @@ import scala.util.control.NonFatal
   * Here's an example schema with descriptions inline as comments:
   * {{{
   * {
-  *   "defaultLuceneMatchVersion": "4.10.4" // Optional.  Supplied to analysis components
+  *   "defaultLuceneMatchVersion": "5.0.0" // Optional.  Supplied to analysis components
   *                                         //     that don't explicitly specify "luceneMatchVersion".
   *   "analyzers": [              // Optional.  If not included, all field mappings must be
   *     {                         //     to fully qualified class names of Lucene Analyzer subclasses.
@@ -299,11 +299,11 @@ private class AnalyzerSchema(val analysisSchema: String) {
   var invalidMessages : StringBuilder = new StringBuilder()
   try {
     schemaConfig.defaultLuceneMatchVersion.foreach { version =>
-      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_4_0_0)) {
+      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_5_0_0)) {
         isValid = false
         invalidMessages.append(
           s"""defaultLuceneMatchVersion "${schemaConfig.defaultLuceneMatchVersion}"""")
-          .append(" is not on or after ").append(LuceneVersion.LUCENE_4_0_0).append("\n")
+          .append(" is not on or after ").append(LuceneVersion.LUCENE_5_0_0).append("\n")
       }
     }
   } catch {

@@ -38,7 +38,7 @@ val df = sqlContext.read.format("solr")
 import com.lucidworks.spark.rdd.SolrRDD
 val solrRDD = new SolrRDD(zkHost, collectionName, sc)
 
-SolrRDD is an RDD of https://lucene.apache.org/solr/5_4_1/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
+SolrRDD is an RDD of https://lucene.apache.org/solr/6_1_0/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
 
 ==== via RDD (Java)
 

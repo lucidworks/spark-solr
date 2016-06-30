@@ -89,7 +89,7 @@ public class StreamingResultsIterator extends ResultsIterator {
 
     if (!hasNext && closeAfterIterating) {
       try {
-        solrServer.shutdown();
+        solrServer.close();
       } catch (Exception exc) { exc.printStackTrace(); }
     }
 
