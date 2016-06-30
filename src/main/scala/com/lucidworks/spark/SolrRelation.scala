@@ -51,6 +51,7 @@ class SolrRelation(
   if (unknownParams.nonEmpty)
     log.warn("Unknown parameters passed to query: " + unknownParams.toString())
   val sc = sqlContext.sparkContext
+
   if (!conf.partition_by.isEmpty && conf.partition_by.get=="time") {
     val feature=new PartitionByTimeQueryParams(conf)
     val p=new PartitionByTimeQuerySupport(feature,conf)
