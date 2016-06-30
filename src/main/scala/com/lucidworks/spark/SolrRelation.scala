@@ -17,6 +17,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -24,6 +25,7 @@ import scala.reflect.runtime.universe._
 
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
+
 
 class SolrRelation(
     val parameters: Map[String, String],
@@ -43,16 +45,24 @@ class SolrRelation(
   }
 
   checkRequiredParams()
+  var collection=conf.getCollection.get
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
     log.warn("Unknown parameters passed to query: " + unknownParams.toString())
-
   val sc = sqlContext.sparkContext
+  if (!conf.partition_by.isEmpty && conf.partition_by.get=="time") {
+    val feature=new PartitionByTimeQueryParams(conf)
+    val p=new PartitionByTimeQuerySupport(feature,conf)
+    val allCollections=p.getPartitionsForQuery()
+    collection=allCollections mkString ","
+  }
+
+
   val solrRDD = {
     var rdd = new SolrRDD(
       conf.getZkHost.get,
-      conf.getCollection.get,
+      collection,
       sc,
       exportHandler = conf.useExportHandler)
 
@@ -79,17 +89,21 @@ class SolrRelation(
       conf.getFields
     }
   }
+
   val baseSchema: StructType =
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,
       conf.getZkHost.get,
-      conf.getCollection.get,
+      collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
       conf.flattenMultivalued.getOrElse(true))
 
   val query: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
-  val queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+  var queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+
+
+
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
@@ -325,7 +339,7 @@ class SolrRelation(
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
     query.add(conf.getArbitrarySolrParams)
-    query.set("collection", conf.getCollection.get)
+    query.set("collection", collection)
     query
   }
 
