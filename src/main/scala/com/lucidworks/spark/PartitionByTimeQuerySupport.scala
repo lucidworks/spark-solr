@@ -13,12 +13,12 @@ import java.util.regex.Pattern
 import scala.collection.JavaConversions._
 import java.util.regex.Matcher
 import java.util.TimeZone
-
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
 import org.apache.lucene.util.BytesRef
-import org.apache.solr.util.DateFormatUtil
+//import org.apache.solr.util.DateFormatUtil
 import org.apache.spark.Logging
+import java.time.Instant;
 
 
 /**
@@ -155,7 +155,7 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
   @throws[ParseException]
   protected def mapDateToExistingCollectionIndex(dateCrit: String, partitions: List[String]): Int = {
 
-    val collDate: Date = DateFormatUtil.parseMathLenient(null, dateCrit.toUpperCase, null)
+    val collDate: Date = new Date(Instant.parse(dateCrit.toUpperCase).toEpochMilli())
     val coll: String = feature.getCollectionNameForDate(collDate)
     val size: Int = partitions.size
     val lastIndex: Int = size - 1
