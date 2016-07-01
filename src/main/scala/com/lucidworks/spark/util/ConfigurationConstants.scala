@@ -18,6 +18,7 @@ object ConfigurationConstants {
   val USE_EXPORT_HANDLER: String = "use_export_handler"
   val USE_CURSOR_MARKS: String = "use_cursor_marks"
 
+
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
   val BATCH_SIZE: String = "batch_size"
@@ -27,5 +28,15 @@ object ConfigurationConstants {
   val SAMPLE_SEED: String = "sample_seed"
   val SAMPLE_PCT: String = "sample_pct"
 
+  // Time series partitioning params
+
+  val PARTITION_BY:String="partition_by"
+  val TIME_STAMP_FIELD_NAME:String="time_stamp_field_name"
+  val TIME_PERIOD:String="time_period"
+  val DATETIME_PATTERN:String="datetime_pattern"
+  val TIMEZONE_ID:String="timezone_id"
+  val MAX_ACTIVE_PARTITIONS:String="max_active_partitions"
+
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
+
 }
