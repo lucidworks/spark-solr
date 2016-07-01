@@ -2,23 +2,18 @@ package com.lucidworks.spark
 
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Collections, Date, TimeZone}
-
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrRelationUtil, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import com.lucidworks.spark.util.QueryConstants._
-
 import scala.util.control._
 import java.util.regex.Pattern
-
 import scala.collection.JavaConversions._
 import java.util.regex.Matcher
-import java.util.TimeZone
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
 import org.apache.lucene.util.BytesRef
-//import org.apache.solr.util.DateFormatUtil
 import org.apache.spark.Logging
-import java.time.Instant;
+import org.apache.solr.util.DateMathParser;
 
 
 /**
@@ -155,7 +150,7 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
   @throws[ParseException]
   protected def mapDateToExistingCollectionIndex(dateCrit: String, partitions: List[String]): Int = {
 
-    val collDate: Date = new Date(Instant.parse(dateCrit.toUpperCase).toEpochMilli())
+    val collDate =DateMathParser.parseMath(null.asInstanceOf[Date], dateCrit.toUpperCase);
     val coll: String = feature.getCollectionNameForDate(collDate)
     val size: Int = partitions.size
     val lastIndex: Int = size - 1
@@ -185,7 +180,7 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
 
 
   private def bref2str(bytesRef: BytesRef): String = {
-    if ((bytesRef != null)) bytesRef.utf8ToString
+    if (bytesRef != null) bytesRef.utf8ToString
     else null
   }
 }
