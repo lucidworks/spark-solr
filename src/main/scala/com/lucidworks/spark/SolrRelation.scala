@@ -7,6 +7,7 @@ import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
+import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
@@ -80,13 +81,9 @@ class SolrRelation(
       conf.getFields
     }
   }
-  val baseSchema: StructType =
-    SolrRelationUtil.getBaseSchema(
-      solrFields.toSet,
-      conf.getZkHost.get,
-      conf.getCollection.get.split(",")(0),
-      conf.escapeFieldNames.getOrElse(false),
-      conf.flattenMultivalued.getOrElse(true))
+
+  // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
+  var baseSchema : Option[StructType] = None
 
   val query: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
@@ -96,11 +93,80 @@ class SolrRelation(
       dataFrame.get.schema
     } else {
       if (query.getFields != null) {
-        SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema)
+        baseSchema = Some(getBaseSchemaFromConfig(solrFields))
+        SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
+      } else if (conf.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) == "/stream") {
+        // we have to figure out the schema of the streaming expression
+        var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
+        var streamOutputFields = new ListBuffer[StreamFields]
+        streamingExpr.getParameters.asScala.foreach(next => findStreamingExpressionFields(next, streamOutputFields))
+        logInfo(s"Found stream output fields: ${streamOutputFields}")
+        var fieldSet : scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
+        for (sf <- streamOutputFields) {
+          val streamSchema: StructType =
+            SolrRelationUtil.getBaseSchema(
+              sf.fields.toSet,
+              conf.getZkHost.get,
+              sf.collection,
+              conf.escapeFieldNames.getOrElse(false),
+              conf.flattenMultivalued.getOrElse(true))
+          logInfo(s"Got stream schema: ${streamSchema} for ${sf}")
+          streamSchema.fields.foreach(fld => fieldSet.add(fld))
+        }
+        var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
+        logInfo(s"Created combined schema for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        exprSchema
       } else {
-        baseSchema
+        baseSchema = Some(getBaseSchemaFromConfig(solrFields))
+        baseSchema.get
       }
     }
+  }
+
+  def getBaseSchemaFromConfig(solrFields: Array[String]) : StructType = {
+    SolrRelationUtil.getBaseSchema(
+      solrFields.toSet,
+      conf.getZkHost.get,
+      conf.getCollection.get.split(",")(0),
+      conf.escapeFieldNames.getOrElse(false),
+      conf.flattenMultivalued.getOrElse(true))
+  }
+
+  def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields]) : Unit = {
+    expr match {
+      case subExpr : StreamExpression =>
+        logInfo(s"found a sub expression with functionName: ${subExpr.getFunctionName}")
+        if (subExpr.getFunctionName == "search" || subExpr.getFunctionName == "random") {
+          extractSearchFields(subExpr).foreach(fld => streamOutputFields += fld)
+        } else {
+          subExpr.getParameters.asScala.foreach(subParam => findStreamingExpressionFields(subParam, streamOutputFields))
+        }
+      case namedParam : StreamExpressionNamedParameter => findStreamingExpressionFields(namedParam.getParameter, streamOutputFields)
+      case _ => // no op
+    }
+  }
+
+  def extractSearchFields(subExpr: StreamExpression) : Option[StreamFields] = {
+    var collection : Option[String] = Option.empty[String]
+    var fields = scala.collection.mutable.ListBuffer.empty[String]
+    subExpr.getParameters.asScala.foreach(sub => {
+      sub match {
+        case p : StreamExpressionNamedParameter =>
+          if (p.getName == "fl") {
+            p.getParameter match {
+              case value : StreamExpressionValue => fields += value.getValue
+              case _ => // ugly!
+            }
+          }
+        case v : StreamExpressionValue => collection = Some(v.getValue)
+        case _ => // ugly!
+      }
+    })
+    if (collection.isDefined && !fields.isEmpty) {
+      logInfo(s"returning collection=${collection.get} and fields=${fields} for ${subExpr}")
+      return Some(new StreamFields(collection.get, fields))
+    }
+    None
   }
 
   override def schema: StructType = querySchema
@@ -109,11 +175,25 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
+    val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
+    if (rq == "/stream") {
+      // ignore any fields / filters when processing a streaming expression
+      return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
+    }
+    
     log.info("Fields passed down from scanner: " + fields.mkString(","))
     log.info("Filters passed down from scanner: " + filters.mkString(","))
+
+    // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
+    // that the baseSchema must be defined if we get to this point
+    if (!baseSchema.isDefined) {
+      throw new IllegalStateException("No base schema defined for collection "+conf.getCollection.get)
+    }
+
+    val collectionBaseSchema = baseSchema.get
     if (fields != null && fields.length > 0) {
       // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
-      if (this.baseSchema.size == fields.length) {
+      if (collectionBaseSchema.size == fields.length) {
         // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
         if (conf.docValues.getOrElse(false)) {
           fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
@@ -131,14 +211,14 @@ class SolrRelation(
     // We use aliasing to retrieve docValues (that are indexed and not stored). This can be removed after upgrading to 5.5
     if (query.getFields != null && query.getFields.length > 0) {
       if (conf.docValues.getOrElse(false)) {
-        SolrRelationUtil.setAliases(query.getFields.split(","), query, baseSchema)
+        SolrRelationUtil.setAliases(query.getFields.split(","), query, collectionBaseSchema)
       }
     }
 
     // Clear all existing filters except the original filters set in the config.
     if (!filters.isEmpty) {
       query.setFilterQueries(queryFilters:_*)
-      filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, baseSchema))
+      filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, collectionBaseSchema))
     } else {
       query.setFilterQueries(queryFilters:_*)
     }
@@ -159,8 +239,8 @@ class SolrRelation(
     }
 
     try {
-      val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, baseSchema) else schema
-      if (solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) != "/export" && !conf.useCursorMarks.getOrElse(false)) {
+      val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
+      if (rq != "/export" && rq != "/stream" && rq != "/sql" && !conf.useCursorMarks.getOrElse(false)) {
         log.info("Checking the query and sort fields to determine if streaming is possible")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
@@ -180,7 +260,7 @@ class SolrRelation(
         log.info("Existing sort clauses: " + sortClauses.mkString(","))
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
-            SolrRelation.checkSortFieldsForDV(baseSchema, sortClauses)
+            SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
           else
             if (isFDV) {
               SolrRelation.addSortField(querySchema, query)
@@ -188,7 +268,7 @@ class SolrRelation(
             }
             else
               false
-        val requestHandler = if (isFDV && isSDV) "/export" else DEFAULT_REQUEST_HANDLER
+        val requestHandler = if (isFDV && isSDV) "/export" else rq
         log.info("requestHandler is '" +  requestHandler + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
@@ -331,12 +411,13 @@ class SolrRelation(
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
 
+    if (conf.getStreamingExpr.isDefined) {
+      query.setRequestHandler("/stream")
+      query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get)
+    }
+
     if (solrFields.nonEmpty) {
       query.setFields(solrFields:_*)
-    } else {
-      // We add all the defaults fields to retrieve docValues that are not stored. We should remove this after 5.5 release
-      if (conf.docValues.getOrElse(false))
-        SolrRelationUtil.applyDefaultFields(baseSchema, query, conf.flattenMultivalued.getOrElse(true))
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
@@ -417,4 +498,6 @@ object SolrRelation extends Logging {
     log.info("Added sort field '" + query.getSortField + "' to the query")
   }
 }
+
+case class StreamFields(collection:String,fields:ListBuffer[String])
 

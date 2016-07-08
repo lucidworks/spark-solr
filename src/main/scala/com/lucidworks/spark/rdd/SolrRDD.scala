@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
+import com.lucidworks.spark.query.{CloudStreamIterator, ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
@@ -70,6 +70,10 @@ class SolrRDD(
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     split match {
+      case partition: CloudStreamPartition =>
+        logInfo(s"Using CloudStreamIterator to process streaming expression for ${partition}")
+        val resultsIterator = new CloudStreamIterator(partition.zkhost, partition.collection, partition.params)
+        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
       case partition: SolrRDDPartition =>
         log.info("Computing the partition " + partition.index + " on host name " + context.taskMetrics().hostname)
 
@@ -100,10 +104,16 @@ class SolrRDD(
   }
 
   override protected def getPartitions: Array[Partition] = {
-    val shards = SolrSupport.buildShardList(zkHost, collection)
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
+    val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
+    if (rq == "/stream") {
+      logInfo(s"Using SolrCloud stream partitioning scheme to process streaming expression for collection ${collection}")
+      return Array(new CloudStreamPartition(0, zkHost, collection, query))
+    }
+
+    val shards = SolrSupport.buildShardList(zkHost, collection)
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    if (requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) != "/export")
+    if (rq != "/export")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
@@ -115,6 +125,7 @@ class SolrRDD(
   override def getPreferredLocations(split: Partition): Seq[String] = {
     val urls: Seq[String] = Seq.empty
     split match {
+      case partition: CloudStreamPartition => Seq.empty
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case partition: AnyRef => log.warn("Unknown partition type '" + partition.getClass + "'")
     }

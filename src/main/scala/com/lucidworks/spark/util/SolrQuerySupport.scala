@@ -10,7 +10,6 @@ import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBi
 import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj._
-import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList

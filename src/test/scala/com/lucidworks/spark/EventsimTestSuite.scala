@@ -203,13 +203,13 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_COLLECTION_PARAM -> collectionName
     )
     val solrRelation = new SolrRelation(options, sqlContext, None)
-    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema)
+    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema.get)
     val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
     assert(areFieldsDocValues)
 
     solrRelation.query.addSort("registration", SolrQuery.ORDER.asc)
     val sortClauses = solrRelation.query.getSorts.asScala.toList
-    val isSortFieldDocValue = SolrRelation.checkSortFieldsForDV(solrRelation.baseSchema, sortClauses)
+    val isSortFieldDocValue = SolrRelation.checkSortFieldsForDV(solrRelation.baseSchema.get, sortClauses)
     assert(!isSortFieldDocValue)
 
     solrRelation.query.setSorts(Collections.emptyList())

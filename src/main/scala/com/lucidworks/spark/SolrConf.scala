@@ -24,6 +24,13 @@ class SolrConf(config: Map[String, String]) extends Logging {
     None
   }
 
+  def getStreamingExpr: Option[String] = {
+    if (config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      return config.get(SOLR_STREAMING_EXPR)
+    }
+    None
+  }
+
   def getFields: Array[String] = {
     if (config.contains(SOLR_FIELD_PARAM) && config.get(SOLR_FIELD_PARAM).isDefined) {
       return config.get(SOLR_FIELD_PARAM).get.split(",").map(field => field.trim)
@@ -108,6 +115,12 @@ class SolrConf(config: Map[String, String]) extends Logging {
         return Some("/export")
       }
       return None
+    }
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
+      logInfo(s"Set ${REQUEST_HANDLER} to /stream because ${SOLR_STREAMING_EXPR} is set.")
+      return Some("/stream")
     }
 
     if (config.contains(REQUEST_HANDLER) && config.get(REQUEST_HANDLER).isDefined) {
