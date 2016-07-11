@@ -457,13 +457,13 @@ object SolrSupport extends Logging {
     for(col <- collection.split(",")) {
       if (clusterState.hasCollection(col)) {
         collections = collections :+ col
-    }
+      }
     else {
       val aliases: Aliases = zkStateReader.getAliases
       val aliasedCollections: String = aliases.getCollectionAlias(col)
-        if (aliasedCollections == null) {
-          throw new IllegalArgumentException("Collection " + col + " not found!")
-        }
+      if (aliasedCollections == null) {
+        throw new IllegalArgumentException("Collection " + col + " not found!")
+      }
       collections = aliasedCollections.split(",")
       }
     }

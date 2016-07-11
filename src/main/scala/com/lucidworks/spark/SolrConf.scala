@@ -19,6 +19,7 @@ class SolrConf(config: Map[String, String]) extends Logging {
     None
   }
 
+
   def getQuery: Option[String] = {
     if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
     None
@@ -154,6 +155,37 @@ class SolrConf(config: Map[String, String]) extends Logging {
     if (config.contains(SAMPLE_PCT) && config.get(SAMPLE_PCT).isDefined) {
       return Some(config.get(SAMPLE_PCT).get.toFloat)
     }
+    None
+  }
+
+  def partition_by: Option[String]={
+    if (config.contains(PARTITION_BY) && config.get(PARTITION_BY).isDefined) {
+      return Some(config.get(PARTITION_BY).get.toString)
+    }
+    None
+  }
+
+  def getTimeStampFieldName: Option[String]={
+    if (config.contains(TIME_STAMP_FIELD_NAME) && config.get(TIME_STAMP_FIELD_NAME).isDefined) return (config.get(TIME_STAMP_FIELD_NAME))
+    None
+  }
+
+  def getTimePeriod: Option[String]={
+    if (config.contains(TIME_PERIOD) && config.get(TIME_PERIOD).isDefined) return (config.get(TIME_PERIOD))
+    None
+  }
+
+  def getDateTimePattern: Option[String]={
+    if (config.contains(DATETIME_PATTERN) && config.get(DATETIME_PATTERN).isDefined) return (config.get(DATETIME_PATTERN))
+    None
+  }
+
+  def getTimeZoneId: Option[String]={
+    if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
+    None
+  }
+  def getMaxActivePartitions: Option[String]={
+    if (config.contains(MAX_ACTIVE_PARTITIONS) && config.get(MAX_ACTIVE_PARTITIONS).isDefined) return (config.get(MAX_ACTIVE_PARTITIONS))
     None
   }
 
