@@ -46,7 +46,7 @@ class SolrRelation(
   }
 
   checkRequiredParams()
-  var collection=conf.getCollection.get
+  var collection = conf.getCollection.get
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
@@ -54,10 +54,10 @@ class SolrRelation(
   val sc = sqlContext.sparkContext
 
   if (!conf.partition_by.isEmpty && conf.partition_by.get=="time") {
-    val feature=new PartitionByTimeQueryParams(conf)
-    val p=new PartitionByTimeQuerySupport(feature,conf)
-    val allCollections=p.getPartitionsForQuery()
-    collection=allCollections mkString ","
+    val feature = new PartitionByTimeQueryParams(conf)
+    val p = new PartitionByTimeQuerySupport(feature,conf)
+    val allCollections = p.getPartitionsForQuery()
+    collection = allCollections mkString ","
   }
 
   val solrRDD = {
@@ -103,7 +103,7 @@ class SolrRelation(
       dataFrame.get.schema
     } else {
       if (query.getFields != null) {
-        baseSchema = Some(getBaseSchemaFromConfig(solrFields))
+        baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
       } else if (conf.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) == "/stream") {
         // we have to figure out the schema of the streaming expression
@@ -127,17 +127,17 @@ class SolrRelation(
         logInfo(s"Created combined schema for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else {
-        baseSchema = Some(getBaseSchemaFromConfig(solrFields))
+        baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         baseSchema.get
       }
     }
   }
 
-  def getBaseSchemaFromConfig(solrFields: Array[String]) : StructType = {
+  def getBaseSchemaFromConfig(collection: String, solrFields: Array[String]) : StructType = {
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,
       conf.getZkHost.get,
-      conf.getCollection.get.split(",")(0),
+      collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
       conf.flattenMultivalued.getOrElse(true))
   }
