@@ -1,11 +1,10 @@
 package com.lucidworks.spark
 
-
-
+import org.apache.spark.Logging
 import org.apache.solr.common.params.ModifiableSolrParams
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config:Map[String, String]){
+class SolrConf(config: Map[String, String]) extends Logging {
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
@@ -23,6 +22,13 @@ class SolrConf(config:Map[String, String]){
 
   def getQuery: Option[String] = {
     if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
+    None
+  }
+
+  def getStreamingExpr: Option[String] = {
+    if (config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      return config.get(SOLR_STREAMING_EXPR)
+    }
     None
   }
 
@@ -101,9 +107,25 @@ class SolrConf(config:Map[String, String]){
     None
   }
 
-  def useExportHandler: Option[Boolean] = {
-    if (config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
-      return Some(config.get(USE_EXPORT_HANDLER).get.toBoolean)
+  def requestHandler: Option[String] = {
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
+      logWarning(s"The ${USE_EXPORT_HANDLER} option is no longer supported, please switch to using the ${REQUEST_HANDLER} -> /export option!")
+      val useExportHandler =
+      if (config.get(USE_EXPORT_HANDLER).get.toBoolean) {
+        return Some("/export")
+      }
+      return None
+    }
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
+      logInfo(s"Set ${REQUEST_HANDLER} to /stream because ${SOLR_STREAMING_EXPR} is set.")
+      return Some("/stream")
+    }
+
+    if (config.contains(REQUEST_HANDLER) && config.get(REQUEST_HANDLER).isDefined) {
+      return Some(config.get(REQUEST_HANDLER).get)
     }
     None
   }

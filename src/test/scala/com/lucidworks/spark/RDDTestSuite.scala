@@ -2,7 +2,9 @@ package com.lucidworks.spark
 
 import java.util.UUID
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
+import org.apache.solr.client.solrj.SolrQuery
 
 import org.apache.spark.Logging
 import org.scalatest.Ignore
@@ -57,4 +59,28 @@ class RDDTestSuite extends TestSuiteBuilder with Logging {
     }
   }
 
+  test("Test Streaming Expression") {
+    val collectionName = "testStreamingExpr" + UUID.randomUUID().toString
+    val numDocs = 10
+    SolrCloudUtil.buildCollection(zkHost, collectionName, numDocs, 1, cloudClient, sc)
+    
+    val expr : String =
+      s"""
+        |search(${collectionName},
+        |       q="*:*",
+        |       fl="field1_s",
+        |       sort="field1_s asc",
+        |       qt="/export")
+      """.stripMargin
+    try {
+      val solrQuery = new SolrQuery()
+      solrQuery.set(SOLR_STREAMING_EXPR, expr)
+      val streamExprRDD = new SolrRDD(zkHost, collectionName, sc, Some("/stream"))
+      assert(streamExprRDD.requestHandler.get == "/stream")
+      val results = streamExprRDD.query(solrQuery).collect()
+      assert(results.size == numDocs)
+    } finally {
+      SolrCloudUtil.deleteCollection(collectionName, cluster)
+    }
+  }
 }
