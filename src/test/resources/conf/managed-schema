@@ -5,6 +5,8 @@
   <field name="id" type="string" indexed="true" stored="true" required="true"/>
   <field name="_raw_content_" type="binary" multiValued="false" indexed="false" required="false" stored="true"/>
   <field name="images" type="binary" multiValued="true" indexed="false" required="false" stored="true"/>
+  <field name="field1_s" indexed="true" stored="true" type="string" docValues="true"/>
+
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
