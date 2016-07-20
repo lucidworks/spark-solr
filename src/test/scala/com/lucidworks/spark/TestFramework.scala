@@ -4,17 +4,18 @@ import java.io.File
 import java.util.UUID
 
 import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.{Logging, SparkConf, SparkContext}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
 import org.restlet.ext.servlet.ServerServlet
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
-trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite =>
+trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Suite =>
 
   @transient var cluster: MiniSolrCloudCluster = _
   @transient var cloudClient: CloudSolrClient = _

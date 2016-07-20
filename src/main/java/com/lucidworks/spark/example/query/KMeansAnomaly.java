@@ -9,7 +9,6 @@ import com.lucidworks.spark.util.SolrSupport;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
-import org.apache.hadoop.hive.ql.exec.spark.session.SparkSession;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -68,7 +67,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     String queryStr = cli.getOptionValue("query", getLogsQuery);
 
     JavaSparkContext jsc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new HiveContext(jsc.sc());
+    SQLContext sqlContext = new SQLContext(jsc.sc());
 
     Map<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);

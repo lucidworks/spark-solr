@@ -12,7 +12,7 @@ class TwitterTestSuite extends SparkSolrFunSuite {
     val tweetStatusObj = TwitterObjectFactory.createStatus(tweetJSON)
     // simple mapping from primitives to dynamic Solr fields using reflection
     val doc: SolrInputDocument = SolrSupport.autoMapToSolrInputDoc("tweet-" + tweetStatusObj.getId, tweetStatusObj, null)
-    log.info("Mapped to Document: " + doc.toString)
+    logger.info("Mapped to Document: " + doc.toString)
 
     assert(doc.containsKey("createdAt_tdt"))
     assert(doc.containsKey("lang_s"))

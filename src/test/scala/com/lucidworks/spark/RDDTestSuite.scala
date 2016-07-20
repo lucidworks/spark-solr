@@ -3,11 +3,9 @@ package com.lucidworks.spark
 import java.util.UUID
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrCloudUtil
+import com.typesafe.scalalogging.LazyLogging
 
-import org.apache.spark.Logging
-import org.scalatest.Ignore
-
-class RDDTestSuite extends TestSuiteBuilder with Logging {
+class RDDTestSuite extends TestSuiteBuilder with  LazyLogging {
 
   test("Test Simple Query") {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString

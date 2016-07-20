@@ -38,7 +38,7 @@ public class UseML implements SparkApp.RDDProcessor {
     SQLContext sqlContext = new SQLContext(jsc);
 
     long diffMs = (System.currentTimeMillis() - startMs);
-    System.out.println(">> took "+diffMs+" ms to create SQLContext");
+    System.out.println(">> took " + diffMs + " ms to create SQLContext");
 
     Map<String, String> options = new HashMap<>();
     options.put("zkhost", "localhost:9983");
@@ -46,9 +46,9 @@ public class UseML implements SparkApp.RDDProcessor {
     options.put("query", "content_txt:[* TO *]");
     options.put("fields", "content_txt");
 
-    DataFrame solrData = sqlContext.read().format("solr").options(options).load();
-    DataFrame sample = solrData.sample(false, 0.1d, 5150).select("content_txt");
-    List<Row> rows = sample.collectAsList();
+    Dataset solrData = sqlContext.read().format("solr").options(options).load();
+    Dataset sample = solrData.sample(false, 0.1d, 5150).select("content_txt");
+    List<Object> rows = sample.collectAsList();
     System.out.println(">> loaded "+rows.size()+" docs to classify");
 
     StructType schema = sample.schema();
@@ -58,11 +58,13 @@ public class UseML implements SparkApp.RDDProcessor {
 
     int r=0;
     startMs = System.currentTimeMillis();
-    for (Row next : rows) {
+    for (Object o : rows) {
+      Row next = (Row) o;
       Row oneRow = RowFactory.create(next.getString(0));
-      DataFrame oneRowDF = sqlContext.createDataFrame(Collections.<Row>singletonList(oneRow), schema);
-      DataFrame scored = bestModel.transform(oneRowDF);
-      Row scoredRow = scored.collect()[0];
+      Dataset oneRowDF = sqlContext.createDataFrame(Collections.<Row>singletonList(oneRow), schema);
+      Dataset scored = bestModel.transform(oneRowDF);
+      Object o1 = scored.collectAsList().get(0);
+      Row scoredRow = (Row) o1;
       String predictedLabel = scoredRow.getString(scoredRow.fieldIndex("predictedLabel"));
 
       // an acutal app would save the predictedLabel

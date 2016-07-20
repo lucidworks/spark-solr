@@ -37,13 +37,13 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setInputCol("rawText")
       .setOutputCol("tokens")  // Default analysis schema: StandardTokenizer + LowerCaseFilter
 
-    val dataset1 = sqlContext.createDataFrame(Seq(
+    val dataset1 = spark.createDataFrame(Seq(
       TokenizerTestData("Test for tokenization.", Array("test", "for", "tokenization")),
       TokenizerTestData("Te,st. punct", Array("te", "st", "punct"))
     ))
     testLuceneTextAnalyzerTransformer(analyzer1, dataset1)
 
-    val dataset2 = sqlContext.createDataFrame(Seq(
+    val dataset2 = spark.createDataFrame(Seq(
       TokenizerTestData("我是中国人。 １２３４ Ｔｅｓｔｓ ",
         Array("我", "是", "中", "国", "人", "１２３４", "Ｔｅｓｔｓ")),
       TokenizerTestData("some-dashed-phrase", Array("some", "dashed", "phrase"))
@@ -84,7 +84,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setAnalysisSchema(analyzerConfig3)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset3 = sqlContext.createDataFrame(Seq(
+    val dataset3 = spark.createDataFrame(Seq(
       TokenizerTestData("Test for tokenization.",
         Array("Tes", "t", "for", "tok", "eni", "zat", "ion")),
       TokenizerTestData("Te,st.  punct", Array("Te", "st", "pun", "ct"))
@@ -115,7 +115,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setAnalysisSchema(analyzerConfig1)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset1 = sqlContext.createDataFrame(Seq(
+    val dataset1 = spark.createDataFrame(Seq(
       TokenizerTestData("Test for 9983, tokenization.", Array("9983")),
       TokenizerTestData("Te,st. punct", Array())
     ))
@@ -142,7 +142,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
                             |  }]
                             |}""".stripMargin
     analyzer.setAnalysisSchema(analyzerConfig2)
-    val dataset2 = sqlContext.createDataFrame(Seq(
+    val dataset2 = spark.createDataFrame(Seq(
       TokenizerTestData(
         "<html><body>remove<b>me</b> but leave<div>the&nbsp;rest.</div></body></html>",
         Array("but", "leave", "the", "rest"))
@@ -178,7 +178,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset = sqlContext.createDataFrame(Seq(
+    val dataset = spark.createDataFrame(Seq(
       TokenizerTestData("Harold's not around.", Array("harold", "around")),
       TokenizerTestData("The dog's nose KNOWS!", Array("dog", "nose", "knows"))
     ))
@@ -204,7 +204,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setAnalysisSchema(analyzerConfig)
       .setInputCol("rawText")
       .setOutputCol("tokens")
-    val dataset = sqlContext.createDataFrame(Seq(
+    val dataset = spark.createDataFrame(Seq(
       TokenizerTestData("Click on https://www.google.com/#q=spark+lucene",
         Array("Click", "on", "https://www.google.com/#q=spark+lucene")),
       TokenizerTestData("Email caffeine@coffee.biz for tips on staying@alert",
@@ -226,7 +226,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setInputCol("rawText")
       .setOutputCol("tokens")
 
-    val dataset1 = sqlContext.createDataFrame(Seq(
+    val dataset1 = spark.createDataFrame(Seq(
       TokenizerTestData("Test for tokenization.", Array("Test", "for", "tokenization.")),
       TokenizerTestData("Te,st. punct", Array("Te,st.", "punct"))
     ))
@@ -237,7 +237,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
     val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText"))
       .setOutputCol("tokens")
-    val dataset = sqlContext.createDataFrame(Seq(
+    val dataset = spark.createDataFrame(Seq(
       MV_TokenizerTestData(Array("Harold's not around.", "The dog's nose KNOWS!"),
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
@@ -248,7 +248,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
     val analyzer1 = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
-    val dataset1 = sqlContext.createDataFrame(Seq(
+    val dataset1 = spark.createDataFrame(Seq(
       SV_SV_TokenizerTestData("Harold's not around.", "The dog's nose KNOWS!",
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
@@ -284,19 +284,19 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
       .setAnalysisSchema(analyzerConfig)
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
-    val dataset2 = sqlContext.createDataFrame(Seq(
+    val dataset2 = spark.createDataFrame(Seq(
       SV_SV_TokenizerTestData("Harold's NOT around.", "The dog's nose KNOWS!",
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS"))
     ))
     testLuceneTextAnalyzerTransformer(analyzer2, dataset2)
 
-    val dataset3 = sqlContext.createDataFrame(Seq(
+    val dataset3 = spark.createDataFrame(Seq(
       SV_MV_TokenizerTestData("Harold's NOT around.", Array("The dog's nose KNOWS!", "Good, fine, great..."),
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "Good", "fine", "great"))
     ))
     testLuceneTextAnalyzerTransformer(analyzer2, dataset3)
 
-    val dataset4 = sqlContext.createDataFrame(Seq(
+    val dataset4 = spark.createDataFrame(Seq(
       MV_MV_TokenizerTestData(Array("Harold's NOT around.", "Anymore, I mean."),
         Array("The dog's nose KNOWS!", "Good, fine, great..."),
         Array("harold's", "not", "around", "anymore", "i", "mean",
@@ -305,7 +305,7 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
     testLuceneTextAnalyzerTransformer(analyzer2, dataset4)
 
     analyzer2.setInputCols(Array("rawText1", "rawText2", "rawText3"))
-    val dataset5 = sqlContext.createDataFrame(Seq(
+    val dataset5 = spark.createDataFrame(Seq(
       SV_SV_SV_TokenizerTestData(
         "Harold's NOT around.", "The dog's nose KNOWS!", "<html><body>Content</body></html>",
         Array("harold's", "not", "around", "The", "dog's", "nose", "KNOWS", "content"))
@@ -327,13 +327,13 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
     val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText1", "rawText2"))
       .setOutputCol("tokens")
-    val dataset = sqlContext.createDataFrame(
+    val dataset = spark.createDataFrame(
       Seq(MV_MV_TokenizerTestData(rawText1, rawText2, tokens)))
     testLuceneTextAnalyzerTransformer(analyzer, dataset)
 
     // Then transform with token prefixes
     analyzer.setPrefixTokensWithInputCol(true)
-    val prefixedDataset = sqlContext.createDataFrame(
+    val prefixedDataset = spark.createDataFrame(
       Seq(MV_MV_TokenizerTestData(rawText1, rawText2, prefixedTokens)))
     testLuceneTextAnalyzerTransformer(analyzer, prefixedDataset)
   }
@@ -342,20 +342,20 @@ class LuceneTextAnalyzerTransformerSuite extends SparkSolrFunSuite with MLlibTes
     val analyzer = new LuceneTextAnalyzerTransformer()
       .setInputCols(Array("rawText"))
       .setOutputCol("tokens")
-    val dataset1 = sqlContext.createDataFrame(Seq(TokenizerTestData(null, Array())))
+    val dataset1 = spark.createDataFrame(Seq(TokenizerTestData(null, Array())))
     testLuceneTextAnalyzerTransformer(analyzer, dataset1)
 
-    val dataset2 = sqlContext.createDataFrame(Seq(TokenizerTestData("", Array())))
+    val dataset2 = spark.createDataFrame(Seq(TokenizerTestData("", Array())))
     testLuceneTextAnalyzerTransformer(analyzer, dataset2)
 
-    val dataset3 = sqlContext.createDataFrame(Seq(
+    val dataset3 = spark.createDataFrame(Seq(
       MV_TokenizerTestData(Array(null, "Harold's not around.", null, "The dog's nose KNOWS!", ""),
         Array("harold's", "not", "around", "the", "dog's", "nose", "knows"))
     ))
     testLuceneTextAnalyzerTransformer(analyzer, dataset3)
 
     analyzer.setInputCols(Array("rawText1", "rawText2", "rawText3"))
-    val dataset4 = sqlContext.createDataFrame(Seq(
+    val dataset4 = spark.createDataFrame(Seq(
       SV_SV_SV_TokenizerTestData("", "The dog's nose KNOWS!", null,
         Array("the", "dog's", "nose", "knows"))
     ))

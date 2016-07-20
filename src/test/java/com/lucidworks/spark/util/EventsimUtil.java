@@ -6,10 +6,8 @@ import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.schema.SchemaRequest;
-import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.client.solrj.response.schema.SchemaResponse;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
@@ -20,7 +18,6 @@ import scala.collection.immutable.Set$;
 import java.io.File;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.Date;
 
 import static com.lucidworks.spark.util.SolrQuerySupport.getFieldTypes;
 
@@ -46,7 +43,7 @@ public class EventsimUtil {
     List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
     });
     JavaConversions.asScalaSet(new HashSet<>());
-    Map<String, SolrFieldMeta> fields = JavaConversions.asJavaMap(getFieldTypes(
+    Map<String, SolrFieldMeta> fields = JavaConversions.mapAsJavaMap(getFieldTypes(
       Set$.MODULE$.<String>empty(),
       SolrSupport.getSolrBaseUrl(zkHost),
       collectionName));
@@ -77,7 +74,7 @@ public class EventsimUtil {
    */
   public static void loadEventSimDataSet(String zkHost, String collectionName, SQLContext sqlContext) throws Exception {
     String datasetPath = "src/test/resources/eventsim/sample_eventsim_1000.json";
-    DataFrame df = sqlContext.read().json(datasetPath);
+    Dataset df = sqlContext.read().json(datasetPath);
     // Modify the unix timestamp to ISO format for Solr
     log.info("Indexing eventsim documents from file " + datasetPath);
 
@@ -89,7 +86,7 @@ public class EventsimUtil {
     }, DataTypes.TimestampType);
 
     // Registering an UDF and re-using it via DataFrames is not available through Java right now.
-    DataFrame newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
+    Dataset newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
       "length, level, location, method, page, sessionId, song,  " +
       "ts2ISO(registration) AS registration, ts2ISO(ts) AS ts, status from jdbcDF");
 

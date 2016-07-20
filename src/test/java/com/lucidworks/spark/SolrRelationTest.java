@@ -5,16 +5,10 @@ import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.spark.sql.DataFrame;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.*;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.*;
-import org.junit.Ignore;
 import org.junit.Test;
-
-import org.apache.spark.sql.functions;
 
 import javax.xml.bind.DatatypeConverter;
 import java.io.File;
@@ -47,7 +41,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(SAMPLE_SEED(), "5150");
       options.put(SAMPLE_PCT(), "0.1");
-      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
       long count = fromSolr.count();
 
       System.out.println("\n\n"+count+"\n\n");
@@ -66,7 +60,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       SQLContext sqlContext = new SQLContext(jsc);
 
       // load test data from json file to index into Solr
-      DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/oneusagov/oneusagov_sample.json");
+      Dataset eventsDF = sqlContext.read().json("src/test/resources/test-data/oneusagov/oneusagov_sample.json");
       eventsDF = eventsDF.withColumnRenamed("_id", "id");
 
       sqlContext.udf().register("secs2ts", new UDF1<Long, Timestamp>() {
@@ -129,7 +123,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       dumpSolrCollection(testCollection, q);
 
       // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
       fromSolr.printSchema();
 
       List<Row> rows = fromSolr.collectAsList();
@@ -156,7 +150,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       SQLContext sqlContext = new SQLContext(jsc);
 
       // load test data from json file to index into Solr
-      DataFrame eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
+      Dataset eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
       eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
 
       deleteCollection(testCollection);
@@ -179,7 +173,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       SQLContext sqlContext = new SQLContext(jsc);
 
       // load test data from json file to index into Solr
-      DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
+      Dataset aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
       aggDF = aggDF.select("id","aggr_count_l","aggr_id_s","aggr_job_id_s","aggr_type_s",
         "co_occurring_docIds_counts_ls","co_occurring_docIds_ss","entity_id_s","entity_type_s",
         "flag_s","grouping_key_s","in_session_ids_counts_ls","in_session_ids_ss","in_user_id_s",
@@ -228,12 +222,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-    DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort("id");
     fromSolr.printSchema();
 
-    Row[] docsFromSolr = fromSolr.collect();
-    assertTrue(docsFromSolr.length == 4);
+    List<Object> docsFromSolr = fromSolr.collectAsList();
+    assertTrue(docsFromSolr.size() == 4);
   }
 
   //@Ignore
@@ -259,7 +253,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(FLATTEN_MULTIVALUED(), "false");
 
-      DataFrame df = sqlContext.read().format("solr").options(options).load();
+      Dataset df = sqlContext.read().format("solr").options(options).load();
       df.show();
       validateSchema(df);
       //df.show();
@@ -267,9 +261,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       long count = df.count();
       assertCount(testData.length, count, "*:*");
 
-      Row[] rows = df.collect();
-      for (int r=0; r < rows.length; r++) {
-        Row row = rows[r];
+      List<Object> rows = df.collectAsList();
+      for (int r=0; r < rows.size(); r++) {
+        Row row = (Row) rows.get(r);
         List val = row.getList(row.fieldIndex("field4_ss"));
         assertNotNull(val);
 
@@ -326,7 +320,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
       Thread.sleep(1000);
 
-      DataFrame df2 = sqlContext.read().format("solr").options(options).load();
+      Dataset df2 = sqlContext.read().format("solr").options(options).load();
       df2.show();
     } finally {
       deleteCollection(testCollection);
@@ -341,12 +335,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
 
-  protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
+  protected static List<Object> validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, Dataset sourceData) throws Exception {
     String idFieldName = "id";
 
     sourceData = sourceData.sort(idFieldName);
     sourceData.printSchema();
-    Row[] testData = sourceData.collect();
+    List<Object> testData = sourceData.collectAsList();
     String[] cols = sourceData.columns();
 
     String zkHost = cluster.getZkServer().getZkAddress();
@@ -370,11 +364,11 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     System.out.println("\n\n>> reading data from Solr using options: "+options+"\n\n");
 
-    DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort(idFieldName);
     fromSolr.printSchema();
 
-    Row[] docsFromSolr = fromSolr.collect();
+    List<Object> docsFromSolr = fromSolr.collectAsList();
     Set<String> solrCols = new TreeSet<>();
     solrCols.addAll(Arrays.asList(fromSolr.columns()));
     for (String col : cols) {
@@ -383,11 +377,11 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       }
     }
 
-    long actualEvents = docsFromSolr.length;
-    assertTrue("Expected " + testData.length + " docs from Solr, but found: " + actualEvents, actualEvents == testData.length);
-    for (int e=0; e < testData.length; e++) {
-      Row exp = testData[e];
-      Row doc = docsFromSolr[e];
+    long actualEvents = docsFromSolr.size();
+    assertTrue("Expected " + testData.size() + " docs from Solr, but found: " + actualEvents, actualEvents == testData.size());
+    for (int e=0; e < testData.size(); e++) {
+      Row exp = (Row) testData.get(e);
+      Row doc = (Row) docsFromSolr.get(e);
       for (String col : cols) {
         Object expVal = exp.get(exp.fieldIndex(col));
         Object actVal = doc.get(doc.fieldIndex(col));
@@ -402,7 +396,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     assertTrue("expected count == " + expected + " but got " + actual + " for " + expr, expected == actual);
   }
 
-  protected void validateSchema(DataFrame df) {
+  protected void validateSchema(Dataset df) {
     df.printSchema();
     StructType schema = df.schema();
     assertNotNull(schema);

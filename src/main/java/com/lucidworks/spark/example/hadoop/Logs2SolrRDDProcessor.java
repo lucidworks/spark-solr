@@ -8,6 +8,7 @@ import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.log4j.Logger;
+import org.apache.parquet.Closeables;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.SparkConf;
@@ -67,13 +68,13 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
               doc.setField("line_t", line);
               batch.add(doc);
               if (batch.size() >= batchSize)
-                SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.asScalaIterable(batch));
+                SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.collectionAsScalaIterable(batch));
 
               if (lineNum % 10000 == 0)
                 log.info("Sent "+lineNum+" docs to Solr from "+path);
             }
             if (!batch.isEmpty())
-              SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.asScalaIterable(batch));
+              SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.collectionAsScalaIterable(batch));
           } catch (Exception exc) {
             log.error("Failed to read '" + path + "' due to: " + exc);
           } finally {
@@ -82,7 +83,6 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
                 br.close();
               } catch (Exception ignore) {}
             }
-            t2._2().close();
           }
         }
 

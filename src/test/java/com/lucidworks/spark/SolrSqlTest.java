@@ -2,7 +2,7 @@ package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.EventsimUtil;
 import junit.framework.Assert;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataTypes;
@@ -47,12 +47,12 @@ public class SolrSqlTest extends RDDProcessorTestBase{
       options.put(SOLR_QUERY_PARAM(), "*:*");
 
       {
-        DataFrame eventsim = sqlContext.read().format("solr").options(options).option(SOLR_DOC_VALUES(), "true").load();
+        Dataset eventsim = sqlContext.read().format("solr").options(options).option(SOLR_DOC_VALUES(), "true").load();
         eventsim.registerTempTable("eventsim");
 
-        DataFrame records = sqlContext.sql("SELECT * FROM eventsim");
+        Dataset records = sqlContext.sql("SELECT * FROM eventsim");
         StructType schema = records.schema();
-        List<Row> rows = records.collectAsList();
+        List<Object> rows = records.collectAsList();
         assert records.count() == 1000;
 
         String[] fieldNames = schema.fieldNames();
@@ -64,15 +64,15 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert rows.get(0).length() == 21;
+        assert ((Row) rows.get(0)).length() == 21;
       }
 
       // Filter using SQL syntax and escape field names
       {
-        DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
+        Dataset eventsim = sqlContext.read().format("solr").options(options).load();
         eventsim.registerTempTable("eventsim");
 
-        DataFrame records = sqlContext.sql("SELECT `userId`, `ts` from eventsim WHERE `gender` = 'M'");
+        Dataset records = sqlContext.sql("SELECT `userId`, `ts` from eventsim WHERE `gender` = 'M'");
         assert records.count() == 567;
       }
 
@@ -81,9 +81,9 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         options.put(SOLR_SPLIT_FIELD_PARAM(), "sessionId");
         options.put(SOLR_SPLITS_PER_SHARD_PARAM(), "10");
         options.put(SOLR_DOC_VALUES(), "false");
-        DataFrame eventsim = sqlContext.read().format("solr").options(options).load();
+        Dataset eventsim = sqlContext.read().format("solr").options(options).load();
 
-        List<Row> rows = eventsim.collectAsList();
+        List<Object> rows = eventsim.collectAsList();
         assert rows.size() == 1000;
       }
     } finally {

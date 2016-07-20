@@ -359,9 +359,9 @@ public class LuceneTextAnalyzerTransformerTest {
 
   private <T> void assertExpectedTokens(LuceneTextAnalyzerTransformer analyzer, List<T> testData) {
     JavaRDD<T> rdd = jsc.parallelize(testData);
-    Row[] pairs = analyzer.transform(jsql.createDataFrame(rdd, testData.get(0).getClass()))
+    List<Row> pairs = analyzer.transform(jsql.createDataFrame(rdd, testData.get(0).getClass()))
         .select("wantedTokens", "tokens")
-        .collect();
+        .collectAsList();
     for (Row r : pairs) {
       Assert.assertEquals(r.get(0), r.get(1));
     }
