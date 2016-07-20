@@ -195,17 +195,19 @@ object SolrSupport extends Logging {
     val req = new UpdateRequest()
     req.setParam("collection", collection)
 
+    val initialTime = System.currentTimeMillis()
+
     if (commitWithin.isDefined)
       req.setCommitWithin(commitWithin.get)
 
-    if (log.isDebugEnabled) {
-      log.debug("Sending batch of " + batch.size + " to collection " + collection)
-    }
+    log.info("Sending batch of " + batch.size + " to collection " + collection)
 
     req.add(asJavaCollection(batch))
 
     try {
       solrClient.request(req)
+      val timeTaken = (System.currentTimeMillis() - initialTime)/1000.0
+      log.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents")
     } catch {
       case e: Exception =>
         if (shouldRetry(e)) {
