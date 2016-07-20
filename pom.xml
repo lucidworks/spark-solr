@@ -39,7 +39,7 @@
     <java.version>1.8</java.version>
     <spark.version>1.6.1</spark.version>
     <solr.version>6.1.0</solr.version>
-    <fasterxml.version>2.7.1</fasterxml.version>
+    <fasterxml.version>2.3.1</fasterxml.version>
     <scala.version>2.10.5</scala.version>
     <scala.binary.version>2.10</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
@@ -499,7 +499,7 @@
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
       <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
-      <version>2.7.4</version>
+      <version>${fasterxml.version}</version>
     </dependency>
     <dependency>
       <groupId>org.scala-lang</groupId>
