@@ -12,4 +12,8 @@ class RelationTestSuite extends SparkSolrFunSuite {
     assert(unknownParams("fl"))
   }
 
+  test("facet streaming expression") {
+
+  }
+
 }
