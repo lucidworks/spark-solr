@@ -268,9 +268,10 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
-      if (rq != "/export" && rq != "/stream" && rq != "/sql" && !conf.useCursorMarks.getOrElse(false)) {
-        log.info("Checking the query and sort fields to determine if streaming is possible")
+      if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
+        log.info("Checking the query and sort fields to determine if streaming is possible for "+collection)
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
+        val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
         val sortClauses: List[SortClause] = query.getSorts.asScala.toList
         if (sortClauses.isEmpty) {
@@ -290,14 +291,14 @@ class SolrRelation(
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
           else
-            if (isFDV) {
+            if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
               true
             }
             else
               false
-        val requestHandler = if (isFDV && isSDV) "/export" else rq
-        log.info("requestHandler is '" +  requestHandler + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
+        val requestHandler = if (isFDV && isSDV && !hasUnsupportedExportTypes) "/export" else rq
+        logInfo(s"requestHandler: $requestHandler isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -310,6 +311,10 @@ class SolrRelation(
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
+  }
+
+  def requiresExportHandler(rq: String): Boolean = {
+    return rq == "/export" || rq == "/stream" || rq == "/sql"
   }
 
   def toSolrType(dataType: DataType): String = {
@@ -441,7 +446,7 @@ class SolrRelation(
 
     if (conf.getStreamingExpr.isDefined) {
       query.setRequestHandler("/stream")
-      query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get)
+      query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get.replaceAll("\\s+", " "))
     }
 
     if (solrFields.nonEmpty) {
@@ -524,6 +529,15 @@ object SolrRelation extends Logging {
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
     query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
     log.info("Added sort field '" + query.getSortField + "' to the query")
+  }
+
+  // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
+  def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
+    for (structField <- querySchema.fields) {
+      if (structField.dataType == BooleanType || structField.dataType == TimestampType)
+        return true
+    }
+    false
   }
 }
 

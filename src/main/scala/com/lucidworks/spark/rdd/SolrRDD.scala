@@ -113,8 +113,10 @@ class SolrRDD(
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    if (rq != "/export")
+    if (rq != "/export") {
+      logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
+    }
     val partitions = if (splitField.isDefined)
       SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
     if (log.isDebugEnabled)
