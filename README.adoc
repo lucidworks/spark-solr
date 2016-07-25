@@ -111,7 +111,7 @@ Cursors won't work if the index changes during the query time. Constrain your qu
 
 === Streaming API (/export)
 
-If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<request_handler -> /export>> allows you to enable Streaming API via DataFrame.
+If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<request_handler>> allows you to enable Streaming API via DataFrame.
 
 //end::querying[]
 
