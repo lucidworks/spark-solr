@@ -111,7 +111,7 @@ Cursors won't work if the index changes during the query time. Constrain your qu
 
 === Streaming API (/export)
 
-If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<use_export_handler>> allows you to enable Streaming API via DataFrame.
+If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<request_handler -> /export>> allows you to enable Streaming API via DataFrame.
 
 //end::querying[]
 
@@ -168,14 +168,14 @@ By default, the implementation uses 1000 rows but if your documents are smaller,
 Usage: `option("rows","10000")`
 Default: 1000
 
-==== use_export_handler
+==== request_handler
 
-This option is disabled by default and can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://cwiki.apache.org/confluence/display/solr/Exporting+Result+Sets[Exporting Result Sets] for more information.
+Set the Solr request handler for queries. This option can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://cwiki.apache.org/confluence/display/solr/Exporting+Result+Sets[Exporting Result Sets] for more information.
 
 The `/export` handler needs fields to be explicitly specified. Please use the `fields` option or specify the fields in the query.
 
-Usage: `option("use_export_handler", "true")`
-Default: true
+Usage: `option("request_handler", "/export")`
+Default: /select 
 
 ==== Increase Read Parallelism using Intra-Shard Splits
 
