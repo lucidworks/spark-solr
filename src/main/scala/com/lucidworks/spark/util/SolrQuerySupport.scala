@@ -138,8 +138,10 @@ object SolrQuerySupport extends Logging {
   }
 
   def addDefaultSort(solrQuery: SolrQuery, uniqueKey: String): Unit = {
-    if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty)
+    if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty) {
       solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey))
+      logInfo(s"Added default sort clause on uniqueKey field $uniqueKey to query $solrQuery")
+    }
   }
 
   def querySolr(

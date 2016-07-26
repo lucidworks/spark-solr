@@ -526,11 +526,17 @@ public class FusionPipelineClient {
   }
 
   public void postJsonToPipeline(String hostAndPort, String pipelinePath, List docs, int requestId) throws Exception {
-
     FusionSession fusionSession = getSession(hostAndPort, requestId);
-    HttpPost postRequest = new HttpPost(hostAndPort + pipelinePath);
+    String postUrl = hostAndPort + pipelinePath;
+    if (postUrl.indexOf("?") != -1) {
+      postUrl += "&echo=false";
+    } else {
+      postUrl += "?echo=false";
+    }
+
+    HttpPost postRequest = new HttpPost(postUrl);
     EntityTemplate et = new EntityTemplate(new JacksonContentProducer(jsonObjectMapper, docs));
-    et.setContentType("application/vnd.lucidworks-document");
+    et.setContentType("application/json");
     et.setContentEncoding(StandardCharsets.UTF_8.name());
     postRequest.setEntity(et);
 

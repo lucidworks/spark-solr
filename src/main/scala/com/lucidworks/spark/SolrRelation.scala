@@ -18,7 +18,6 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.Logging
 
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
@@ -26,7 +25,6 @@ import scala.reflect.runtime.universe._
 
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
-
 
 class SolrRelation(
     val parameters: Map[String, String],
@@ -109,7 +107,7 @@ class SolrRelation(
         // we have to figure out the schema of the streaming expression
         var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
-        streamingExpr.getParameters.asScala.foreach(next => findStreamingExpressionFields(next, streamOutputFields))
+        findStreamingExpressionFields(streamingExpr, streamOutputFields)
         logInfo(s"Found stream output fields: ${streamOutputFields}")
         var fieldSet : scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
         for (sf <- streamOutputFields) {
@@ -122,6 +120,10 @@ class SolrRelation(
               conf.flattenMultivalued.getOrElse(true))
           logInfo(s"Got stream schema: ${streamSchema} for ${sf}")
           streamSchema.fields.foreach(fld => fieldSet.add(fld))
+          sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
+        }
+        if (fieldSet.isEmpty) {
+          throw new IllegalStateException("Failed to extract schema fields for streaming expression: "+streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
         logInfo(s"Created combined schema for streaming expression: ${exprSchema}: ${exprSchema.fields}")
@@ -130,6 +132,14 @@ class SolrRelation(
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         baseSchema.get
       }
+    }
+  }
+
+  def toMetricStructField(m: String) : StructField = {
+    if (m.startsWith("count")) {
+      return new StructField(m, LongType)
+    } else {
+      return new StructField(m, DoubleType)
     }
   }
 
@@ -145,8 +155,8 @@ class SolrRelation(
   def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields]) : Unit = {
     expr match {
       case subExpr : StreamExpression =>
-        logInfo(s"found a sub expression with functionName: ${subExpr.getFunctionName}")
-        if (subExpr.getFunctionName == "search" || subExpr.getFunctionName == "random") {
+        val funcName = subExpr.getFunctionName
+        if (funcName == "search" || funcName == "random" || funcName == "facet") {
           extractSearchFields(subExpr).foreach(fld => streamOutputFields += fld)
         } else {
           subExpr.getParameters.asScala.foreach(subParam => findStreamingExpressionFields(subParam, streamOutputFields))
@@ -157,24 +167,32 @@ class SolrRelation(
   }
 
   def extractSearchFields(subExpr: StreamExpression) : Option[StreamFields] = {
+    logInfo(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
     var collection : Option[String] = Option.empty[String]
     var fields = scala.collection.mutable.ListBuffer.empty[String]
+    var metrics = scala.collection.mutable.ListBuffer.empty[String]
     subExpr.getParameters.asScala.foreach(sub => {
       sub match {
         case p : StreamExpressionNamedParameter =>
-          if (p.getName == "fl") {
+          if (p.getName == "fl" || p.getName == "buckets" && subExpr.getFunctionName == "facet") {
             p.getParameter match {
               case value : StreamExpressionValue => fields += value.getValue
               case _ => // ugly!
             }
           }
         case v : StreamExpressionValue => collection = Some(v.getValue)
+        case e : StreamExpression =>
+          if (subExpr.getFunctionName == "facet") {
+            // a metric for a facet stream
+            metrics += e.toString
+          }
         case _ => // ugly!
       }
     })
     if (collection.isDefined && !fields.isEmpty) {
-      logInfo(s"returning collection=${collection.get} and fields=${fields} for ${subExpr}")
-      return Some(new StreamFields(collection.get, fields))
+      val streamFields = new StreamFields(collection.get, fields, metrics)
+      logInfo(s"extracted $streamFields for $subExpr")
+      return Some(streamFields)
     }
     None
   }
@@ -250,9 +268,10 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
-      if (rq != "/export" && rq != "/stream" && rq != "/sql" && !conf.useCursorMarks.getOrElse(false)) {
-        log.info("Checking the query and sort fields to determine if streaming is possible")
+      if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
+        log.info("Checking the query and sort fields to determine if streaming is possible for "+collection)
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
+        val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
         val sortClauses: List[SortClause] = query.getSorts.asScala.toList
         if (sortClauses.isEmpty) {
@@ -272,14 +291,14 @@ class SolrRelation(
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
           else
-            if (isFDV) {
+            if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
               true
             }
             else
               false
-        val requestHandler = if (isFDV && isSDV) "/export" else rq
-        log.info("requestHandler is '" +  requestHandler + "'. isFDV is '" + isFDV + "' and isSDV is '" + isSDV + "'")
+        val requestHandler = if (isFDV && isSDV && !hasUnsupportedExportTypes) "/export" else rq
+        logInfo(s"requestHandler: $requestHandler isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -292,6 +311,10 @@ class SolrRelation(
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
+  }
+
+  def requiresExportHandler(rq: String): Boolean = {
+    return rq == "/export" || rq == "/stream" || rq == "/sql"
   }
 
   def toSolrType(dataType: DataType): String = {
@@ -423,7 +446,7 @@ class SolrRelation(
 
     if (conf.getStreamingExpr.isDefined) {
       query.setRequestHandler("/stream")
-      query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get)
+      query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get.replaceAll("\\s+", " "))
     }
 
     if (solrFields.nonEmpty) {
@@ -507,7 +530,16 @@ object SolrRelation extends Logging {
     query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
     log.info("Added sort field '" + query.getSortField + "' to the query")
   }
+
+  // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
+  def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
+    for (structField <- querySchema.fields) {
+      if (structField.dataType == BooleanType || structField.dataType == TimestampType)
+        return true
+    }
+    false
+  }
 }
 
-case class StreamFields(collection:String,fields:ListBuffer[String])
+case class StreamFields(collection:String,fields:ListBuffer[String],metrics:ListBuffer[String])
 

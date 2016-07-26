@@ -7,6 +7,12 @@
   <field name="images" type="binary" multiValued="true" indexed="false" required="false" stored="true"/>
   <field name="field1_s" indexed="true" stored="true" type="string" docValues="true"/>
 
+  <field name="user_id" indexed="true" stored="true" type="string" docValues="true"/>
+  <field name="movie_id" indexed="true" stored="true" type="string" docValues="true"/>
+  <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
+  <field name="rating_timestamp" indexed="true" stored="true" type="tdate" docValues="true"/>
+  <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
+
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
