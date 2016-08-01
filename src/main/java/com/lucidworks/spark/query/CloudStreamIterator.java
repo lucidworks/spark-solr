@@ -1,16 +1,22 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.io.graph.GatherNodesStream;
-import org.apache.solr.client.solrj.io.graph.ShortestPathStream;
-import org.apache.solr.client.solrj.io.ops.ConcatOperation;
-import org.apache.solr.client.solrj.io.ops.DistinctOperation;
-import org.apache.solr.client.solrj.io.ops.GroupOperation;
-import org.apache.solr.client.solrj.io.ops.ReplaceOperation;
-import org.apache.solr.client.solrj.io.stream.*;
-import org.apache.solr.client.solrj.io.stream.expr.StreamFactory;
-import org.apache.solr.client.solrj.io.stream.metrics.*;
+import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.io.stream.SolrStream;
+import org.apache.solr.client.solrj.io.stream.TupleStream;
+import org.apache.solr.common.cloud.Replica;
+import org.apache.solr.common.cloud.Slice;
+import org.apache.solr.common.cloud.ZkCoreNodeProps;
+import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Random;
 
 public class CloudStreamIterator extends TupleStreamIterator {
 
@@ -19,6 +25,8 @@ public class CloudStreamIterator extends TupleStreamIterator {
   protected String zkHost;
   protected String collection;
 
+  private final Random random = new Random(5150L);
+
   public CloudStreamIterator(String zkHost, String collection, SolrParams solrParams) {
     super(solrParams);
     this.zkHost = zkHost;
@@ -26,59 +34,17 @@ public class CloudStreamIterator extends TupleStreamIterator {
   }
 
   protected TupleStream openStream() {
-    StreamFactory streamFactory = new StreamFactory();
-
-    log.info("Opening CloudSolrStream to "+collection+" using "+zkHost);
-
-    streamFactory = streamFactory.withCollectionZkHost(collection, zkHost).withDefaultZkHost(zkHost)
-            .withFunctionName("search", CloudSolrStream.class)
-            .withFunctionName("facet", FacetStream.class)
-            .withFunctionName("update", UpdateStream.class)
-            .withFunctionName("jdbc", JDBCStream.class)
-            .withFunctionName("topic", TopicStream.class)
-
-                    // decorator streams
-            .withFunctionName("merge", MergeStream.class)
-            .withFunctionName("unique", UniqueStream.class)
-            .withFunctionName("top", RankStream.class)
-            .withFunctionName("group", GroupOperation.class)
-            .withFunctionName("reduce", ReducerStream.class)
-            .withFunctionName("parallel", ParallelStream.class)
-            .withFunctionName("rollup", RollupStream.class)
-            .withFunctionName("stats", StatsStream.class)
-            .withFunctionName("innerJoin", InnerJoinStream.class)
-            .withFunctionName("leftOuterJoin", LeftOuterJoinStream.class)
-            .withFunctionName("hashJoin", HashJoinStream.class)
-            .withFunctionName("outerHashJoin", OuterHashJoinStream.class)
-            .withFunctionName("intersect", IntersectStream.class)
-            .withFunctionName("complement", ComplementStream.class)
-            .withFunctionName("daemon", DaemonStream.class)
-            .withFunctionName("sort", SortStream.class)
-            .withFunctionName("select", SelectStream.class)
-            .withFunctionName("shortestPath", ShortestPathStream.class)
-            .withFunctionName("gatherNodes", GatherNodesStream.class)
-
-                    // metrics
-            .withFunctionName("min", MinMetric.class)
-            .withFunctionName("max", MaxMetric.class)
-            .withFunctionName("avg", MeanMetric.class)
-            .withFunctionName("sum", SumMetric.class)
-            .withFunctionName("count", CountMetric.class)
-
-                    // tuple manipulation operations
-            .withFunctionName("replace", ReplaceOperation.class)
-            .withFunctionName("concat", ConcatOperation.class)
-
-                    // stream reduction operations
-            .withFunctionName("group", GroupOperation.class)
-            .withFunctionName("distinct", DistinctOperation.class);
-
+    TupleStream stream;
     String expr = solrParams.get("expr").replaceAll("\\s+", " ");
-    log.info("Executing streaming expression "+expr+" against collection "+collection);
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set(CommonParams.QT, "/stream");
+    log.info("Executing streaming expression " + expr + " against collection " + collection);
+    params.set("expr", expr);
     try {
-      TupleStream tupleStream = streamFactory.constructStream(expr);
-      tupleStream.open();
-      return tupleStream;
+      String url = (new ZkCoreNodeProps(getRandomReplica())).getCoreUrl();
+      log.info("Opening SolrStream to replica "+url+" of "+collection+" to execute streaming expression.");
+      stream = new SolrStream(url, params);
+      stream.open();
     } catch (Exception e) {
       log.error("Failed to execute streaming expression "+expr+" due to: "+e, e);
       if (e instanceof RuntimeException) {
@@ -87,5 +53,20 @@ public class CloudStreamIterator extends TupleStreamIterator {
         throw new RuntimeException(e);
       }
     }
+    return stream;
+  }
+
+  public Replica getRandomReplica() {
+    CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
+    ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
+    Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection).getActiveSlices();
+    if (slices == null || slices.size() == 0)
+      throw new IllegalStateException("No active shards found "+collection);
+
+    List<Replica> shuffler = new ArrayList<>();
+    for (Slice slice : slices) {
+      shuffler.addAll(slice.getReplicas());
+    }
+    return shuffler.get(random.nextInt(shuffler.size()));
   }
 }

@@ -108,7 +108,7 @@ class SolrRelation(
         var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
         findStreamingExpressionFields(streamingExpr, streamOutputFields)
-        logInfo(s"Found stream output fields: ${streamOutputFields}")
+        logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
         var fieldSet : scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
         for (sf <- streamOutputFields) {
           val streamSchema: StructType =
@@ -118,7 +118,7 @@ class SolrRelation(
               sf.collection,
               conf.escapeFieldNames.getOrElse(false),
               conf.flattenMultivalued.getOrElse(true))
-          logInfo(s"Got stream schema: ${streamSchema} for ${sf}")
+          logDebug(s"Got stream schema: ${streamSchema} for ${sf}")
           streamSchema.fields.foreach(fld => fieldSet.add(fld))
           sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
         }
@@ -126,7 +126,7 @@ class SolrRelation(
           throw new IllegalStateException("Failed to extract schema fields for streaming expression: "+streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
-        logInfo(s"Created combined schema for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        logInfo(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
@@ -176,7 +176,7 @@ class SolrRelation(
         case p : StreamExpressionNamedParameter =>
           if (p.getName == "fl" || p.getName == "buckets" && subExpr.getFunctionName == "facet") {
             p.getParameter match {
-              case value : StreamExpressionValue => fields += value.getValue
+              case value : StreamExpressionValue => value.getValue.split(",").foreach(v => fields += v)
               case _ => // ugly!
             }
           }

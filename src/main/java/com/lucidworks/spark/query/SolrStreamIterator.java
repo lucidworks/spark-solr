@@ -38,7 +38,7 @@ public class SolrStreamIterator extends TupleStreamIterator {
       solrQuery = solrQuery.setRequestHandler("/export");
     }
     solrQuery.setRows(null);
-    SolrQuerySupport.validateExportHandlerQuery(solrServer, solrQuery);
+    //SolrQuerySupport.validateExportHandlerQuery(solrServer, solrQuery);
   }
 
   protected TupleStream openStream() {
