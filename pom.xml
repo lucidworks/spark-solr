@@ -39,7 +39,7 @@
     <java.version>1.8</java.version>
     <spark.version>1.6.2</spark.version>
     <solr.version>6.1.0</solr.version>
-    <fasterxml.version>2.3.1</fasterxml.version>
+    <fasterxml.version>2.4.0</fasterxml.version>
     <scala.version>2.10.5</scala.version>
     <scala.binary.version>2.10</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
