@@ -1,6 +1,5 @@
 package com.lucidworks.spark.query;
 
-import com.lucidworks.spark.util.SolrQuerySupport;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;

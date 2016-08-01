@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.{CloudStreamIterator, ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
+import com.lucidworks.spark.query.{StreamingExpressionResultIterator, ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
@@ -71,8 +71,8 @@ class SolrRDD(
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     split match {
       case partition: CloudStreamPartition =>
-        logInfo(s"Using CloudStreamIterator to process streaming expression for ${partition}")
-        val resultsIterator = new CloudStreamIterator(partition.zkhost, partition.collection, partition.params)
+        logInfo(s"Using StreamingExpressionResultIterator to process streaming expression for ${partition}")
+        val resultsIterator = new StreamingExpressionResultIterator(partition.zkhost, partition.collection, partition.params)
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
       case partition: SolrRDDPartition =>
         log.info("Computing the partition " + partition.index + " on host name " + context.taskMetrics().hostname)

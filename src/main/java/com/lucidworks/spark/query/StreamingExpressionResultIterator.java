@@ -18,16 +18,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 
-public class CloudStreamIterator extends TupleStreamIterator {
+public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
-  private static final Logger log = Logger.getLogger(CloudStreamIterator.class);
+  private static final Logger log = Logger.getLogger(StreamingExpressionResultIterator.class);
 
   protected String zkHost;
   protected String collection;
 
   private final Random random = new Random(5150L);
 
-  public CloudStreamIterator(String zkHost, String collection, SolrParams solrParams) {
+  public StreamingExpressionResultIterator(String zkHost, String collection, SolrParams solrParams) {
     super(solrParams);
     this.zkHost = zkHost;
     this.collection = collection;
@@ -37,12 +37,14 @@ public class CloudStreamIterator extends TupleStreamIterator {
     TupleStream stream;
     String expr = solrParams.get("expr").replaceAll("\\s+", " ");
     ModifiableSolrParams params = new ModifiableSolrParams();
-    params.set(CommonParams.QT, "/stream");
+    String qt = solrParams.get(CommonParams.QT);
+    if (qt == null) qt = "/stream";
+    params.set(CommonParams.QT, qt);
     log.info("Executing streaming expression " + expr + " against collection " + collection);
     params.set("expr", expr);
     try {
       String url = (new ZkCoreNodeProps(getRandomReplica())).getCoreUrl();
-      log.info("Opening SolrStream to replica "+url+" of "+collection+" to execute streaming expression.");
+      log.info("Sending streaming expression to replica "+url+" of "+collection);
       stream = new SolrStream(url, params);
       stream.open();
     } catch (Exception e) {
@@ -56,7 +58,7 @@ public class CloudStreamIterator extends TupleStreamIterator {
     return stream;
   }
 
-  public Replica getRandomReplica() {
+  protected Replica getRandomReplica() {
     CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
     ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
     Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection).getActiveSlices();

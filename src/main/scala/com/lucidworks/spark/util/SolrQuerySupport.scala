@@ -203,7 +203,7 @@ object SolrQuerySupport extends Logging {
             if (callback != null) {
               resp = Some(queryAndStreamResponsePost(solrQuery, callback, solrClient))
             } else {
-              resp = Some(solrClient.query(solrQuery))
+              resp = Some(solrClient.query(solrQuery, METHOD.POST))
             }
           } catch {
             case execOnRetry: SolrServerException =>
