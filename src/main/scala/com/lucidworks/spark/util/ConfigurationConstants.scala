@@ -15,11 +15,12 @@ object ConfigurationConstants {
   val ESCAPE_FIELDNAMES_PARAM: String = "escape_fieldnames"
   val SOLR_DOC_VALUES: String = "dv"
   val FLATTEN_MULTIVALUED: String = "flatten_multivalued"
+  @deprecated
   val USE_EXPORT_HANDLER: String = "use_export_handler"
   val REQUEST_HANDLER: String = "request_handler"
   val USE_CURSOR_MARKS: String = "use_cursor_marks"
   val SOLR_STREAMING_EXPR: String = "expr"
-
+  val SOLR_SQL_STMT: String = "sql"
 
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
@@ -40,5 +41,4 @@ object ConfigurationConstants {
   val MAX_ACTIVE_PARTITIONS:String="max_active_partitions"
 
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
-
 }

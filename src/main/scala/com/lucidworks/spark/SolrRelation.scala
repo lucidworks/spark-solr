@@ -63,7 +63,7 @@ class SolrRelation(
       conf.getZkHost.get,
       collection,
       sc,
-      requestHandler = conf.requestHandler)
+      requestHandler = Some(conf.requestHandler))
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
@@ -103,7 +103,7 @@ class SolrRelation(
       if (query.getFields != null) {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
-      } else if (conf.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER) == "/stream") {
+      } else if (conf.requestHandler == QT_STREAM) {
         // we have to figure out the schema of the streaming expression
         var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
@@ -204,7 +204,7 @@ class SolrRelation(
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-    if (rq == "/stream") {
+    if (rq == QT_STREAM) {
       // ignore any fields / filters when processing a streaming expression
       return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
     }
@@ -297,8 +297,14 @@ class SolrRelation(
             }
             else
               false
-        val requestHandler = if (isFDV && isSDV && !hasUnsupportedExportTypes) "/export" else rq
-        logInfo(s"requestHandler: $requestHandler isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+
+        var requestHandler = rq
+        if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
+          requestHandler = QT_EXPORT
+          logInfo("Using /export handler because docValues are enabled and no unsupported field types have been requested.")
+        } else {
+          logInfo(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+        }
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -314,7 +320,7 @@ class SolrRelation(
   }
 
   def requiresExportHandler(rq: String): Boolean = {
-    return rq == "/export" || rq == "/stream" || rq == "/sql"
+    return rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
   }
 
   def toSolrType(dataType: DataType): String = {
@@ -445,8 +451,13 @@ class SolrRelation(
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
 
     if (conf.getStreamingExpr.isDefined) {
-      query.setRequestHandler("/stream")
+      query.setRequestHandler(QT_STREAM)
       query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get.replaceAll("\\s+", " "))
+    }
+
+    if (conf.getSqlStmt.isDefined) {
+      query.setRequestHandler(QT_SQL)
+      query.set(SOLR_SQL_STMT, conf.getSqlStmt.get.replaceAll("\\s+", " "))
     }
 
     if (solrFields.nonEmpty) {
@@ -463,7 +474,6 @@ class SolrRelation(
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
     require(conf.getCollection.isDefined, "Param '" + SOLR_COLLECTION_PARAM + "' is required")
   }
-
 }
 
 object SolrRelation extends Logging {

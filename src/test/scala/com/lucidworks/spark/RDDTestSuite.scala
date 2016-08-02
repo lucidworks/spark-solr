@@ -3,11 +3,11 @@ package com.lucidworks.spark
 import java.util.UUID
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
 import org.apache.solr.client.solrj.SolrQuery
 
 import org.apache.spark.Logging
-import org.scalatest.Ignore
 
 class RDDTestSuite extends TestSuiteBuilder with Logging {
 
@@ -75,8 +75,8 @@ class RDDTestSuite extends TestSuiteBuilder with Logging {
     try {
       val solrQuery = new SolrQuery()
       solrQuery.set(SOLR_STREAMING_EXPR, expr)
-      val streamExprRDD = new SolrRDD(zkHost, collectionName, sc, Some("/stream"))
-      assert(streamExprRDD.requestHandler.get == "/stream")
+      val streamExprRDD = new SolrRDD(zkHost, collectionName, sc, Some(QT_STREAM))
+      assert(streamExprRDD.requestHandler.get == QT_STREAM)
       val results = streamExprRDD.query(solrQuery).collect()
       assert(results.size == numDocs)
     } finally {

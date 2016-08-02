@@ -157,6 +157,19 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
     assert(schema.fields(3).name == "user_id")
     assert(schema.fields(3).dataType == StringType)
 
+    val sqlStmt =
+      s"""
+         |    SELECT movie_id, COUNT(*) as aggCount
+         |      FROM ${ratingsCollection}
+         |     WHERE rating >= 3
+         |  GROUP BY movie_id
+         |  ORDER BY aggCount desc
+       """.stripMargin
+    var sqlDF = sqlContext.read.format("solr").options(
+      Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "sql" -> sqlStmt)).load
+    assert(sqlDF.count == numRatings)
+    sqlDF.printSchema()
+
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)

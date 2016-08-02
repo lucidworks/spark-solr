@@ -106,14 +106,14 @@ class SolrRDD(
   override protected def getPartitions: Array[Partition] = {
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-    if (rq == "/stream") {
-      logInfo(s"Using SolrCloud stream partitioning scheme to process streaming expression for collection ${collection}")
+    if (rq == QT_STREAM || rq == QT_SQL) {
+      logInfo(s"Using SolrCloud stream partitioning scheme to process request to ${rq} for collection ${collection}")
       return Array(new CloudStreamPartition(0, zkHost, collection, query))
     }
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-    if (rq != "/export") {
+    if (rq != QT_EXPORT) {
       logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     }
@@ -159,7 +159,7 @@ class SolrRDD(
 
   def splitsPerShard(splitsPerShard: Int): SolrRDD = copy(splitsPerShard = Some(splitsPerShard))
 
-  def useExportHandler: SolrRDD = copy(requestHandler = Some("/export"))
+  def useExportHandler: SolrRDD = copy(requestHandler = Some(QT_EXPORT))
 
   def requestHandler(requestHandler: String): SolrRDD = copy(requestHandler = Some(requestHandler))
 
