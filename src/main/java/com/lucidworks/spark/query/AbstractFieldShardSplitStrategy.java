@@ -117,6 +117,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     statsQuery.setRows(0);
     statsQuery.setStart(0);
     statsQuery.set("distrib", false);
+    statsQuery.setFields(splitFieldName);
     statsQuery.remove("cursorMark");
     statsQuery.setGetFieldStatistics(splitFieldName);
     QueryResponse qr = solrClient.query(statsQuery);
@@ -128,6 +129,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     splitQuery.addFilterQuery(split.getSplitFilterQuery());
     splitQuery.setRows(0);
     splitQuery.setStart(0);
+    splitQuery.setFields(split.getSplitFieldName());
     QueryResponse qr = solrClient.query(splitQuery);
     split.setNumHits(qr.getResults().getNumFound());
     return split.getNumHits();

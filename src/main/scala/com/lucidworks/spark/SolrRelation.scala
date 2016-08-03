@@ -128,7 +128,7 @@ class SolrRelation(
           throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
-        logInfo(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else if (conf.requestHandler == QT_SQL) {
         val sqlStmt = query.get(SOLR_SQL_STMT)
@@ -212,7 +212,7 @@ class SolrRelation(
   }
 
   def extractSearchFields(subExpr: StreamExpression) : Option[StreamFields] = {
-    logInfo(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
+    logDebug(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
     var collection : Option[String] = Option.empty[String]
     var fields = scala.collection.mutable.ListBuffer.empty[String]
     var metrics = scala.collection.mutable.ListBuffer.empty[String]
@@ -236,7 +236,7 @@ class SolrRelation(
     })
     if (collection.isDefined && !fields.isEmpty) {
       val streamFields = new StreamFields(collection.get, fields, metrics)
-      logInfo(s"extracted $streamFields for $subExpr")
+      logDebug(s"extracted $streamFields for $subExpr")
       return Some(streamFields)
     }
     None
@@ -307,14 +307,12 @@ class SolrRelation(
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
-    if (log.isInfoEnabled) {
-      log.info("Constructed SolrQuery: " + query)
-    }
+    logInfo(s"Constructed SolrQuery: ${query}")
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
       if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
-        log.info("Checking the query and sort fields to determine if streaming is possible for "+collection)
+        logDebug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
@@ -331,7 +329,7 @@ class SolrRelation(
           }
         }
 
-        log.info("Existing sort clauses: " + sortClauses.mkString(","))
+        logDebug(s"Existing sort clauses: ${sortClauses.mkString}")
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
@@ -346,9 +344,9 @@ class SolrRelation(
         var requestHandler = rq
         if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
           requestHandler = QT_EXPORT
-          logInfo("Using /export handler because docValues are enabled and no unsupported field types have been requested.")
+          logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
-          logInfo(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+          logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
