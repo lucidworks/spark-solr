@@ -75,14 +75,18 @@ public abstract class TupleStreamIterator extends ResultsIterator {
 
   protected abstract TupleStream openStream();
 
-  public synchronized SolrDocument next() {
+  public synchronized Tuple nextTuple() {
     if (currentTuple == null)
       throw new NoSuchElementException();
 
     final Tuple tempCurrentTuple = currentTuple;
     currentTuple = null;
     ++numDocs;
-    return tuple2doc(tempCurrentTuple);
+    return tempCurrentTuple;
+  }
+
+  public synchronized SolrDocument next() {
+    return tuple2doc(nextTuple());
   }
 
   protected SolrDocument tuple2doc(Tuple tuple) {
