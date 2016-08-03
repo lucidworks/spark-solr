@@ -148,6 +148,9 @@ class SolrRelation(
             fieldSet.add(new StructField(kvp._2, LongType))
           } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
             fieldSet.add(new StructField(kvp._2, DoubleType))
+
+            // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
+            // based on the aggregation mode used to execute the SQL statement
             var promoteFields = query.get("promote_to_double")
             if (promoteFields == null) {
               promoteFields = kvp._2
