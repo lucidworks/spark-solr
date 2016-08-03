@@ -2,6 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
+import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.http.entity.StringEntity
@@ -13,6 +14,7 @@ import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.ParserDialect
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
@@ -109,7 +111,7 @@ class SolrRelation(
         var streamOutputFields = new ListBuffer[StreamFields]
         findStreamingExpressionFields(streamingExpr, streamOutputFields)
         logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
-        var fieldSet : scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
+        var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
         for (sf <- streamOutputFields) {
           val streamSchema: StructType =
             SolrRelationUtil.getBaseSchema(
@@ -123,11 +125,49 @@ class SolrRelation(
           sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
         }
         if (fieldSet.isEmpty) {
-          throw new IllegalStateException("Failed to extract schema fields for streaming expression: "+streamingExpr)
+          throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
         logInfo(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
+      } else if (conf.requestHandler == QT_SQL) {
+        val sqlStmt = query.get(SOLR_SQL_STMT)
+        logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
+
+        val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
+        baseSchema = Some(allFieldsSchema)
+
+        var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
+
+        val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
+        logInfo(s"Parsed SQL fields: ${sqlColumns}")
+        sqlColumns.foreach((kvp) => {
+          var lower = kvp._1.toLowerCase
+          var col = kvp._2
+          if (lower.startsWith("count(")) {
+            fieldSet.add(new StructField(kvp._2, LongType))
+          } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
+            fieldSet.add(new StructField(kvp._2, DoubleType))
+            var promoteFields = query.get("promote_to_double")
+            if (promoteFields == null) {
+              promoteFields = kvp._2
+              query.set("promote_to_double", promoteFields)
+            } else {
+              query.set("promote_to_double", promoteFields+","+kvp._2)
+            }
+          } else {
+            if (allFieldsSchema.fieldNames.contains(kvp._2)) {
+              val existing = allFieldsSchema.fields(allFieldsSchema.fieldIndex(kvp._2))
+              fieldSet.add(existing)
+              logDebug(s"Found existing field ${kvp._2}: ${existing}")
+            } else {
+              fieldSet.add(new StructField(kvp._2, StringType))
+            }
+          }
+        })
+        val sqlSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
+        logInfo(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
+        sqlSchema
       } else {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         baseSchema.get
@@ -135,8 +175,13 @@ class SolrRelation(
     }
   }
 
+  def getSQLDialect(dialectClassName: String): ParserDialect = {
+    val clazz = Utils.classForName(dialectClassName)
+    clazz.newInstance().asInstanceOf[ParserDialect]
+  }
+
   def toMetricStructField(m: String) : StructField = {
-    if (m.startsWith("count")) {
+    if (m.toLowerCase.startsWith("count(")) {
       return new StructField(m, LongType)
     } else {
       return new StructField(m, DoubleType)
@@ -204,11 +249,11 @@ class SolrRelation(
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-    if (rq == QT_STREAM) {
+    if (rq == QT_STREAM || rq == QT_SQL) {
       // ignore any fields / filters when processing a streaming expression
       return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
     }
-    
+
     log.info("Fields passed down from scanner: " + fields.mkString(","))
     log.info("Filters passed down from scanner: " + filters.mkString(","))
 

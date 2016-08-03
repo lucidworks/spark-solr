@@ -202,6 +202,7 @@ class SolrConf(config: Map[String, String]) extends Logging {
     if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
     None
   }
+
   def getMaxActivePartitions: Option[String]={
     if (config.contains(MAX_ACTIVE_PARTITIONS) && config.get(MAX_ACTIVE_PARTITIONS).isDefined) return (config.get(MAX_ACTIVE_PARTITIONS))
     None

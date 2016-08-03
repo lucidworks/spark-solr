@@ -68,7 +68,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
   test("movielens data analytics") {
 
     // movies: id, movie_id, title
-    val moviesCollection = "movies" + UUID.randomUUID().toString
+    val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
     val numMovies = buildMoviesCollection(moviesCollection)
 
     var moviesDF = sqlContext.read.format("solr").options(
@@ -82,7 +82,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
     assert(schema.fields(1).dataType == StringType)
 
     // movie ratings: id, user_id, movie_id, rating, rating_timestamp
-    val ratingsCollection = "ratings" + UUID.randomUUID().toString
+    val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
     val numRatings = buildRatingsCollection(ratingsCollection)
 
     var ratingsDF = sqlContext.read.format("solr").options(
@@ -159,16 +159,35 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
 
     val sqlStmt =
       s"""
-         |    SELECT movie_id, COUNT(*) as aggCount
+         |    SELECT movie_id, COUNT(*) as agg_count, avg(rating) as avg_rating, sum(rating) as sum_rating, min(rating) as min_rating, max(rating) as max_rating
          |      FROM ${ratingsCollection}
-         |     WHERE rating >= 3
          |  GROUP BY movie_id
-         |  ORDER BY aggCount desc
+         |  ORDER BY movie_id asc
        """.stripMargin
     var sqlDF = sqlContext.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "sql" -> sqlStmt)).load
-    assert(sqlDF.count == numRatings)
-    sqlDF.printSchema()
+    sqlDF.printSchema
+    sqlDF.show
+
+    assert(sqlDF.count == 2)
+    var sqlSchema = sqlDF.schema
+    assert(sqlSchema != null)
+    assert(sqlSchema.fields.length == 6)
+    assert(sqlSchema.fields(0).name == "agg_count")
+    assert(sqlSchema.fields(0).dataType == LongType)
+    assert(sqlSchema.fields(1).name == "avg_rating")
+    assert(sqlSchema.fields(1).dataType == DoubleType)
+    assert(sqlSchema.fields(2).name == "max_rating")
+    assert(sqlSchema.fields(2).dataType == DoubleType)
+    assert(sqlSchema.fields(3).name == "min_rating")
+    assert(sqlSchema.fields(3).dataType == DoubleType)
+    assert(sqlSchema.fields(4).name == "movie_id")
+    assert(sqlSchema.fields(4).dataType == StringType)
+    assert(sqlSchema.fields(5).name == "sum_rating")
+    assert(sqlSchema.fields(5).dataType == DoubleType)
+    val sqlResults = sqlDF.collectAsList()
+    val row0 = sqlResults.get(0)
+    assert(row0.getString(4) == "movie200")
 
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)

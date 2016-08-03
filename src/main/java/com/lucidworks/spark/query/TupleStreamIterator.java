@@ -23,7 +23,6 @@ public abstract class TupleStreamIterator extends ResultsIterator {
   protected TupleStream stream;
   protected long numDocs = 0;
   protected SolrParams solrParams;
-
   private Tuple currentTuple = null;
 
   public TupleStreamIterator(SolrParams solrParams) {
