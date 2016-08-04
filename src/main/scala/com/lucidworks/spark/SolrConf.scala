@@ -1,15 +1,22 @@
 package com.lucidworks.spark
 
+import org.apache.spark.Logging
 import org.apache.solr.common.params.ModifiableSolrParams
+import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config: Map[String, String]) {
+class SolrConf(config: Map[String, String]) extends Logging {
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
 
   def getZkHost: Option[String] = {
     if (config.contains(SOLR_ZK_HOST_PARAM)) return config.get(SOLR_ZK_HOST_PARAM)
+
+    // allow users to set the zkhost using a Java system property
+    var zkHostSysProp = System.getProperty("solr.zkhost")
+    if (zkHostSysProp != null) return Some(zkHostSysProp)
+
     None
   }
 
@@ -18,8 +25,23 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
+
   def getQuery: Option[String] = {
     if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
+    None
+  }
+
+  def getStreamingExpr: Option[String] = {
+    if (config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      return config.get(SOLR_STREAMING_EXPR)
+    }
+    None
+  }
+
+  def getSqlStmt: Option[String] = {
+    if (config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
+      return config.get(SOLR_SQL_STMT)
+    }
     None
   }
 
@@ -98,11 +120,32 @@ class SolrConf(config: Map[String, String]) {
     None
   }
 
-  def useExportHandler: Option[Boolean] = {
-    if (config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
-      return Some(config.get(USE_EXPORT_HANDLER).get.toBoolean)
+  def requestHandler: String = {
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
+      logWarning(s"The ${USE_EXPORT_HANDLER} option is no longer supported, please switch to using the ${REQUEST_HANDLER} -> ${QT_EXPORT} option!")
+      if (config.get(USE_EXPORT_HANDLER).get.toBoolean) {
+        return QT_EXPORT
+      }
     }
-    None
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+      // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
+      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
+      return QT_STREAM
+    }
+
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
+      // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
+      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
+      return QT_SQL
+    }
+
+    if (config.contains(REQUEST_HANDLER) && config.get(REQUEST_HANDLER).isDefined) {
+      return config.get(REQUEST_HANDLER).get
+    }
+
+    DEFAULT_REQUEST_HANDLER
   }
 
   def useCursorMarks: Option[Boolean] = {
@@ -130,6 +173,38 @@ class SolrConf(config: Map[String, String]) {
     if (config.contains(SAMPLE_PCT) && config.get(SAMPLE_PCT).isDefined) {
       return Some(config.get(SAMPLE_PCT).get.toFloat)
     }
+    None
+  }
+
+  def partition_by: Option[String]={
+    if (config.contains(PARTITION_BY) && config.get(PARTITION_BY).isDefined) {
+      return Some(config.get(PARTITION_BY).get.toString)
+    }
+    None
+  }
+
+  def getTimeStampFieldName: Option[String]={
+    if (config.contains(TIME_STAMP_FIELD_NAME) && config.get(TIME_STAMP_FIELD_NAME).isDefined) return (config.get(TIME_STAMP_FIELD_NAME))
+    None
+  }
+
+  def getTimePeriod: Option[String]={
+    if (config.contains(TIME_PERIOD) && config.get(TIME_PERIOD).isDefined) return (config.get(TIME_PERIOD))
+    None
+  }
+
+  def getDateTimePattern: Option[String]={
+    if (config.contains(DATETIME_PATTERN) && config.get(DATETIME_PATTERN).isDefined) return (config.get(DATETIME_PATTERN))
+    None
+  }
+
+  def getTimeZoneId: Option[String]={
+    if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
+    None
+  }
+
+  def getMaxActivePartitions: Option[String]={
+    if (config.contains(MAX_ACTIVE_PARTITIONS) && config.get(MAX_ACTIVE_PARTITIONS).isDefined) return (config.get(MAX_ACTIVE_PARTITIONS))
     None
   }
 

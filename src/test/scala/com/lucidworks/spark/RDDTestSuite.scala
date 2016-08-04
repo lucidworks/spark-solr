@@ -2,10 +2,13 @@ package com.lucidworks.spark
 
 import java.util.UUID
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.solr.client.solrj.SolrQuery
 
-class RDDTestSuite extends TestSuiteBuilder with  LazyLogging {
+class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
 
   test("Test Simple Query") {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString
@@ -55,4 +58,28 @@ class RDDTestSuite extends TestSuiteBuilder with  LazyLogging {
     }
   }
 
+  test("Test Streaming Expression") {
+    val collectionName = "testStreamingExpr" + UUID.randomUUID().toString
+    val numDocs = 10
+    SolrCloudUtil.buildCollection(zkHost, collectionName, numDocs, 1, cloudClient, sc)
+    
+    val expr : String =
+      s"""
+        |search(${collectionName},
+        |       q="*:*",
+        |       fl="field1_s",
+        |       sort="field1_s asc",
+        |       qt="/export")
+      """.stripMargin
+    try {
+      val solrQuery = new SolrQuery()
+      solrQuery.set(SOLR_STREAMING_EXPR, expr)
+      val streamExprRDD = new SolrRDD(zkHost, collectionName, sc, Some(QT_STREAM))
+      assert(streamExprRDD.requestHandler.get == QT_STREAM)
+      val results = streamExprRDD.query(solrQuery).collect()
+      assert(results.size == numDocs)
+    } finally {
+      SolrCloudUtil.deleteCollection(collectionName, cluster)
+    }
+  }
 }
