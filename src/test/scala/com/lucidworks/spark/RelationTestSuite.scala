@@ -2,15 +2,14 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.common.SolrInputDocument
-import org.apache.spark.Logging
 import org.apache.spark.sql.types.{TimestampType, StringType, LongType, DoubleType}
 
-class RelationTestSuite extends TestSuiteBuilder with Logging {
+class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
 
   test("Unknown params") {
     val paramsToCheck = Set(SOLR_ZK_HOST_PARAM, SOLR_COLLECTION_PARAM, SOLR_QUERY_PARAM, ESCAPE_FIELDNAMES_PARAM, "fl", "q")
