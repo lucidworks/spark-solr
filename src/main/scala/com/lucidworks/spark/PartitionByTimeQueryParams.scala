@@ -7,10 +7,10 @@ import java.util.regex.{Matcher, Pattern}
 
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.spark.Logging
 
-class PartitionByTimeQueryParams(val conf:SolrConf) extends Logging {
+class PartitionByTimeQueryParams(val conf:SolrConf) extends LazyLogging {
   private val TIME_PERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS)$")
   private val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
     override protected def initialValue: SimpleDateFormat = {

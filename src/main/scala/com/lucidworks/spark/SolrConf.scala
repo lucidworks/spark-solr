@@ -1,11 +1,11 @@
 package com.lucidworks.spark
 
-import org.apache.spark.Logging
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.common.params.ModifiableSolrParams
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config: Map[String, String]) extends Logging {
+class SolrConf(config: Map[String, String]) extends LazyLogging {
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
@@ -123,7 +123,7 @@ class SolrConf(config: Map[String, String]) extends Logging {
   def requestHandler: String = {
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
-      logWarning(s"The ${USE_EXPORT_HANDLER} option is no longer supported, please switch to using the ${REQUEST_HANDLER} -> ${QT_EXPORT} option!")
+      logger.warn(s"The ${USE_EXPORT_HANDLER} option is no longer supported, please switch to using the ${REQUEST_HANDLER} -> ${QT_EXPORT} option!")
       if (config.get(USE_EXPORT_HANDLER).get.toBoolean) {
         return QT_EXPORT
       }
@@ -131,13 +131,13 @@ class SolrConf(config: Map[String, String]) extends Logging {
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
-      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
+      logger.info(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
       return QT_STREAM
     }
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
-      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
+      logger.info(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
       return QT_SQL
     }
 

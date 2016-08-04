@@ -3,6 +3,7 @@ package com.lucidworks.spark
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Collections, Date, TimeZone}
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrRelationUtil, SolrSupport}
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import com.lucidworks.spark.util.QueryConstants._
 import scala.util.control._
@@ -12,14 +13,13 @@ import java.util.regex.Matcher
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
 import org.apache.lucene.util.BytesRef
-import org.apache.spark.Logging
 import org.apache.solr.util.DateMathParser;
 
 
 /**
   * This class is used to query multiple collections of time series data given a range query.
   */
-class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val conf: SolrConf) extends Logging{
+class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val conf: SolrConf) extends LazyLogging {
 
   val solrCloudClient = SolrSupport.getCachedCloudClient(conf.getZkHost.get)
   val query:SolrQuery=buildQuery
@@ -57,17 +57,13 @@ class PartitionByTimeQuerySupport(val feature: PartitionByTimeQueryParams,val co
     val allPartitions:List[String] = getPartitions(true)
 
     if (allPartitions.isEmpty) {
-      if(log.isWarnEnabled) {
-        log.warn(s"No filter query found to determine partitions and no time-based partitions exist in Solr returning base collection: ${conf.getCollection.get}")
-      }
+      logger.warn(s"No filter query found to determine partitions and no time-based partitions exist in Solr returning base collection: ${conf.getCollection.get}")
       return List(conf.getCollection.get)
     }
 
     if (rangeQuery == null) {
 
-      if (log.isWarnEnabled) {
-        log.warn(s"No filter query available to select partitions, so using all partitions in Solr: ${allPartitions}")
-      }
+      logger.warn(s"No filter query available to select partitions, so using all partitions in Solr: ${allPartitions}")
       return allPartitions
     }
 
