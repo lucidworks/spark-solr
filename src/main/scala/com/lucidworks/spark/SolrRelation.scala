@@ -141,6 +141,9 @@ class SolrRelation(
 
         val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
         logInfo(s"Parsed SQL fields: ${sqlColumns}")
+        if (sqlColumns.isEmpty)
+          throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
+
         sqlColumns.foreach((kvp) => {
           var lower = kvp._1.toLowerCase
           var col = kvp._2
