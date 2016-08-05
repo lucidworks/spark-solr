@@ -52,8 +52,6 @@ class SolrRelation(
   if (unknownParams.nonEmpty)
     logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
-  val sc = sqlContext.sparkContext
-
   if (conf.partition_by.isDefined && conf.partition_by.get=="time") {
     val feature = new PartitionByTimeQueryParams(conf)
     val p = new PartitionByTimeQuerySupport(feature,conf)
@@ -65,7 +63,7 @@ class SolrRelation(
     var rdd = new SolrRDD(
       conf.getZkHost.get,
       collection,
-      sc,
+      sqlContext.sparkContext,
       requestHandler = Some(conf.requestHandler))
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
@@ -142,6 +140,9 @@ class SolrRelation(
 
         val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
         logger.info(s"Parsed SQL fields: ${sqlColumns}")
+        if (sqlColumns.isEmpty)
+          throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
+
         sqlColumns.foreach((kvp) => {
           var lower = kvp._1.toLowerCase
           var col = kvp._2
@@ -464,26 +465,27 @@ class SolrRelation(
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
-      schema.fields.foreach(field => {
-        val fname = field.name
-        breakable {
-          if (fname.equals("_version")) break()
-        }
-        val fieldIndex = row.fieldIndex(fname)
-        val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
-        if (fieldValue.isDefined) {
-          val value = fieldValue.get
-          value match {
-            //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
-            case v: Iterable[Any] =>
-              val it = v.iterator
-              while (it.hasNext) doc.addField(fname, it.next())
-            case bd: java.math.BigDecimal =>
-              doc.setField(fname, bd.doubleValue())
-            case _ => doc.setField(fname, value)
+      breakable {
+        schema.fields.foreach(field => {
+          val fname = field.name
+          if (fname.equals("_version_")) break()
+          val fieldIndex = row.fieldIndex(fname)
+          val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
+          if (fieldValue.isDefined) {
+            val value = fieldValue.get
+            value match {
+              //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
+              case v: Iterable[Any] =>
+                val it = v.iterator
+                while (it.hasNext) doc.addField(fname, it.next())
+              case bd: java.math.BigDecimal =>
+                doc.setField(fname, bd.doubleValue())
+              case _ => doc.setField(fname, value)
+            }
           }
-        }
-      })
+        })
+      }
+
       // Generate unique key if the document doesn't have one
       if (generateUniqKey) {
         if (!doc.containsKey(uniqueKey)) {

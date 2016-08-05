@@ -24,6 +24,7 @@ public abstract class TupleStreamIterator extends ResultsIterator {
   protected long numDocs = 0;
   protected SolrParams solrParams;
   private Tuple currentTuple = null;
+  private long openedAt;
 
   public TupleStreamIterator(SolrParams solrParams) {
     this.solrParams = solrParams;
@@ -32,6 +33,7 @@ public abstract class TupleStreamIterator extends ResultsIterator {
   public synchronized boolean hasNext() {
     if (stream == null) {
       stream = openStream();
+      openedAt = System.currentTimeMillis();
     }
 
     try {
@@ -50,6 +52,9 @@ public abstract class TupleStreamIterator extends ResultsIterator {
         log.error("Failed to close the SolrStream.", e);
         throw new RuntimeException(e);
       }
+
+      long diffMs = System.currentTimeMillis() - openedAt;
+      log.info("Took "+diffMs+" (ms) to read "+numDocs+" from stream.");
 
       try {
         afterStreamClosed();

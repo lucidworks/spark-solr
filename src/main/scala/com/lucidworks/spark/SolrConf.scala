@@ -5,7 +5,7 @@ import org.apache.solr.common.params.ModifiableSolrParams
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.ConfigurationConstants._
 
-class SolrConf(config: Map[String, String]) extends LazyLogging {
+class SolrConf(config: Map[String, String]) extends Serializable with LazyLogging {
 
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")

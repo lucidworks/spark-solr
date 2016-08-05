@@ -317,11 +317,15 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection2);
       options.put(FLATTEN_MULTIVALUED(), "false");
 
+      assert(df.count() == 4);
+      df.explain(true);
+      log.info("Writing data to Solr");
       df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
-      Thread.sleep(1000);
+      SolrSupport.getCachedCloudClient(zkHost).commit(testCollection2);
 
       Dataset df2 = sqlContext.read().format("solr").options(options).load();
       df2.show();
+      assert(df2.count() == 4);
     } finally {
       deleteCollection(testCollection);
       deleteCollection(testCollection2);

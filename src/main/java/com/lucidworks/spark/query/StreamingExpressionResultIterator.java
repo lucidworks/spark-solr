@@ -54,9 +54,11 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
     String aggregationMode = solrParams.get("aggregationMode");
 
-    log.info("aggregationMode="+aggregationMode+", solrParams: "+solrParams);
+    log.info("aggregationMode=" + aggregationMode + ", solrParams: " + solrParams);
     if (aggregationMode != null) {
       params.set("aggregationMode", aggregationMode);
+    } else {
+      params.set("aggregationMode", "facet"); // use facet by default as it is faster
     }
     
     if ("/sql".equals(qt)) {
@@ -72,9 +74,12 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
     
     try {
       String url = (new ZkCoreNodeProps(getRandomReplica())).getCoreUrl();
-      log.info("Sending "+qt+" request to replica "+url+" of "+collection);
+      log.info("Sending "+qt+" request to replica "+url+" of "+collection+" with params: "+params);
+      long startMs = System.currentTimeMillis();
       stream = new SolrStream(url, params);
       stream.open();
+      long diffMs = (System.currentTimeMillis() - startMs);
+      log.info("Open stream to "+url+" took "+diffMs+" (ms)");
     } catch (Exception e) {
       log.error("Failed to execute request ["+solrParams+"] due to: "+e, e);
       if (e instanceof RuntimeException) {
