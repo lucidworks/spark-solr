@@ -273,8 +273,8 @@ object SolrSupport extends Logging {
     val publicFields = objClass.getFields
 
     if (publicFields != null) {
-      for (f <- publicFields) {
-        breakable {
+      breakable {
+        for (f <- publicFields) {
           // only non-static public
           if (Modifier.isStatic(f.getModifiers) || !Modifier.isPublic(f.getModifiers))
             break()
@@ -296,6 +296,7 @@ object SolrSupport extends Logging {
           }
         }
       }
+
     }
 
     var props: Option[Array[PropertyDescriptor]] = None
