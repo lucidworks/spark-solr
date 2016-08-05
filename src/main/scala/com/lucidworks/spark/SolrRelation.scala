@@ -462,7 +462,7 @@ class SolrRelation(
       breakable {
         schema.fields.foreach(field => {
           val fname = field.name
-           if (fname.equals("_version_")) break()
+          if (fname.equals("_version_")) break()
           val fieldIndex = row.fieldIndex(fname)
           val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
           if (fieldValue.isDefined) {
