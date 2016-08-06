@@ -251,6 +251,7 @@
                   <exclude>org.apache.spark:spark-core_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-streaming_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-hive_${scala.binary.version}</exclude>
+                  <exclude>org.apache.derby</exclude>
                   <exclude>org.apache.hadoop:*</exclude>
                   <exclude>com.google.protobuf_spark:*</exclude>
                   <exclude>com.twitter:chill_${scala.binary.version}</exclude>
