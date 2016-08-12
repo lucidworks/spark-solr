@@ -63,7 +63,7 @@ object SolrSupport extends Logging {
    if (solrJaasAuthConfig.isDefined) {
      val configurer: Option[HttpClientConfigurer] = Some(HttpClientUtil.getConfigurer)
      if (configurer.isDefined) {
-       if (configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
+       if (!configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
          HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer)
          log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
        }
