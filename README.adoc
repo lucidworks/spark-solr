@@ -15,7 +15,7 @@ toc::[]
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:2.0.1"
+./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:2.0.4"
                           or
 ./bin/spark-shell --jars spark-solr-2.0.1.jar
 
