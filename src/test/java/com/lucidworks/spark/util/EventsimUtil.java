@@ -78,10 +78,9 @@ public class EventsimUtil {
   public static void loadEventSimDataSet(String zkHost, String collectionName, SQLContext sqlContext) throws Exception {
     String datasetPath = "src/test/resources/eventsim/sample_eventsim_1000.json";
     DataFrame df = sqlContext.read().json(datasetPath);
-    // Modify the unix timestamp to ISO format for Solr
-    log.info("Indexing eventsim documents from file " + datasetPath);
-
     df.registerTempTable("jdbcDF");
+
+    // Modify the unix timestamp to ISO format for Solr
     sqlContext.udf().register("ts2ISO", new UDF1<Long, Timestamp>() {
       public Timestamp call(Long ts) {
         return asDate(ts);
@@ -98,6 +97,7 @@ public class EventsimUtil {
     options.put("collection", collectionName);
     options.put(ConfigurationConstants.GENERATE_UNIQUE_KEY(), "true");
 
+    log.info("Indexing eventsim documents from file " + datasetPath);
     newDF.write().format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save();
 
     CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);

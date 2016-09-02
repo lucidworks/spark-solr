@@ -7,6 +7,7 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -75,15 +76,16 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
     JavaSparkContext jsc = new JavaSparkContext(conf);
 
     final SolrQuery solrQuery = new SolrQuery(queryStr);
-    solrQuery.setFields("id");
+    solrQuery.setFields("id", "title", "content_txt");
+    solrQuery.setRequestHandler("tvrh");
 
     // sorts are needed for deep-paging
     List<SolrQuery.SortClause> sorts = new ArrayList<SolrQuery.SortClause>();
     sorts.add(new SolrQuery.SortClause("id", "asc"));
-    sorts.add(new SolrQuery.SortClause("created_at_tdt", "asc"));
     solrQuery.setSorts(sorts);
 
     SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
+    JavaRDD<SolrDocument> docs = solrRDD.queryShards(solrQuery);
 
     //TODO: Commented out until we implement term vectors in Base RDD
 //    // query Solr for term vectors
