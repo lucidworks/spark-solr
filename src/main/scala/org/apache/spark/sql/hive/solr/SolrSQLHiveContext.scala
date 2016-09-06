@@ -16,7 +16,8 @@ class SolrSQLHiveContext(
     tablePermissionChecker: Option[TablePermissionChecker] = None)
   extends HiveContext(sparkContext) with Logging {
 
-  val cachedSQLQueries: Map[String, String] = Map.empty
+  var cachedSQLQueries: Map[String, String] = Map.empty
+  protected val solrSubQueryPattern: Pattern = Pattern.compile(SolrSQLHiveContext.subQueryRegex, Pattern.CASE_INSENSITIVE)
 
   @transient
   override protected[sql] lazy val catalog =
@@ -24,81 +25,93 @@ class SolrSQLHiveContext(
 
   override def sql(sqlText: String): DataFrame = {
     // process the statement and check for sub-queries
-    val modifiedSqlText = SolrSQLHiveContext.processSqlStmt(sqlText, this)
+    val modifiedSqlText = processSqlStmt(sqlText)
     super.sql(modifiedSqlText)
   }
 
-}
+  def processSqlStmt(sqlText: String) : String =
+    if (SolrSQLHiveContext.hasSolrAlias(sqlText)) processPushDownSql(sqlText) else sqlText
 
-object SolrSQLHiveContext extends Logging {
-  protected val solrSubQueryPattern: Pattern = Pattern.compile("\\((SELECT .*?\\)) as solr", Pattern.CASE_INSENSITIVE)
-
-  def processSqlStmt(sqlText: String, sHiveContext: SolrSQLHiveContext): String =
-    if (hasSolrAlias(sqlText)) processPushDownSql(sqlText, sHiveContext) else sqlText
-
-  def hasSolrAlias(sqlText: String): Boolean =
-    sqlText.toLowerCase.indexOf(") as solr") != -1
-
-  def processPushDownSql(sqlText: String, sHiveContext: SolrSQLHiveContext): String = {
+  def processPushDownSql(sqlText: String): String = {
     val matcher: Matcher = solrSubQueryPattern.matcher(sqlText)
     if (!matcher.find()) return sqlText
 
     val subQueryMatch = matcher.group()
+
     // remove the ') as solr' part
     val solrQueryStmt = subQueryMatch.substring(1, subQueryMatch.length - 9).trim
-
     if (solrQueryStmt == null) return sqlText
+    val solrQueryStmtLowerCase = solrQueryStmt.toLowerCase
 
     // Check if the query is cached and return the modified sql
-    val cachedPushdownQuery = sHiveContext.cachedSQLQueries.get(solrQueryStmt.toLowerCase)
+    val cachedPushdownQuery = cachedSQLQueries.get(solrQueryStmtLowerCase)
     if (cachedPushdownQuery.isDefined) {
       val replaceSql = matcher.replaceFirst(cachedPushdownQuery.get)
       logInfo("Found push-down in cache, re-wrote SQL statement as [" + replaceSql + "] to use cached push-down sub-query; original query: " + sqlText)
       return replaceSql
     }
 
-    val cols = parseColumns(sqlText).getOrElse(return sqlText)
-    log.debug("Parsed columns: " + cols)
-    log.info("Attempting to push-down sub-query into Solr: " + solrQueryStmt)
+    // Determine if the columns in the query are compatible with Solr SQL
+    val cols = SolrSQLHiveContext.parseColumns(sqlText).getOrElse(return sqlText)
+    logDebug("Parsed columns: " + cols)
+    logInfo("Attempting to push-down sub-query into Solr: " + solrQueryStmt)
 
-    val tableName = findTableFromSql(solrQueryStmt.toLowerCase).getOrElse(return sqlText)
+    val tableName = SolrSQLHiveContext.findTableFromSql(solrQueryStmtLowerCase).getOrElse(return sqlText)
     logInfo("Extracted table name '" + tableName + "' from sub-query: " + solrQueryStmt)
+    val tempTableName = SolrSQLHiveContext.getTempTableName(solrQueryStmtLowerCase, tableName)
 
-    val md5 = DigestUtils.md5Hex(sqlText)
-    val tempTableName = tableName + "_sspd_" + md5
     try {
       // load the push down query as a temp table
-      registerSolrPushdownQuery(tempTableName, solrQueryStmt, tableName, sHiveContext)
+      registerSolrPushdownQuery(tempTableName, solrQueryStmt, tableName)
       val newCachedPushdownQuery = "(SELECT * FROM " + tempTableName + ") as solr"
-      sHiveContext.cachedSQLQueries + (solrQueryStmt.toLowerCase -> newCachedPushdownQuery)
+      cachedSQLQueries += (solrQueryStmtLowerCase -> newCachedPushdownQuery)
 
       val rewrittenSql = matcher.replaceFirst(newCachedPushdownQuery)
-      log.info("Re-wrote SQL statement as [" + rewrittenSql + "] to use cached push-down sub-query; original query: " + sqlText)
+      logInfo("Re-wrote SQL statement as [" + rewrittenSql + "] to use cached push-down sub-query; original query: " + sqlText)
       return rewrittenSql
     } catch {
       case exc: Exception =>
-        log.error("Failed to push-down sub-query [" + solrQueryStmt + "] to Solr due to: " + exc)
+        logError("Failed to push-down sub-query [" + solrQueryStmt + "] to Solr due to: " + exc)
     }
+
     sqlText
   }
+
+  def registerSolrPushdownQuery(
+    tempTableName: String,
+    sqlText: String,
+    tableName: String): Unit = {
+    var opts = Map("request_handler" -> "/sql", "sql" -> sqlText, "collection" -> tableName)
+    val zkhost = config.get("zkhost")
+    if (zkhost.isDefined) opts += ("zkhost" -> zkhost.get)
+    logInfo("Registering temp table '" + tempTableName + "' for Solr push-down SQL using options " + opts)
+    this.read.format("solr").options(opts).load().registerTempTable(tempTableName)
+  }
+}
+
+object SolrSQLHiveContext extends Logging {
+  val subQueryRegex= "\\((SELECT .*?\\)) as solr"
+
+  def hasSolrAlias(sqlText: String): Boolean =
+    sqlText.toLowerCase.indexOf(") as solr") != -1
 
   def parseColumns(sqlText: String): Option[Map[String, String]] = {
     try {
       val cols = SolrSQLSupport.parseColumns(sqlText)
       if (cols.isEmpty) {
-        log.info("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
+        logInfo("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
         return None
       }
       Some(cols.toMap)
     } catch {
       case e: Exception =>
-        log.warn("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
+        logWarning("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
         None
     }
   }
 
   def findTableFromSql(sqlText: String): Option[String] = {
-    val fromAt = sqlText.indexOf("from ")
+    val fromAt = sqlText.toLowerCase.indexOf("from ")
     if (fromAt != -1) {
       val partialTableStmt = sqlText.substring(fromAt + 5)
       val spaceAt = partialTableStmt.indexOf(" ")
@@ -109,14 +122,8 @@ object SolrSQLHiveContext extends Logging {
     }
   }
 
-  def registerSolrPushdownQuery(
-      tempTableName: String,
-      sqlText: String,
-      tableName: String,
-      sHiveContext: SolrSQLHiveContext): Unit = {
-    val zkhost = sHiveContext.config.getOrElse("zkhost", null)
-    val opts = Map("request_handler" -> "/sql", "sql" -> sqlText, "collection" -> tableName, "zkhost" -> zkhost)
-    logInfo("Registering temp table '" + tempTableName + "' for Solr push-down SQL using options " + opts)
-    sHiveContext.read.format("solr").options(opts).load().registerTempTable(tempTableName)
+  def getTempTableName(sqlText: String, tableName: String): String = {
+    val md5 = DigestUtils.md5Hex(sqlText)
+    tableName + "_sspd_" + md5
   }
 }

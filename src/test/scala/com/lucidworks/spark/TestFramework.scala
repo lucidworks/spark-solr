@@ -135,13 +135,13 @@ trait MovielensBuilder extends TestSuiteBuilder {
   def createCollections(): Unit = {
     SolrCloudUtil.buildCollection(zkHost, moviesColName, null, 1, cloudClient, sc)
     SolrCloudUtil.buildCollection(zkHost, ratingsColName, null, 1, cloudClient, sc)
-    SolrCloudUtil.buildCollection(zkHost, userColName, null, 1, cloudClient, sc)
+//    SolrCloudUtil.buildCollection(zkHost, userColName, null, 1, cloudClient, sc)
   }
 
   def deleteCollections(): Unit = {
     SolrCloudUtil.deleteCollection(ratingsColName, cluster)
     SolrCloudUtil.deleteCollection(moviesColName, cluster)
-    SolrCloudUtil.deleteCollection(userColName, cluster)
+//    SolrCloudUtil.deleteCollection(userColName, cluster)
   }
 }
 
@@ -149,20 +149,19 @@ object MovieLensUtil {
   val dataDir: String = "src/test/resources/ml-100k"
 
   def indexMovieLensDataset(sqlContext: SQLContext, zkhost: String): Unit = {
-    sqlContext.udf.register("toInt", (str: String) => str.toInt)
-
-    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
-    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
+//    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
+//    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
 
     val moviesDF = sqlContext.read.json(dataDir + "/movielens_movies.json")
     moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_movies", "batch_size" -> "10000")).save
 
-    val ratingsDF = sqlContext.read.json(dataDir + "/movielens_ratings.json")
+    val ratingsDF = sqlContext.read.json(dataDir + "/movielens_ratings_10k.json")
     val dateUDF = udf(DateConverter.toISO8601(_: String))
     ratingsDF
       .withColumn("timestamp", dateUDF(ratingsDF("rating_timestamp")))
       .drop("rating_timestamp")
       .withColumnRenamed("timestamp", "rating_timestamp")
+      .limit(10000)
       .write
       .format("solr")
       .options(Map("zkhost" -> zkhost, "collection" -> "movielens_ratings", "batch_size" -> "10000"))
