@@ -10,10 +10,11 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
 
   override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
     try {
-      sqlContext match {
-        case sHiveContext: SolrSQLHiveContext =>
-          if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
-            sHiveContext.tablePermissionChecker.get.checkQueryAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
+      // Using scala case match is throwing the error scala.MatchError: org.apache.spark.sql.SQLContext@4fd80300 (of class org.apache.spark.sql.SQLContext)
+      if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
+        val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
+        if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
+          sHiveContext.tablePermissionChecker.get.checkQueryAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
       }
       return new SolrRelation(parameters, sqlContext)
     } catch {
@@ -28,10 +29,11 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
       parameters: Map[String, String],
       df: DataFrame): BaseRelation = {
     try {
-      sqlContext match {
-        case sHiveContext: SolrSQLHiveContext =>
-          if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
-            sHiveContext.tablePermissionChecker.get.checkWriteAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
+      // Using scala case match is throwing the error scala.MatchError: org.apache.spark.sql.SQLContext@4fd80300 (of class org.apache.spark.sql.SQLContext)
+      if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
+        val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
+        if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
+          sHiveContext.tablePermissionChecker.get.checkWriteAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
       }
 
       // TODO: What to do with the saveMode?
