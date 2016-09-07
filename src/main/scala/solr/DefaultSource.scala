@@ -1,7 +1,8 @@
 package solr
 
 import com.lucidworks.spark.SolrRelation
-import com.lucidworks.spark.util.Constants
+import com.lucidworks.spark.util.{ConfigurationConstants, Constants}
+import org.apache.spark.sql.hive.solr.SolrSQLHiveContext
 import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
 import org.apache.spark.sql.sources.{DataSourceRegister, BaseRelation, CreatableRelationProvider, RelationProvider}
 
@@ -9,6 +10,11 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
 
   override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
     try {
+      sqlContext match {
+        case sHiveContext: SolrSQLHiveContext =>
+          if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
+            sHiveContext.tablePermissionChecker.get.checkQueryAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
+      }
       return new SolrRelation(parameters, sqlContext)
     } catch {
       case re: RuntimeException => throw re
@@ -22,6 +28,12 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
       parameters: Map[String, String],
       df: DataFrame): BaseRelation = {
     try {
+      sqlContext match {
+        case sHiveContext: SolrSQLHiveContext =>
+          if (sHiveContext.tablePermissionChecker.isDefined && parameters.isDefinedAt(ConfigurationConstants.SOLR_COLLECTION_PARAM))
+            sHiveContext.tablePermissionChecker.get.checkWriteAccess(parameters.get(ConfigurationConstants.SOLR_COLLECTION_PARAM).get)
+      }
+
       // TODO: What to do with the saveMode?
       val solrRelation: SolrRelation = new SolrRelation(parameters, sqlContext, Some(df))
       solrRelation.insert(df, overwrite = true)

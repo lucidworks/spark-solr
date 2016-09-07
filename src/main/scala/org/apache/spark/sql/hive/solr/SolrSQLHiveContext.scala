@@ -5,23 +5,19 @@ import java.util.regex.{Matcher, Pattern}
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.catalyst.analysis.OverrideCatalog
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Logging, SparkContext}
+
 import scala.collection.JavaConversions.mapAsScalaMap
 
 class SolrSQLHiveContext(
     sparkContext: SparkContext,
     val config: Map[String, String],
-    tablePermissionChecker: Option[TablePermissionChecker] = None)
+    val tablePermissionChecker: Option[TablePermissionChecker] = None)
   extends HiveContext(sparkContext) with Logging {
 
   var cachedSQLQueries: Map[String, String] = Map.empty
   protected val solrSubQueryPattern: Pattern = Pattern.compile(SolrSQLHiveContext.subQueryRegex, Pattern.CASE_INSENSITIVE)
-
-  @transient
-  override protected[sql] lazy val catalog =
-    new SolrHiveMetastoreCatalog(metadataHive, this, tablePermissionChecker) with OverrideCatalog
 
   override def sql(sqlText: String): DataFrame = {
     // process the statement and check for sub-queries
@@ -126,4 +122,12 @@ object SolrSQLHiveContext extends Logging {
     val md5 = DigestUtils.md5Hex(sqlText)
     tableName + "_sspd_" + md5
   }
+
+}
+
+trait TablePermissionChecker {
+
+  def checkQueryAccess(collection: String): Unit
+
+  def checkWriteAccess(collection: String): Unit
 }
