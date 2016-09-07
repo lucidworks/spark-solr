@@ -149,8 +149,8 @@ object MovieLensUtil {
   val dataDir: String = "src/test/resources/ml-100k"
 
   def indexMovieLensDataset(sqlContext: SQLContext, zkhost: String): Unit = {
-//    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
-//    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
+    //    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
+    //    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
 
     val moviesDF = sqlContext.read.json(dataDir + "/movielens_movies.json")
     moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_movies", "batch_size" -> "10000")).save
@@ -167,5 +167,4 @@ object MovieLensUtil {
       .options(Map("zkhost" -> zkhost, "collection" -> "movielens_ratings", "batch_size" -> "10000"))
       .save
   }
-
 }
