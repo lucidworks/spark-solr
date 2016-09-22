@@ -25,7 +25,6 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
     None
   }
 
-
   def getQuery: Option[String] = {
     if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
     None
@@ -131,13 +130,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
-      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
+      logDebug(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
       return QT_STREAM
     }
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
-      logInfo(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
+      logDebug(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
       return QT_SQL
     }
 

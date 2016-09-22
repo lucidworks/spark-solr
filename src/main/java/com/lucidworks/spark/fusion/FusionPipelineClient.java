@@ -611,6 +611,11 @@ public class FusionPipelineClient {
   }
 
   public HttpEntity sendRequestToFusion(HttpUriRequest httpRequest) throws Exception {
+    return sendRequestToFusion(httpRequest, true);
+  }
+
+  public HttpEntity sendRequestToFusion(HttpUriRequest httpRequest, boolean retry) throws Exception {
+
     String endpoint = httpRequest.getRequestLine().getUri();
     int requestId = requestCounter.incrementAndGet();
     FusionSession fusionSession = getSession(endpoint, requestId);
@@ -635,9 +640,16 @@ public class FusionPipelineClient {
 
     entity = response.getEntity();
     int statusCode = response.getStatusLine().getStatusCode();
-
     if (log.isDebugEnabled()) {
       log.debug(httpRequest.getMethod()+" request to "+endpoint+" returned: "+statusCode);
+    }
+
+    if (!retry) {
+      if (statusCode == 200 || statusCode == 204) {
+        return entity;
+      } else {
+        raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
+      }
     }
 
     if (statusCode == 401) {

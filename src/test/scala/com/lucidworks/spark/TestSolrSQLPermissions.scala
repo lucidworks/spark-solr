@@ -1,8 +1,8 @@
-package org.apache.spark.sql.hive.solr
+package com.lucidworks.spark
 
-import com.lucidworks.spark.TestSuiteBuilder
 import com.lucidworks.spark.util.SolrCloudUtil
-import org.apache.spark.sql.DataFrame
+import org.apache.hadoop.security.UserGroupInformation
+import org.apache.spark.sql.{SQLContext, DataFrame}
 
 class TestSolrSQLPermissions extends TestSuiteBuilder {
   var sHiveContext: SolrSQLHiveContext = _
@@ -38,13 +38,13 @@ class TestSolrSQLPermissions extends TestSuiteBuilder {
 }
 
 class TestTablePermissionChecker extends TablePermissionChecker {
-  override def checkQueryAccess(collection: String): Unit = {
-    if (collection.equals("testSolrSQLPermissions"))
+  override def checkQueryAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
+    if (securedResource.resource == "testSolrSQLPermissions")
       throw new NoQueryAccessTableException
   }
 
-  override def checkWriteAccess(collection: String): Unit = {
-    if (collection.equals("testSolrSQLPermissions"))
+  override def checkWriteAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
+    if (securedResource.resource == "testSolrSQLPermissions")
       throw new NoWriteAccessTableException
   }
 }
