@@ -269,6 +269,11 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
+    if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
+      val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
+      sHiveContext.checkReadAccess(collection, "solr")
+    }
+
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
     if (rq == QT_STREAM || rq == QT_SQL) {
       // ignore any fields / filters when processing a streaming expression

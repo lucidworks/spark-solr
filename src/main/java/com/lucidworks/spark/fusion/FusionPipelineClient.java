@@ -175,6 +175,9 @@ public class FusionPipelineClient {
     requestCounter = new AtomicInteger(0);
   }
 
+  public String getFusionUser() { return fusionUser; }
+  public String getFusionRealm() { return fusionRealm; }
+
   public void setMetricsRegistry(MetricRegistry metrics) {
     this.metrics = metrics;
   }
@@ -342,7 +345,7 @@ public class FusionPipelineClient {
       if (fusionSession == null || (currTime - fusionSession.sessionEstablishedAt) > maxNanosOfInactivity) {
         log.info("Fusion session is likely expired (or soon will be) for " + url + ", " +
                 "pre-emptively re-setting this session before processing request " + requestId);
-        fusionSession = resetSession(url);
+        fusionSession = resetSession(sessionKey);
         if (fusionSession == null)
           throw new IllegalStateException("Failed to re-connect to " + url +
                   " after session loss when processing request " + requestId);
