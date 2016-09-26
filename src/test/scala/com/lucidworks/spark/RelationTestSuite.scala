@@ -165,7 +165,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
          |  ORDER BY movie_id asc
        """.stripMargin
     var sqlDF = sqlContext.read.format("solr").options(
-      Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "sql" -> sqlStmt)).load
+      Map("zkhost" -> zkHost, "sql" -> sqlStmt)).load
     sqlDF.printSchema
     sqlDF.show
 

@@ -163,6 +163,8 @@ By default, all fields for each document are pulled back from Solr.
 
 You can use the `rows` option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implementation uses either deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows.
 
+To be clear, this is not the maximum number of rows to read from Solr. All matching rows on the backend are read. The `rows` parameter is the page size.
+
 By default, the implementation uses 1000 rows but if your documents are smaller, you can increase this to 10000. Using too large a value can put pressure on the Solr JVM's garbage collector.
 
 Usage: `option("rows","10000")`
@@ -252,6 +254,23 @@ Usage: `option("gen_uniq_key", "true")`
 
 Default: false
 
+==== sample_seed
+
+The `sample_seed` option allows you to read a random sample of documents from Solr using the specified seed. This option can be useful if you just need to explore the data before performing operations on the full result set. By default, if this option is provided, a 10% sample size is read from Solr, but you can use the `sample_pct` option to control the sample size.
+
+Usage: `option("sample_seed", "5150")`
+
+Default: None
+
+==== sample_pct
+
+The `sample_pct` option allows you to set the size of a random sample of documents from Solr; use a value between 0 and 1.
+
+Usage: `option("sample_pct", "0.05")`
+
+Default: 0.1
+
+
 === solr.params
 
 The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
@@ -309,6 +328,23 @@ Usage: `option("max_active_partitions", "100")`
 Default: null
 
 //end::tuning[]
+
+//tag::spark-troubleshooting[]
+== Troubleshooting Tips
+
+=== Why is dataFrame.count so slow?
+
+Solr can provide the number of matching documents nearly instantly, so why is calling `count` on a DataFrame backed by a Solr query so slow? The reason is that Spark likes to read all rows before performing any operations on a DataFrame. So when you ask SparkSQL to count the rows in a DataFrame, spark-solr has to read all matching documents from Solr and then count the rows in the RDD.
+
+If you're just exploring a Solr collection from Spark and need to know the number of matching rows for a query, you can use `SolrQuerySupport.getNumDocsFromSolr` utility function.
+
+=== I set rows to 10 and now my job takes forever to read 10 rows from Solr!
+
+The `rows` option sets the page size, but all matching rows are read from Solr for every query. So if your query matches many documents in Solr, then Spark is reading them all 10 docs per request.
+
+Use the `sample_seed` option to limit the size of the results returned from Solr.
+
+//end::spark-troubleshooting[]
 
 //tag::spark-app[]
 == Developing a Spark Application
