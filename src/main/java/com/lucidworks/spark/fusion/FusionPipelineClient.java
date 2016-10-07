@@ -57,6 +57,8 @@ public class FusionPipelineClient {
 
   private static final Log log = LogFactory.getLog(FusionPipelineClient.class);
 
+  public static final String PIPELINE_DOC_CONTENT_TYPE = "application/vnd.lucidworks-document";
+
   public static final String LWWW_JAAS_FILE = "lww.jaas.file";
   public static final String LWWW_JAAS_APPNAME = "lww.jaas.appname";
 
@@ -539,7 +541,7 @@ public class FusionPipelineClient {
 
     HttpPost postRequest = new HttpPost(postUrl);
     EntityTemplate et = new EntityTemplate(new JacksonContentProducer(jsonObjectMapper, docs));
-    et.setContentType("application/json");
+    et.setContentType(PIPELINE_DOC_CONTENT_TYPE);
     et.setContentEncoding(StandardCharsets.UTF_8.name());
     postRequest.setEntity(et);
 
