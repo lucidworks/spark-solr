@@ -44,6 +44,18 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
   }
 
+  test("Get Solr score as field") {
+    val df = sqlContext.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "id, userId, score")
+      .option(SOLR_QUERY_PARAM, "userId:93")
+      .load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 3)
+    assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
+  }
+
   test("SQL query") {
     val df: DataFrame = sqlContext.read.format("solr").option("zkHost", zkHost).option("collection", collectionName).load()
     assert(df.count() == eventSimCount)

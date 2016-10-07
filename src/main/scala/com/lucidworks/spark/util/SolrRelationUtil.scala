@@ -95,7 +95,11 @@ object SolrRelationUtil extends Logging {
           log.info("No structField definition found for field '" + field + "'")
         }
       } else {
-        log.info("Base schema does not contain field '" + field + "'")
+        if (field.equals("score")) {
+          listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+        } else {
+          log.info("Base schema does not contain field '" + field + "'")
+        }
       }
     }
 
