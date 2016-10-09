@@ -596,7 +596,7 @@ object SolrRelation extends LazyLogging {
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
-      if (structField.dataType == BooleanType || structField.dataType == TimestampType)
+      if (structField.dataType == BooleanType)
         return true
     }
     false

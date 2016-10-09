@@ -11,6 +11,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.status.api.v1.NotFoundException;
 import scala.collection.JavaConversions;
 import scala.collection.immutable.Set$;
@@ -26,49 +27,6 @@ public class EventsimUtil {
   private static ObjectMapper objectMapper = new ObjectMapper();
 
   /**
-   * Define the schema for Eventsim dataset
-   * @param zkHost
-   * @param collectionName
-   * @throws Exception
-   */
-  public static void defineSchemaForEventSim(String zkHost, String collectionName) throws Exception {
-    String schemaPath = "src/test/resources/eventsim/fields_schema.json";
-    log.info("Reading schema file: " + schemaPath);
-    File schemaFile = new File(schemaPath);
-    if (!schemaFile.exists())
-      throw new NotFoundException("Could not find the schema file at path " + schemaPath);
-
-    CloudSolrClient solrClient = SolrSupport.getCachedCloudClient(zkHost);
-    solrClient.setDefaultCollection(collectionName);
-    List<Map<String, Object>> fieldDefinitions = new ObjectMapper().readValue(schemaFile, new TypeReference<List<Map<String, Object>>>() {
-    });
-    JavaConversions.asScalaSet(new HashSet<>());
-    Map<String, SolrFieldMeta> fields = JavaConversions.mapAsJavaMap(getFieldTypes(
-      Set$.MODULE$.<String>empty(),
-      SolrSupport.getSolrBaseUrl(zkHost),
-      collectionName));
-    Set<String> existingFields = fields.keySet();
-
-    // Add the fields to Solr schema
-    for (Map<String, Object> fd: fieldDefinitions) {
-      String name = (String)fd.get("name");
-      if (!existingFields.contains(name)) {
-        // Add the field to Solr
-        SchemaRequest.AddField addFieldRequest = new SchemaRequest.AddField(fd);
-        SchemaResponse.UpdateResponse updateResponse = addFieldRequest.process(solrClient);
-
-        if (updateResponse.getStatus() != 0)
-          throw new Exception("Incorrect status response from Solr. Errors are: " + updateResponse.getResponse().get("errors"));
-        if (updateResponse.getResponse().asMap(5).containsKey("errors"))
-          throw new Exception("Errors from schema request: " + updateResponse.getResponse().get("errors").toString());
-        log.info("Added field definition: " + fd.toString());
-      } else {
-        log.info("Field '" + name + "' already exists");
-      }
-    }
-  }
-
-  /**
    * Load the eventsim json dataset and post it through HttpClient
    * @throws Exception
    */
@@ -79,7 +37,7 @@ public class EventsimUtil {
     log.info("Indexing eventsim documents from file " + datasetPath);
 
     df.registerTempTable("jdbcDF");
-    sqlContext.udf().register("ts2ISO", new UDF1<Long, Timestamp>() {
+    sqlContext.udf().register("ts2iso", new UDF1<Long, Timestamp>() {
       public Timestamp call(Long ts) {
         return asDate(ts);
       }
@@ -88,7 +46,7 @@ public class EventsimUtil {
     // Registering an UDF and re-using it via DataFrames is not available through Java right now.
     Dataset newDF = sqlContext.sql("SELECT userAgent, userId, artist, auth, firstName, gender, itemInSession, lastName, " +
       "length, level, location, method, page, sessionId, song,  " +
-      "ts2ISO(registration) AS registration, ts2ISO(ts) AS ts, status from jdbcDF");
+      "ts2iso(registration) AS registration, ts2iso(ts) AS ts, status from jdbcDF");
 
     HashMap<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
