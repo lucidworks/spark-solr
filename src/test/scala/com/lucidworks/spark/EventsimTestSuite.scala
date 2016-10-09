@@ -36,7 +36,7 @@ class EventsimTestSuite extends EventsimBuilder {
     val df = sqlContext.read.format("solr")
       .option(SOLR_ZK_HOST_PARAM, zkHost)
       .option(SOLR_COLLECTION_PARAM, collectionName)
-      .option(SOLR_FIELD_PARAM, "id, userId,")
+      .option(SOLR_FIELD_PARAM, "userId, ts")
       .option(SOLR_QUERY_PARAM, "userId:93")
       .load()
     val singleRow = df.take(1)(0)
@@ -222,7 +222,7 @@ class EventsimTestSuite extends EventsimBuilder {
     solrRelation.query.addSort("registration", SolrQuery.ORDER.asc)
     val sortClauses = solrRelation.query.getSorts.asScala.toList
     val isSortFieldDocValue = SolrRelation.checkSortFieldsForDV(solrRelation.baseSchema.get, sortClauses)
-    assert(!isSortFieldDocValue)
+    assert(isSortFieldDocValue)
 
     solrRelation.query.setSorts(Collections.emptyList())
     SolrRelation.addSortField(querySchema, solrRelation.query)

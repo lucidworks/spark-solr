@@ -39,7 +39,6 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
       deleteCollection(testCollectionName);
       buildCollection(zkHost, testCollectionName, null, 2);
-      EventsimUtil.defineSchemaForEventSim(zkHost, testCollectionName);
       EventsimUtil.loadEventSimDataSet(zkHost, testCollectionName, sqlContext);
 
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
