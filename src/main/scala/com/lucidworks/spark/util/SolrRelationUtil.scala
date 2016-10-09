@@ -96,7 +96,11 @@ object SolrRelationUtil extends LazyLogging {
           logger.info("No structField definition found for field '" + field + "'")
         }
       } else {
-        logger.info("Base schema does not contain field '" + field + "'")
+        if (field.equals("score")) {
+          listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+        } else {
+          logger.info("Base schema does not contain field '" + field + "'")
+        }
       }
     }
 

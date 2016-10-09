@@ -188,7 +188,7 @@ object NewsgroupsIndexer {
   * a set of date formats known to be present in the 20 newsgroups data, then converts them
   * to ISO8601 format.
   */
-private object DateConverter extends Serializable with LazyLogging {
+object DateConverter extends Serializable with LazyLogging {
   // Map of time zone abbreviations to time zone IDs, from <http://www.timeanddate.com/time/zones/>,
   // <http://www.worldtimezone.com>, and Joda-Time v2.2 DateTimeZone.getAvailableIds()
   val ZoneMap = Map("+3000" -> "Europe/Moscow", // 19 Apr 93 16:15:19 +3000 <- invalid offset, should be +0300
@@ -210,6 +210,7 @@ private object DateConverter extends Serializable with LazyLogging {
     "dd MMM yy HH:mm:ss Z",
     "MM/dd/yy",
     "MMM dd, yy",
+    "yyyy-MM-dd HH:mm:ss",
     "MMM dd HH:mm:ss yy").map(DateTimeFormat.forPattern(_).getParser)
   val Formatter = new DateTimeFormatterBuilder().append(null, DateParsers)
     .toFormatter.withPivotYear(1970).withLocale(Locale.ENGLISH)

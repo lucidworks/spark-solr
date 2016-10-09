@@ -3,12 +3,14 @@ package com.lucidworks.spark
 import java.io.File
 import java.util.UUID
 
+import com.lucidworks.spark.example.ml.DateConverter
 import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.functions.udf
 import org.apache.spark.{SparkConf, SparkContext}
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
@@ -112,3 +114,56 @@ trait EventsimBuilder extends TestSuiteBuilder {
   def numShards: Int = 2
 }
 
+trait MovielensBuilder extends TestSuiteBuilder {
+
+  val moviesColName: String = "movielens_movies"
+  val ratingsColName: String = "movielens_ratings"
+  val userColName: String = "movielens_users"
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    createCollections()
+    MovieLensUtil.indexMovieLensDataset(sqlContext, zkHost)
+  }
+
+  override def afterAll(): Unit = {
+    deleteCollections()
+    super.afterAll()
+  }
+
+  def createCollections(): Unit = {
+    SolrCloudUtil.buildCollection(zkHost, moviesColName, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, ratingsColName, null, 1, cloudClient, sc)
+//    SolrCloudUtil.buildCollection(zkHost, userColName, null, 1, cloudClient, sc)
+  }
+
+  def deleteCollections(): Unit = {
+    SolrCloudUtil.deleteCollection(ratingsColName, cluster)
+    SolrCloudUtil.deleteCollection(moviesColName, cluster)
+//    SolrCloudUtil.deleteCollection(userColName, cluster)
+  }
+}
+
+object MovieLensUtil {
+  val dataDir: String = "src/test/resources/ml-100k"
+
+  def indexMovieLensDataset(sqlContext: SQLContext, zkhost: String): Unit = {
+    //    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
+    //    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
+
+    val moviesDF = sqlContext.read.json(dataDir + "/movielens_movies.json")
+    moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_movies", "batch_size" -> "10000")).save
+
+    val ratingsDF = sqlContext.read.json(dataDir + "/movielens_ratings_10k.json")
+    val dateUDF = udf(DateConverter.toISO8601(_: String))
+    ratingsDF
+      .withColumn("timestamp", dateUDF(ratingsDF("rating_timestamp")))
+      .drop("rating_timestamp")
+      .withColumnRenamed("timestamp", "rating_timestamp")
+      .limit(10000)
+      .write
+      .format("solr")
+      .options(Map("zkhost" -> zkhost, "collection" -> "movielens_ratings", "batch_size" -> "10000"))
+      .save
+  }
+}

@@ -159,6 +159,9 @@ object SolrJsonSupport extends LazyLogging {
   }
 
   def getHttpClient(): HttpClient = {
+    // Make sure to configure Kerberos for HttpClient before first usage
+    SolrSupport.setupKerberosIfNeeded()
+
     val params = new ModifiableSolrParams()
     params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 128)
     params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 32)

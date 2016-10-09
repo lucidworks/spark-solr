@@ -25,12 +25,17 @@ public abstract class TupleStreamIterator extends ResultsIterator {
   protected SolrParams solrParams;
   private Tuple currentTuple = null;
   private long openedAt;
+  private boolean isClosed = false;
 
   public TupleStreamIterator(SolrParams solrParams) {
     this.solrParams = solrParams;
   }
 
   public synchronized boolean hasNext() {
+    if (isClosed) {
+      return false;
+    }
+
     if (stream == null) {
       stream = openStream();
       openedAt = System.currentTimeMillis();
@@ -51,6 +56,8 @@ public abstract class TupleStreamIterator extends ResultsIterator {
       } catch (IOException e) {
         log.error("Failed to close the SolrStream.", e);
         throw new RuntimeException(e);
+      } finally {
+        this.isClosed = true;
       }
 
       long diffMs = System.currentTimeMillis() - openedAt;
@@ -81,6 +88,9 @@ public abstract class TupleStreamIterator extends ResultsIterator {
   protected abstract TupleStream openStream();
 
   public synchronized Tuple nextTuple() {
+    if (isClosed)
+      throw new NoSuchElementException("already closed");
+
     if (currentTuple == null)
       throw new NoSuchElementException();
 

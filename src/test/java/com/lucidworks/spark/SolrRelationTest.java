@@ -367,7 +367,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     System.out.println("\n\n>> reading data from Solr using options: "+options+"\n\n");
-
     Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort(idFieldName);
     fromSolr.printSchema();

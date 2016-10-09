@@ -46,7 +46,23 @@ class SolrRelation(
   }
 
   checkRequiredParams()
-  var collection = conf.getCollection.get
+
+  var collection = conf.getCollection.getOrElse({
+    var coll = Option.empty[String]
+    if (conf.getSqlStmt.isDefined) {
+      val collectionFromSql = SolrSQLHiveContext.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+      if (collectionFromSql.isDefined) {
+        coll = collectionFromSql
+      }
+    }
+    if (coll.isDefined) {
+      logger.info(s"resolved collection option from sql to be ${coll.get}")
+      coll.get
+    } else {
+      throw new IllegalArgumentException("collection option is required!")
+    }
+  })
+
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
@@ -253,6 +269,11 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
+    if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
+      val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
+      sHiveContext.checkReadAccess(collection, "solr")
+    }
+
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
     if (rq == QT_STREAM || rq == QT_SQL) {
       // ignore any fields / filters when processing a streaming expression
@@ -265,7 +286,7 @@ class SolrRelation(
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
     if (!baseSchema.isDefined) {
-      throw new IllegalStateException("No base schema defined for collection "+conf.getCollection.get)
+      throw new IllegalStateException("No base schema defined for collection "+collection)
     }
 
     val collectionBaseSchema = baseSchema.get
@@ -316,6 +337,11 @@ class SolrRelation(
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
+
+      if (querySchema.fields.length == 0) {
+        throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
+      }
+
       if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
         logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
 
@@ -401,7 +427,9 @@ class SolrRelation(
       case at: ArrayType =>
         map += ("multiValued" -> "true")
         map += ("type" -> toSolrType(at.elementType))
-      case _ => map += ("type" -> toSolrType(dataType))
+      case _ =>
+        map += ("multiValued" -> "false")
+        map += ("type" -> toSolrType(dataType))
     }
     map.toMap
   }
@@ -419,8 +447,10 @@ class SolrRelation(
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en"))
+      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
+        logger.info(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
+      }
     })
 
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
@@ -430,7 +460,6 @@ class SolrRelation(
 
     if (fieldsToAddToSolr.nonEmpty) {
       logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
-
       val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
         addFieldsUpdateRequest.process(cloudClient, collectionId)
       if (updateResponse.getStatus >= 400) {
@@ -457,7 +486,7 @@ class SolrRelation(
       SolrJsonSupport.doJsonRequest(cloudClient.getLbClient.getHttpClient, configApi, postRequest)
     }
 
-    val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 500
+    val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
     val uniqueKey: String = solrRDD.uniqueKey
 
@@ -524,7 +553,6 @@ class SolrRelation(
 
   private def checkRequiredParams(): Unit = {
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
-    require(conf.getCollection.isDefined, "Param '" + SOLR_COLLECTION_PARAM + "' is required")
   }
 }
 

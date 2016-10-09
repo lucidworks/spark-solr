@@ -188,6 +188,11 @@
           <target>${java.version}</target>
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>versions-maven-plugin</artifactId>
+        <version>2.3</version>
+      </plugin>
       <!-- Surefire runs Java tests -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
