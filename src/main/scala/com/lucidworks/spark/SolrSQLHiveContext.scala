@@ -4,11 +4,12 @@ import java.util.Locale
 import java.util.regex.{Matcher, Pattern}
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.security.UserGroupInformation
 import org.apache.spark.sql.{SQLContext, DataFrame}
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.SparkContext
 
 import java.security.AccessControlException
 
@@ -19,7 +20,7 @@ case class SecuredResource(resource:String, resourceType:String)
 class SolrSQLHiveContext(sparkContext: SparkContext,
     val config: Map[String, String],
     val tablePermissionChecker: Option[TablePermissionChecker] = None)
-  extends HiveContext(sparkContext) with Logging {
+  extends HiveContext(sparkContext) with LazyLogging {
 
   var cachedSQLQueries: Map[String, String] = Map.empty
 
@@ -170,7 +171,7 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
   }
 }
 
-object SolrSQLHiveContext extends Logging {
+object SolrSQLHiveContext extends LazyLogging {
   val solrSubQueryPattern: Pattern = Pattern.compile("\\((SELECT .*?\\)) as solr", Pattern.CASE_INSENSITIVE)
   // also supports executing Solr queries directly if they use _query_ in the where clause, one of our few hints we can rely on
   val solrQueryPattern: Pattern = Pattern.compile("\\s_query_\\s?=\\s?'.*?'\\s?")
@@ -183,13 +184,13 @@ object SolrSQLHiveContext extends Logging {
     try {
       val cols = SolrSQLSupport.parseColumns(sqlText)
       if (cols.isEmpty) {
-        logInfo("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
+        logger.info("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
         return None
       }
       Some(cols.toMap)
     } catch {
       case e: Exception =>
-        logWarning("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
+        logger.warn("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
         None
     }
   }
@@ -197,7 +198,7 @@ object SolrSQLHiveContext extends Logging {
   def findSolrCollectionNameInSql(sqlText: String): Option[String] = {
     val collectionIdMatcher = solrCollectionInSqlPattern.matcher(sqlText)
     if (!collectionIdMatcher.find()) {
-      logWarning(s"No push-down to Solr! Cannot determine collection name from Solr SQL query: ${sqlText}")
+      logger.warn(s"No push-down to Solr! Cannot determine collection name from Solr SQL query: ${sqlText}")
       return None
     }
     Some(collectionIdMatcher.group(1))
