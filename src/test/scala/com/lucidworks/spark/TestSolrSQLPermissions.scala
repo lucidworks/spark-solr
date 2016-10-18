@@ -20,14 +20,14 @@ class TestSolrSQLPermissions extends TestSuiteBuilder {
     super.afterAll()
   }
 
-  test("Check query access") {
+  ignore("Check query access") {
     val ex = intercept[RuntimeException] {
       sHiveContext.read.format("solr").options(sHiveContext.config).load()
     }
     assert(ex.getCause.isInstanceOf[NoQueryAccessTableException])
   }
 
-  test("Check write access") {
+  ignore("Check write access") {
     val ex = intercept[RuntimeException] {
       val datasetPath : String = "src/test/resources/eventsim/sample_eventsim_1000.json"
       val df : DataFrame = sHiveContext.read.json(datasetPath)
