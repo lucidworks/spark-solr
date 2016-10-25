@@ -228,7 +228,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
 
     long _startMs = System.currentTimeMillis();
 
-    int numSplits = Math.round(toBeSplit.getNumHits() / docsPerSplit);
+    int numSplits = docsPerSplit > 0 ? Math.round(toBeSplit.getNumHits() / docsPerSplit) : 1;
     if (numSplits == 1 && toBeSplit.getNumHits() > docsPerSplit)
       numSplits = 2;
 
