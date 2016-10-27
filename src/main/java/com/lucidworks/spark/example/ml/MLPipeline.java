@@ -21,13 +21,13 @@ import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.spark.sql.SparkSession;
 import scala.collection.JavaConversions$;
 
 public class MLPipeline implements SparkApp.RDDProcessor {
@@ -76,8 +76,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
   @Override
   public int run(SparkConf conf, CommandLine cli) throws Exception {
 
-    JavaSparkContext jsc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new SQLContext(jsc);
+    SparkSession sparkSession = SparkSession.builder().config(conf).getOrCreate();
 
     String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
     String collection = cli.getOptionValue("collection", "ml20news");
@@ -92,7 +91,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     options.put("fields", "id," + labelField + "," + contentFields);
 
     double sampleFraction = Double.parseDouble(cli.getOptionValue("sample", "1.0"));
-    Dataset solrData = sqlContext.read().format("solr").options(options).load();
+    Dataset solrData = sparkSession.read().format("solr").options(options).load();
     solrData = solrData.sample(false, sampleFraction);
 
     // Configure an ML pipeline, which consists of the following stages:

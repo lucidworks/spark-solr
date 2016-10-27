@@ -12,7 +12,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
       val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
+      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
         .option("header", "true")
         .option("inferSchema", "true")
         .load(csvFileLocation)
@@ -25,7 +25,7 @@ class TestQuerying extends TestSuiteBuilder {
       val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
       solrCloudClient.commit(collectionName, true, true)
 
-      val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
       assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
@@ -43,7 +43,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
       val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
+      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
         .option("header", "true")
         .option("inferSchema", "true")
         .load(csvFileLocation)
@@ -56,7 +56,7 @@ class TestQuerying extends TestSuiteBuilder {
       val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
       solrCloudClient.commit(collectionName, true, true)
 
-      val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
       assert(solrDF.schema.fields.length === 3)
 
@@ -80,7 +80,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 2, cloudClient, sc)
     try {
       val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
+      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
         .option("header", "true")
         .option("inferSchema", "true")
         .load(csvFileLocation)
@@ -99,7 +99,7 @@ class TestQuerying extends TestSuiteBuilder {
       solrCloudClient.commit(collection1Name, true, true)
       solrCloudClient.commit(collection2Name, true, true)
 
-      val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 6)
       assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column

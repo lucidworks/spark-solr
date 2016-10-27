@@ -1,7 +1,5 @@
 package com.lucidworks.spark
 
-import java.util.UUID
-
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode._
 
@@ -21,7 +19,7 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection3Name, null, 1, cloudClient, sc)
     try {
       val jsonFileLocation = "src/test/resources/test-data/events.json"
-      val jsonDF = sqlContext.read.json(jsonFileLocation)
+      val jsonDF = sparkSession.read.json(jsonFileLocation)
       assert(jsonDF.count == 100)
 
       var col1DF=jsonDF.filter(jsonDF("timestamp_tdt") >= "2014-11-24T17:30" && jsonDF("timestamp_tdt") < "2014-11-24T17:31")
@@ -50,17 +48,17 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
 
       // No query, return all the partitons
       var solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES")
-      var solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      var solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 100)
 
       //query to select all partitions
       solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[* TO *]")
-      solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 100)
 
       // querying a range
       solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[2014-11-24T17:30:00Z TO 2014-11-24T17:32:00Z]")
-      solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 63)
 
 

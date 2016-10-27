@@ -21,15 +21,14 @@ import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformer
 import org.apache.commons.cli.CommandLine
 import org.apache.commons.cli.Option.{builder => OptionBuilder}
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.ml.{Pipeline, PipelineStage}
+import org.apache.spark.SparkConf
 import org.apache.spark.ml.classification.NaiveBayes
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.ml.feature._
-import org.apache.spark.ml.tuning.CrossValidator
-import org.apache.spark.ml.tuning.{CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.{Pipeline, PipelineStage}
 import org.apache.spark.mllib.evaluation.MulticlassMetrics
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.SparkSession
 
 /** An example of building a spark.ml classification model to predict the newsgroup of
   * articles from the 20 newsgroups data (see [[http://qwone.com/~jason/20Newsgroups/]])
@@ -78,8 +77,8 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
       s"Solr source collection. Default: $DefaultCollection").build())
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
-    val jsc = new SparkContext(conf)
-    val sqlContext = new SQLContext(jsc)
+    val sparkSession: SparkSession = SparkSession.builder().config(conf).getOrCreate()
+
     val labelField = cli.getOptionValue("labelField", DefaultLabelField)
     val contentFields = cli.getOptionValue("contentFields", DefaultContentFields).split(",").map(_.trim)
     val sampleFraction = cli.getOptionValue("sample", DefaultSample).toDouble
@@ -89,7 +88,7 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
       "collection" -> cli.getOptionValue("collection", DefaultCollection),
       "query" -> cli.getOptionValue("query", DefaultQuery),
       "fields" -> s"""id,$labelField,${contentFields.mkString(",")}""")
-    val solrData = sqlContext.read.format("solr").options(options).load
+    val solrData = sparkSession.read.format("solr").options(options).load
     val sampledSolrData = solrData.sample(withReplacement = false, sampleFraction)
 
     // Configure an ML pipeline, which consists of the following stages:

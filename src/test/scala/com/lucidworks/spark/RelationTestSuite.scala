@@ -37,7 +37,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       updateRequest.process(cloudClient, collectionName)
       updateRequest.commit(cloudClient, collectionName)
 
-      val testDF = sqlContext.read.format("solr").options(
+      val testDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName,
           "query" -> "the_abcdefghijklmnopqrstuvwxyz_field_01:[* TO *]", "fields" -> fl)).load
       //testDF.printSchema
@@ -53,7 +53,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
           |           sort="the_abcdefghijklmnopqrstuvwxyz_field_01 asc",
           |           qt="/export")
       """.stripMargin
-      val exprDF = sqlContext.read.format("solr").options(
+      val exprDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName, "expr" -> searchExpr)).load
       val exprSchema = exprDF.schema
       //exprDF.printSchema
@@ -70,7 +70,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
     val numMovies = buildMoviesCollection(moviesCollection)
 
-    var moviesDF = sqlContext.read.format("solr").options(
+    var moviesDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> moviesCollection, "fields" -> "movie_id,title")).load
     assert(moviesDF.count == numMovies)
     var schema = moviesDF.schema
@@ -84,7 +84,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
     val numRatings = buildRatingsCollection(ratingsCollection)
 
-    var ratingsDF = sqlContext.read.format("solr").options(
+    var ratingsDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "fields" -> "user_id,movie_id,rating,rating_timestamp")).load
     assert(ratingsDF.count == numRatings)
     schema = ratingsDF.schema
@@ -110,7 +110,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       |    avg(rating)
       |  )
     """.stripMargin
-    var ratingFacetsDF = sqlContext.read.format("solr").options(
+    var ratingFacetsDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> facetExpr)).load
     assert(ratingFacetsDF.count == 2)
     schema = ratingFacetsDF.schema
@@ -141,7 +141,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
          |    on="movie_id"
          |  ), workers="1", sort="movie_id asc")
        """.stripMargin
-    var joinDF = sqlContext.read.format("solr").options(
+    var joinDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> hashJoinExpr)).load
     assert(joinDF.count == numRatings)
     joinDF.printSchema()
@@ -163,7 +163,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
          |  GROUP BY movie_id
          |  ORDER BY movie_id asc
        """.stripMargin
-    var sqlDF = sqlContext.read.format("solr").options(
+    var sqlDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "sql" -> sqlStmt)).load
     sqlDF.printSchema
     sqlDF.show

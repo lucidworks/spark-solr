@@ -34,8 +34,8 @@ public class UseML implements SparkApp.RDDProcessor {
 
     conf.set("spark.ui.enabled", "false");
 
-    JavaSparkContext jsc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new SQLContext(jsc);
+    SparkSession sparkSession = SparkSession.builder().config(conf).getOrCreate();
+    JavaSparkContext jsc = new JavaSparkContext(sparkSession.sparkContext());
 
     long diffMs = (System.currentTimeMillis() - startMs);
     System.out.println(">> took " + diffMs + " ms to create SQLContext");
@@ -46,7 +46,7 @@ public class UseML implements SparkApp.RDDProcessor {
     options.put("query", "content_txt:[* TO *]");
     options.put("fields", "content_txt");
 
-    Dataset solrData = sqlContext.read().format("solr").options(options).load();
+    Dataset solrData = sparkSession.read().format("solr").options(options).load();
     Dataset sample = solrData.sample(false, 0.1d, 5150).select("content_txt");
     List<Object> rows = sample.collectAsList();
     System.out.println(">> loaded "+rows.size()+" docs to classify");
@@ -61,7 +61,7 @@ public class UseML implements SparkApp.RDDProcessor {
     for (Object o : rows) {
       Row next = (Row) o;
       Row oneRow = RowFactory.create(next.getString(0));
-      Dataset oneRowDF = sqlContext.createDataFrame(Collections.<Row>singletonList(oneRow), schema);
+      Dataset oneRowDF = sparkSession.createDataFrame(Collections.<Row>singletonList(oneRow), schema);
       Dataset scored = bestModel.transform(oneRowDF);
       Object o1 = scored.collectAsList().get(0);
       Row scoredRow = (Row) o1;

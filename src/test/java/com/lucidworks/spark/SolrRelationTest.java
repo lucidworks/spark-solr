@@ -28,8 +28,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   public void testSampleIndex() throws Exception {
     String testCollection = "testSampleIndex";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       deleteCollection(testCollection);
       int numShards = 3;
       int numDocs = 100;
@@ -41,7 +39,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(SAMPLE_SEED(), "5150");
       options.put(SAMPLE_PCT(), "0.1");
-      Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
       long count = fromSolr.count();
 
       System.out.println("\n\n"+count+"\n\n");
@@ -57,13 +55,11 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   public void testIndexOneusagovDataFrame() throws Exception {
     String testCollection = "testIndexOneusagovDataFrame";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       // load test data from json file to index into Solr
-      Dataset eventsDF = sqlContext.read().json("src/test/resources/test-data/oneusagov/oneusagov_sample.json");
+      Dataset eventsDF = sparkSession.read().json("src/test/resources/test-data/oneusagov/oneusagov_sample.json");
       eventsDF = eventsDF.withColumnRenamed("_id", "id");
 
-      sqlContext.udf().register("secs2ts", new UDF1<Long, Timestamp>() {
+      sparkSession.udf().register("secs2ts", new UDF1<Long, Timestamp>() {
         public Timestamp call(final Long secs) throws Exception {
           return (secs != null) ? new Timestamp(secs * 1000) : null;
         }
@@ -78,7 +74,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int numShards = 1;
       int replicationFactor = 1;
       createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
-      validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+      validateDataFrameStoreLoad(sparkSession, testCollection, eventsDF);
     } finally {
       deleteCollection(testCollection);
     }
@@ -89,8 +85,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   public void testFlattenMultivalued() throws Exception {
     String testCollection = "testFlattenMultivalued";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       deleteCollection(testCollection);
       String confName = "testConfig";
       File confDir = new File("src/test/resources/conf");
@@ -123,7 +117,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       dumpSolrCollection(testCollection, q);
 
       // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-      Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
       fromSolr.printSchema();
 
       List<Row> rows = fromSolr.collectAsList();
@@ -147,10 +141,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   public void testEventsDataFrame() throws Exception {
     String testCollection = "testEventsDataFrame";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       // load test data from json file to index into Solr
-      Dataset eventsDF = sqlContext.read().json("src/test/resources/test-data/events.json");
+      Dataset eventsDF = sparkSession.read().json("src/test/resources/test-data/events.json");
       eventsDF = eventsDF.select("id", "count_l", "doc_id_s", "flag_s", "session_id_s", "type_s", "tz_timestamp_txt", "user_id_s", "`params.title_s`");
 
       deleteCollection(testCollection);
@@ -159,7 +151,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int numShards = 1;
       int replicationFactor = 1;
       createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
-      validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+      validateDataFrameStoreLoad(sparkSession, testCollection, eventsDF);
     } finally {
       deleteCollection(testCollection);
     }
@@ -170,10 +162,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   public void testAggDataFrame() throws Exception {
     String testCollection = "testAggDataFrame";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       // load test data from json file to index into Solr
-      Dataset aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
+      Dataset aggDF = sparkSession.read().json("src/test/resources/test-data/em_sample.json");
       aggDF = aggDF.select("id","aggr_count_l","aggr_id_s","aggr_job_id_s","aggr_type_s",
         "co_occurring_docIds_counts_ls","co_occurring_docIds_ss","entity_id_s","entity_type_s",
         "flag_s","grouping_key_s","in_session_ids_counts_ls","in_session_ids_ss","in_user_id_s",
@@ -188,7 +178,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int numShards = 1;
       int replicationFactor = 1;
       createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
-      validateDataFrameStoreLoad(sqlContext, testCollection, aggDF);
+      validateDataFrameStoreLoad(sparkSession, testCollection, aggDF);
     } finally {
       deleteCollection(testCollection);
     }
@@ -197,7 +187,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   //@Ignore
   @Test
   public void testMVDateHandling() throws Exception {
-    SQLContext sqlContext = new SQLContext(jsc);
     String testCollection = "testMVDateHandling";
 
     int numShards = 1;
@@ -222,7 +211,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
-    Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort("id");
     fromSolr.printSchema();
 
@@ -236,8 +225,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     String testCollection = "testFilterSupport";
     String testCollection2 = "testFilterSupport2";
     try {
-      SQLContext sqlContext = new SQLContext(jsc);
-
       String[] testData = new String[] {
         "1,a,x,1000,[a;x],[1000]",
         "2,b,y,2000,[b;y],[2000]",
@@ -253,7 +240,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(FLATTEN_MULTIVALUED(), "false");
 
-      Dataset df = sqlContext.read().format("solr").options(options).load();
+      Dataset df = sparkSession.read().format("solr").options(options).load();
       df.show();
       validateSchema(df);
       //df.show();
@@ -323,7 +310,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
       SolrSupport.getCachedCloudClient(zkHost).commit(testCollection2);
 
-      Dataset df2 = sqlContext.read().format("solr").options(options).load();
+      Dataset df2 = sparkSession.read().format("solr").options(options).load();
       df2.show();
       assert(df2.count() == 4);
     } finally {
@@ -339,7 +326,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
 
-  protected static List<Object> validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, Dataset sourceData) throws Exception {
+  protected static List<Object> validateDataFrameStoreLoad(SparkSession sparkSession, String testCollection, Dataset sourceData) throws Exception {
     String idFieldName = "id";
 
     sourceData = sourceData.sort(idFieldName);
@@ -367,7 +354,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     System.out.println("\n\n>> reading data from Solr using options: "+options+"\n\n");
-    Dataset fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+    Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
     fromSolr = fromSolr.sort(idFieldName);
     fromSolr.printSchema();
 
