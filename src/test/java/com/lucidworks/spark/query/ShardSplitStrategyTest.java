@@ -4,30 +4,22 @@ import com.lucidworks.spark.RDDProcessorTestBase;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
 import com.lucidworks.spark.rdd.SolrRDD$;
-import com.lucidworks.spark.util.SolrJsonSupport;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSupport;
-import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
-import org.json4s.JsonAST;
-import org.json4s.jackson.JsonMethods$;
 import org.junit.Test;
 import scala.Option;
-import scala.collection.JavaConversions;
 
-import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class ShardSplitStrategyTest extends RDDProcessorTestBase {
 

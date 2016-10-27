@@ -338,7 +338,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
-    sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
+
+    sourceData.repartition(1).write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
 
     // Explicit commit to make sure all docs are visible
     CloudSolrClient solrCloudClient = SolrSupport.getCachedCloudClient(zkHost);
