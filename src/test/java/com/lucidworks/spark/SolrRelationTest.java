@@ -114,7 +114,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       SolrQuery q = new SolrQuery("*:*");
       q.setRows(100);
       q.addSort("id", SolrQuery.ORDER.asc);
-      dumpSolrCollection(testCollection, q);
+//      dumpSolrCollection(testCollection, q);
 
       // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
       Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
@@ -203,7 +203,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     SolrQuery q = new SolrQuery("*:*");
     q.setRows(100);
     q.addSort("id", SolrQuery.ORDER.asc);
-    dumpSolrCollection(testCollection, q);
+//    dumpSolrCollection(testCollection, q);
 
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
@@ -347,7 +347,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     SolrQuery q = new SolrQuery("*:*");
     q.setRows(100);
     q.addSort(idFieldName, SolrQuery.ORDER.asc);
-    dumpSolrCollection(testCollection, q);
+//    dumpSolrCollection(testCollection, q);
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
