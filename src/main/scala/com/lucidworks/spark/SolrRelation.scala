@@ -16,9 +16,10 @@ import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.solr.SolrSparkSession
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{SparkSession, DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -30,8 +31,8 @@ import com.lucidworks.spark.util.ConfigurationConstants._
 
 class SolrRelation(
     val parameters: Map[String, String],
-    override val sqlContext: SQLContext,
-    val dataFrame: Option[DataFrame])(
+    val dataFrame: Option[DataFrame],
+    @transient val sparkSession: SparkSession)(
   implicit
     val conf: SolrConf = new SolrConf(parameters))
   extends BaseRelation
@@ -41,8 +42,10 @@ class SolrRelation(
   with InsertableRelation
   with LazyLogging {
 
-  def this(parameters: Map[String, String], sqlContext: SQLContext) {
-    this(parameters, sqlContext, None)
+  override val sqlContext: SQLContext = sparkSession.sqlContext
+
+  def this(parameters: Map[String, String], sparkSession: SparkSession) {
+    this(parameters, None, sparkSession)
   }
 
   checkRequiredParams()
@@ -50,7 +53,7 @@ class SolrRelation(
   var collection = conf.getCollection.getOrElse({
     var coll = Option.empty[String]
     if (conf.getSqlStmt.isDefined) {
-      val collectionFromSql = SolrSQLHiveContext.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+      val collectionFromSql = SolrSparkSession.findSolrCollectionNameInSql(conf.getSqlStmt.get)
       if (collectionFromSql.isDefined) {
         coll = collectionFromSql
       }
@@ -269,9 +272,10 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
-    if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
-      val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
-      sHiveContext.checkReadAccess(collection, "solr")
+    sparkSession match {
+      case solrSparkSession: SolrSparkSession =>
+        solrSparkSession.checkReadAccess(collection, "solr")
+      case _ =>
     }
 
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)

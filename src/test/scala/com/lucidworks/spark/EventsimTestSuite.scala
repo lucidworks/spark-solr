@@ -214,7 +214,7 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_ZK_HOST_PARAM -> zkHost,
       SOLR_COLLECTION_PARAM -> collectionName
     )
-    val solrRelation = new SolrRelation(options, sqlContext, None)
+    val solrRelation = new SolrRelation(options, None, sqlContext.sparkSession)
     val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema.get)
     val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
     assert(areFieldsDocValues)
