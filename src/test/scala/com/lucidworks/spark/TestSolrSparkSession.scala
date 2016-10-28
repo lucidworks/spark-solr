@@ -2,20 +2,22 @@ package com.lucidworks.spark
 
 import java.util.Locale
 
+import org.apache.spark.sql.solr.SolrSparkSession
 
-class TestSolrSQLHiveContext extends MovielensBuilder {
 
-  var sHiveContext: SolrSQLHiveContext = _
+class TestSolrSparkSession extends MovielensBuilder {
+
+  var sHiveContext: SolrSparkSession = _
 
   override def beforeAll(): Unit = {
     super.beforeAll()
     val opts = Map("zkhost" -> zkHost)
-    sHiveContext = new SolrSQLHiveContext(sc, opts)
+    sHiveContext = new SolrSparkSession(sc, opts)
   }
 
   test("find table from SQL statement") {
     val sqlStmt = "select * from dummy where a=b"
-    val tableName = SolrSQLHiveContext.findSolrCollectionNameInSql(sqlStmt.replaceAll("\\s+"," "))
+    val tableName = SolrSparkSession.findSolrCollectionNameInSql(sqlStmt.replaceAll("\\s+"," "))
     assert(tableName.isDefined)
     assert(tableName.get.equals("dummy"))
   }
@@ -28,7 +30,7 @@ class TestSolrSQLHiveContext extends MovielensBuilder {
 
     val cacheKey = "("+solrSQLStmt.toLowerCase(Locale.US)+") as solr"
 
-    val tempTableName = SolrSQLHiveContext.getTempTableName(cacheKey, "movielens_ratings")
+    val tempTableName = SolrSparkSession.getTempTableName(cacheKey, "movielens_ratings")
 
     // Non cached lookup
     {
@@ -43,8 +45,9 @@ class TestSolrSQLHiveContext extends MovielensBuilder {
 
       // Check if the temp table is created
 
-      val tables = sHiveContext.tableNames()
-      assert(tables.contains(tempTableName))
+      val table = sHiveContext.catalog.listTables().collect().apply(0)
+      assert(table.isTemporary)
+      assert(table.name.equals(tempTableName))
 
       // Check if the temp table is cached
       assert(sHiveContext.cachedSQLQueries.contains(cacheKey))

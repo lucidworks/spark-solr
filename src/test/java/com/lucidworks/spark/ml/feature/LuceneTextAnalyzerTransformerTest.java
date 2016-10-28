@@ -21,8 +21,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.ml.feature.TokenizerTestData;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.SparkSession;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -36,7 +36,7 @@ import java.util.List;
 
 public class LuceneTextAnalyzerTransformerTest {
   private transient JavaSparkContext jsc;
-  private transient SQLContext jsql;
+  private transient SparkSession sparkSession;
 
   @Before
   public void setupJavaSparkContext() {
@@ -44,15 +44,14 @@ public class LuceneTextAnalyzerTransformerTest {
         .setMaster("local")
         .setAppName("JavaLuceneAnalyzerTest")
         .set("spark.default.parallelism", "1");
-    jsc = new JavaSparkContext(conf);
-    jsql = new SQLContext(jsc);
+    sparkSession = SparkSession.builder().config(conf).getOrCreate();
+    jsc = new JavaSparkContext(sparkSession.sparkContext());
   }
 
   @After
   public void stopSparkContext() {
     jsc.stop();
     jsc = null;
-    jsql = null;
   }
 
   @Test
@@ -359,9 +358,9 @@ public class LuceneTextAnalyzerTransformerTest {
 
   private <T> void assertExpectedTokens(LuceneTextAnalyzerTransformer analyzer, List<T> testData) {
     JavaRDD<T> rdd = jsc.parallelize(testData);
-    Row[] pairs = analyzer.transform(jsql.createDataFrame(rdd, testData.get(0).getClass()))
+    List<Row> pairs = analyzer.transform(sparkSession.createDataFrame(rdd, testData.get(0).getClass()))
         .select("wantedTokens", "tokens")
-        .collect();
+        .collectAsList();
     for (Row r : pairs) {
       Assert.assertEquals(r.get(0), r.get(1));
     }

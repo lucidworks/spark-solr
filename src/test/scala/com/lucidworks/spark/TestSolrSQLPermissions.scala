@@ -2,17 +2,18 @@ package com.lucidworks.spark
 
 import com.lucidworks.spark.util.SolrCloudUtil
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.sql.{SQLContext, DataFrame}
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.solr.{SolrSparkSession, SecuredResource, TablePermissionChecker}
 
 class TestSolrSQLPermissions extends TestSuiteBuilder {
-  var sHiveContext: SolrSQLHiveContext = _
+  var sHiveContext: SolrSparkSession = _
   val collectionName = "testSolrSQLPermissions"
 
   override def beforeAll(): Unit = {
     super.beforeAll()
     val opts = Map("zkhost" -> zkHost, "collection" -> collectionName)
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
-    sHiveContext = new SolrSQLHiveContext(sc, opts, Some(new TestTablePermissionChecker))
+    sHiveContext = new SolrSparkSession(sc, opts, Some(new TestTablePermissionChecker))
   }
 
   override def afterAll(): Unit = {
@@ -38,12 +39,12 @@ class TestSolrSQLPermissions extends TestSuiteBuilder {
 }
 
 class TestTablePermissionChecker extends TablePermissionChecker {
-  override def checkQueryAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
+  override def checkQueryAccess(sparkSession: SolrSparkSession, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
     if (securedResource.resource == "testSolrSQLPermissions")
       throw new NoQueryAccessTableException
   }
 
-  override def checkWriteAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
+  override def checkWriteAccess(sparkSession: SolrSparkSession, ugi: UserGroupInformation, securedResource: SecuredResource): Unit = {
     if (securedResource.resource == "testSolrSQLPermissions")
       throw new NoWriteAccessTableException
   }

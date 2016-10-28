@@ -1,12 +1,11 @@
 package com.lucidworks.spark.example.query;
 
+import com.lucidworks.spark.SparkApp;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.util.ConfigurationConstants;
-import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.PivotField;
-import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrSupport;
-import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
@@ -18,19 +17,16 @@ import org.apache.spark.mllib.clustering.KMeans;
 import org.apache.spark.mllib.clustering.KMeansModel;
 import org.apache.spark.mllib.linalg.Vector;
 import org.apache.spark.mllib.linalg.Vectors;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF1;
-import org.apache.spark.sql.hive.HiveContext;
 import org.apache.spark.sql.types.DataTypes;
 
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.lucidworks.spark.util.ConfigurationConstants.*;
 
 /**
  * Use K-means to do basic anomaly detection by examining user sessions
@@ -70,8 +66,8 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     String collection = cli.getOptionValue("collection", "apache_logs");
     String queryStr = cli.getOptionValue("query", getLogsQuery);
 
-    JavaSparkContext jsc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new HiveContext(jsc.sc());
+    SparkSession sparkSession = SparkSession.builder().config(conf).getOrCreate();
+    JavaSparkContext jsc = new JavaSparkContext(sparkSession.sparkContext());
 
     Map<String, String> options = new HashMap<String, String>();
     options.put("zkhost", zkHost);
@@ -86,7 +82,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     //   - parallelization of reads from each shard in Solr
     //   - more parallelization by splitting each shard into ranges
     //   - results are streamed back from Solr using deep-paging and streaming response
-    DataFrame logEvents = sqlContext.read().format("solr").options(options).load();
+    Dataset logEvents = sparkSession.read().format("solr").options(options).load();
 
     // Convert rows loaded from Solr into rows with pivot fields expanded, i.e.
     //
@@ -101,12 +97,12 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
 
     // this "view" has the verb_s and response_s fields expanded into aggregatable
     SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
-    DataFrame solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD.rdd(), false);
+    Dataset solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD.rdd(), false);
     // register this DataFrame so we can execute a SQL query against it for doing sessionization using lag window func
     solrDataWithPivots.registerTempTable("logs");
 
     // used in SQL below to convert a timestamp into millis since the epoch
-    sqlContext.udf().register("ts2ms", new UDF1<Timestamp, Long>() {
+    sparkSession.udf().register("ts2ms", new UDF1<Timestamp, Long>() {
       public Long call(final Timestamp ts) throws Exception {
         return (ts != null) ? ts.getTime() : 0L;
       }
@@ -118,13 +114,13 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     String lagSql = "SELECT *, sum(IF(diff_ms > "+maxGapMs+", 1, 0)) OVER "+lagWindowSpec+
         " session_id FROM (SELECT *, ts2ms("+TS_FIELD+") - lag(ts2ms("+TS_FIELD+")) OVER "+lagWindowSpec+" as diff_ms FROM logs) tmp";
 
-    DataFrame userSessions = sqlContext.sql(lagSql);
+    Dataset userSessions = sparkSession.sql(lagSql);
     //userSessions.printSchema();
     //userSessions.cache(); // much work done to get here ... cache it for better perf when executing queries
-    sqlContext.registerDataFrameAsTable(userSessions, "sessions");
+    userSessions.createOrReplaceTempView("sessions");
 
     // used to convert bytes_s into an int (or zero) if null
-    sqlContext.udf().register("asInt", new UDF1<String, Integer>() {
+    sparkSession.udf().register("asInt", new UDF1<String, Integer>() {
       public Integer call(final String str) throws Exception {
         return (str != null) ? new Integer(str) : 0;
       }
@@ -133,7 +129,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     // execute some aggregation query
     // TODO: ugh - having to use dynamic fields here is crappy ... be better to use the schema api to define
     // the fields we need on-the-fly (see APOLLO-4127)
-    DataFrame sessionsAgg = sqlContext.sql(
+    Dataset sessionsAgg = sparkSession.sql(
         "SELECT   concat_ws('||', clientip_s,session_id) as id, " +
         "         first(clientip_s) as clientip_s, " +
         "         min(timestamp_tdt) as session_start_tdt, " +

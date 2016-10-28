@@ -5,6 +5,7 @@ import java.util.UUID
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
@@ -14,11 +15,11 @@ import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.ParserDialect
+import org.apache.spark.sql.catalyst.parser.ParserInterface
+import org.apache.spark.sql.solr.SolrSparkSession
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.Logging
+import org.apache.spark.sql.{SparkSession, DataFrame, Row, SQLContext}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -30,8 +31,8 @@ import com.lucidworks.spark.util.ConfigurationConstants._
 
 class SolrRelation(
     val parameters: Map[String, String],
-    override val sqlContext: SQLContext,
-    val dataFrame: Option[DataFrame])(
+    val dataFrame: Option[DataFrame],
+    @transient val sparkSession: SparkSession)(
   implicit
     val conf: SolrConf = new SolrConf(parameters))
   extends BaseRelation
@@ -39,10 +40,12 @@ class SolrRelation(
   with TableScan
   with PrunedFilteredScan
   with InsertableRelation
-  with Logging {
+  with LazyLogging {
 
-  def this(parameters: Map[String, String], sqlContext: SQLContext) {
-    this(parameters, sqlContext, None)
+  override val sqlContext: SQLContext = sparkSession.sqlContext
+
+  def this(parameters: Map[String, String], sparkSession: SparkSession) {
+    this(parameters, None, sparkSession)
   }
 
   checkRequiredParams()
@@ -50,13 +53,13 @@ class SolrRelation(
   var collection = conf.getCollection.getOrElse({
     var coll = Option.empty[String]
     if (conf.getSqlStmt.isDefined) {
-      val collectionFromSql = SolrSQLHiveContext.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+      val collectionFromSql = SolrSparkSession.findSolrCollectionNameInSql(conf.getSqlStmt.get)
       if (collectionFromSql.isDefined) {
         coll = collectionFromSql
       }
     }
     if (coll.isDefined) {
-      logInfo(s"resolved collection option from sql to be ${coll.get}")
+      logger.info(s"resolved collection option from sql to be ${coll.get}")
       coll.get
     } else {
       throw new IllegalArgumentException("collection option is required!")
@@ -66,9 +69,9 @@ class SolrRelation(
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
-    log.warn("Unknown parameters passed to query: " + unknownParams.toString())
+    logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
-  if (!conf.partition_by.isEmpty && conf.partition_by.get=="time") {
+  if (conf.partition_by.isDefined && conf.partition_by.get=="time") {
     val feature = new PartitionByTimeQueryParams(conf)
     val p = new PartitionByTimeQuerySupport(feature,conf)
     val allCollections = p.getPartitionsForQuery()
@@ -125,7 +128,7 @@ class SolrRelation(
         var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
         findStreamingExpressionFields(streamingExpr, streamOutputFields)
-        logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
+        logger.debug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
         for (sf <- streamOutputFields) {
           val streamSchema: StructType =
@@ -135,7 +138,7 @@ class SolrRelation(
               sf.collection,
               conf.escapeFieldNames.getOrElse(false),
               conf.flattenMultivalued.getOrElse(true))
-          logDebug(s"Got stream schema: ${streamSchema} for ${sf}")
+          logger.debug(s"Got stream schema: ${streamSchema} for ${sf}")
           streamSchema.fields.foreach(fld => fieldSet.add(fld))
           sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
         }
@@ -143,11 +146,11 @@ class SolrRelation(
           throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
-        logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        logger.debug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else if (conf.requestHandler == QT_SQL) {
         val sqlStmt = query.get(SOLR_SQL_STMT)
-        logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
+        logger.info(s"Determining schema for Solr SQL: ${sqlStmt}")
 
         val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
         baseSchema = Some(allFieldsSchema)
@@ -155,7 +158,7 @@ class SolrRelation(
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
 
         val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
-        logInfo(s"Parsed SQL fields: ${sqlColumns}")
+        logger.info(s"Parsed SQL fields: ${sqlColumns}")
         if (sqlColumns.isEmpty)
           throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
 
@@ -180,14 +183,14 @@ class SolrRelation(
             if (allFieldsSchema.fieldNames.contains(kvp._2)) {
               val existing = allFieldsSchema.fields(allFieldsSchema.fieldIndex(kvp._2))
               fieldSet.add(existing)
-              logDebug(s"Found existing field ${kvp._2}: ${existing}")
+              logger.debug(s"Found existing field ${kvp._2}: ${existing}")
             } else {
               fieldSet.add(new StructField(kvp._2, StringType))
             }
           }
         })
         val sqlSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
-        logInfo(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
+        logger.info(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
         sqlSchema
       } else {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
@@ -196,9 +199,9 @@ class SolrRelation(
     }
   }
 
-  def getSQLDialect(dialectClassName: String): ParserDialect = {
+  def getSQLDialect(dialectClassName: String): ParserInterface = {
     val clazz = Utils.classForName(dialectClassName)
-    clazz.newInstance().asInstanceOf[ParserDialect]
+    clazz.newInstance().asInstanceOf[ParserInterface]
   }
 
   def toMetricStructField(m: String) : StructField = {
@@ -233,7 +236,7 @@ class SolrRelation(
   }
 
   def extractSearchFields(subExpr: StreamExpression) : Option[StreamFields] = {
-    logDebug(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
+    logger.debug(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
     var collection : Option[String] = Option.empty[String]
     var fields = scala.collection.mutable.ListBuffer.empty[String]
     var metrics = scala.collection.mutable.ListBuffer.empty[String]
@@ -257,7 +260,7 @@ class SolrRelation(
     })
     if (collection.isDefined && !fields.isEmpty) {
       val streamFields = new StreamFields(collection.get, fields, metrics)
-      logDebug(s"extracted $streamFields for $subExpr")
+      logger.debug(s"extracted $streamFields for $subExpr")
       return Some(streamFields)
     }
     None
@@ -269,9 +272,10 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
-    if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
-      val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
-      sHiveContext.checkReadAccess(collection, "solr")
+    sparkSession match {
+      case solrSparkSession: SolrSparkSession =>
+        solrSparkSession.checkReadAccess(collection, "solr")
+      case _ =>
     }
 
     val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
@@ -280,8 +284,8 @@ class SolrRelation(
       return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
     }
 
-    log.info("Fields passed down from scanner: " + fields.mkString(","))
-    log.info("Filters passed down from scanner: " + filters.mkString(","))
+    logger.info("Fields passed down from scanner: " + fields.mkString(","))
+    logger.info("Filters passed down from scanner: " + filters.mkString(","))
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
@@ -333,7 +337,7 @@ class SolrRelation(
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
-    logInfo(s"Constructed SolrQuery: ${query}")
+    logger.info(s"Constructed SolrQuery: ${query}")
 
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
@@ -343,7 +347,8 @@ class SolrRelation(
       }
 
       if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
-        logDebug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
+        logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
+
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
@@ -360,7 +365,8 @@ class SolrRelation(
           }
         }
 
-        logDebug(s"Existing sort clauses: ${sortClauses.mkString}")
+        logger.debug(s"Existing sort clauses: ${sortClauses.mkString}")
+
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
@@ -375,11 +381,12 @@ class SolrRelation(
         var requestHandler = rq
         if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
           requestHandler = QT_EXPORT
-          logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
+          logger.info("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
-          logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+          logger.debug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
         val docs = solrRDD.requestHandler(requestHandler).query(query)
+
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
       } else {
@@ -445,7 +452,7 @@ class SolrRelation(
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
       if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
-        logInfo(s"adding new field: "+toAddFieldMap(f).asJava)
+        logger.info(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
       }
     })
@@ -456,18 +463,18 @@ class SolrRelation(
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
 
     if (fieldsToAddToSolr.nonEmpty) {
-      logInfo(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+      logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
       val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
         addFieldsUpdateRequest.process(cloudClient, collectionId)
       if (updateResponse.getStatus >= 400) {
         val errMsg = "Schema update request failed due to: "+updateResponse
-        logError(errMsg)
+        logger.error(errMsg)
         throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
       }
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
-      logInfo("softAutoCommitSecs? "+conf.softAutoCommitSecs)
+      logger.info("softAutoCommitSecs? "+conf.softAutoCommitSecs)
       val softAutoCommitSecs = conf.softAutoCommitSecs.get
       val softAutoCommitMs = softAutoCommitSecs * 1000
       var configApi = solrBaseUrl
@@ -479,7 +486,7 @@ class SolrRelation(
       val postRequest = new org.apache.http.client.methods.HttpPost(configApi)
       val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
       postRequest.setEntity(new StringEntity(configJson))
-      logInfo("POSTing: "+configJson+" to "+configApi)
+      logger.info("POSTing: "+configJson+" to "+configApi)
       SolrJsonSupport.doJsonRequest(cloudClient.getLbClient.getHttpClient, configApi, postRequest)
     }
 
@@ -553,7 +560,7 @@ class SolrRelation(
   }
 }
 
-object SolrRelation extends Logging {
+object SolrRelation extends LazyLogging {
   def checkUnknownParams(keySet: Set[String]): Set[String] = {
     var knownParams = Set.empty[String]
     var unknownParams = Set.empty[String]
@@ -603,7 +610,7 @@ object SolrRelation extends Logging {
           if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("docValues"))
             return false
         } else {
-          log.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          logger.warn("The sort field '" + sortField + "' does not exist in the base schema")
           return false
         }
       }
@@ -615,13 +622,13 @@ object SolrRelation extends Logging {
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
     query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
-    log.info("Added sort field '" + query.getSortField + "' to the query")
+    logger.info("Added sort field '" + query.getSortField + "' to the query")
   }
 
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
-      if (structField.dataType == BooleanType || structField.dataType == TimestampType)
+      if (structField.dataType == BooleanType)
         return true
     }
     false

@@ -5,19 +5,19 @@ import java.util.UUID
 
 import com.lucidworks.spark.example.ml.DateConverter
 import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.udf
-import org.apache.spark.{Logging, SparkConf, SparkContext}
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
 import org.restlet.ext.servlet.ServerServlet
 import org.scalatest.{BeforeAndAfterAll, Suite}
 
-
-trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite =>
+trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Suite =>
 
   @transient var cluster: MiniSolrCloudCluster = _
   @transient var cloudClient: CloudSolrClient = _
@@ -68,21 +68,22 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with Logging { this: Suite 
 
 trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
 
+  @transient var sparkSession: SparkSession = _
   @transient var sc: SparkContext = _
-  @transient var sqlContext: SQLContext = _
 
   override def beforeAll(): Unit = {
     super.beforeAll()
-    val conf = new SparkConf()
-      .setMaster("local")
-      .setAppName("test")
-      .set("spark.default.parallelism", "1")
-    sc = new SparkContext(conf)
-    sqlContext = new SQLContext(sc)
+    sparkSession = SparkSession.builder()
+      .appName("spark-solr-tester")
+      .master("local")
+      .config("spark.default.parallelism", "1")
+      .getOrCreate()
+
+    sc = sparkSession.sparkContext
   }
 
   override def afterAll(): Unit = {
-    sc.stop()
+    sparkSession.stop()
     super.afterAll()
   }
 }
@@ -98,10 +99,8 @@ trait EventsimBuilder extends TestSuiteBuilder {
   override def beforeAll(): Unit = {
     super.beforeAll()
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, numShards, cloudClient, sc)
-    EventsimUtil.defineSchemaForEventSim(zkHost, collectionName)
-    EventsimUtil.loadEventSimDataSet(zkHost, collectionName, sqlContext)
+    EventsimUtil.loadEventSimDataSet(zkHost, collectionName, sparkSession)
   }
-
 
   override def afterAll(): Unit = {
     SolrCloudUtil.deleteCollection(collectionName, cluster)
@@ -124,7 +123,7 @@ trait MovielensBuilder extends TestSuiteBuilder {
   override def beforeAll(): Unit = {
     super.beforeAll()
     createCollections()
-    MovieLensUtil.indexMovieLensDataset(sqlContext, zkHost)
+    MovieLensUtil.indexMovieLensDataset(sparkSession, zkHost)
   }
 
   override def afterAll(): Unit = {
@@ -148,14 +147,14 @@ trait MovielensBuilder extends TestSuiteBuilder {
 object MovieLensUtil {
   val dataDir: String = "src/test/resources/ml-100k"
 
-  def indexMovieLensDataset(sqlContext: SQLContext, zkhost: String): Unit = {
+  def indexMovieLensDataset(sparkSession: SparkSession, zkhost: String): Unit = {
     //    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
     //    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
 
-    val moviesDF = sqlContext.read.json(dataDir + "/movielens_movies.json")
+    val moviesDF = sparkSession.read.json(dataDir + "/movielens_movies.json")
     moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_movies", "batch_size" -> "10000")).save
 
-    val ratingsDF = sqlContext.read.json(dataDir + "/movielens_ratings_10k.json")
+    val ratingsDF = sparkSession.read.json(dataDir + "/movielens_ratings_10k.json")
     val dateUDF = udf(DateConverter.toISO8601(_: String))
     ratingsDF
       .withColumn("timestamp", dateUDF(ratingsDF("rating_timestamp")))

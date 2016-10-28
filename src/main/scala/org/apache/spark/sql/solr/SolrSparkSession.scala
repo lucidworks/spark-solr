@@ -1,47 +1,47 @@
-package com.lucidworks.spark
+package org.apache.spark.sql.solr
 
+import java.security.AccessControlException
 import java.util.Locale
 import java.util.regex.{Matcher, Pattern}
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.sql.{SQLContext, DataFrame}
-import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{Logging, SparkContext}
-
-import java.security.AccessControlException
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.internal.CatalogImpl
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import scala.collection.JavaConversions.mapAsScalaMap
 
 case class SecuredResource(resource:String, resourceType:String)
 
-class SolrSQLHiveContext(sparkContext: SparkContext,
+class SolrSparkSession(
+    sparkContext: SparkContext,
     val config: Map[String, String],
     val tablePermissionChecker: Option[TablePermissionChecker] = None)
-  extends HiveContext(sparkContext) with Logging {
+  extends SparkSession(sparkContext) with LazyLogging {
 
   var cachedSQLQueries: Map[String, String] = Map.empty
-
   var tableToResource : Map[String, SecuredResource] = Map.empty
 
+  override lazy val catalog = new SolrSessionCatalog(this)
   override def sql(sqlText: String): DataFrame = {
     // process the statement and check for sub-queries
     val modifiedSqlText = processSqlStmt(sqlText)
     super.sql(modifiedSqlText)
   }
 
-  override def clearCache() : Unit = {
+  def clearQueryCache() : Unit = {
     cachedSQLQueries = Map.empty
-    super.clearCache()
   }
 
   def checkReadAccess(resource: String, resourceType: String) : Unit = {
-    if (!tablePermissionChecker.isDefined) {
+    if (tablePermissionChecker.isEmpty) {
       return
     }
 
-    val ugi : UserGroupInformation = UserGroupInformation.getCurrentUser();
+    val ugi : UserGroupInformation = UserGroupInformation.getCurrentUser()
     if (ugi == null) {
       throw new AccessControlException("No UserGroupInformation found for current user verify access!")
     }
@@ -53,11 +53,11 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
   }
 
   def checkWriteAccess(resource: String, resourceType: String) : Unit = {
-    if (!tablePermissionChecker.isDefined) {
+    if (tablePermissionChecker.isEmpty) {
       return
     }
 
-    val ugi : UserGroupInformation = UserGroupInformation.getCurrentUser();
+    val ugi : UserGroupInformation = UserGroupInformation.getCurrentUser()
     if (ugi == null) {
       throw new AccessControlException("No UserGroupInformation found for current user verify access!")
     }
@@ -69,7 +69,7 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
   }
 
   def processSqlStmt(sqlText: String) : String = {
-    val matcher: Matcher = SolrSQLHiveContext.solrSubQueryPattern.matcher(sqlText)
+    val matcher: Matcher = SolrSparkSession.solrSubQueryPattern.matcher(sqlText)
     if (matcher.find()) {
       return processPushDownSql(sqlText, matcher)
     } else {
@@ -80,16 +80,16 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
         checkReadAccess(collectionId, "solr")
 
         val cacheKey = sqlText.toLowerCase(Locale.US)
-        var maybeCachedSqlQuery = cachedSQLQueries.get(cacheKey)
+        val maybeCachedSqlQuery = cachedSQLQueries.get(cacheKey)
         if (maybeCachedSqlQuery.isDefined) {
           return maybeCachedSqlQuery.get
         }
 
-        val tempTableName = SolrSQLHiveContext.getTempTableName(sqlText.toLowerCase(Locale.US), collectionId)
+        val tempTableName = SolrSparkSession.getTempTableName(sqlText.toLowerCase(Locale.US), collectionId)
         logInfo(s"Sending Solr SQL query [${sqlText}}] directly to Solr collection ${collectionId} and saving result into temp table ${tempTableName}")
         // SQL query should be routed directly to Solr and by-pass SparkSQL query parsing
         val solrSqlOpts = Map("collection" -> collectionId, "sql" -> sqlText)
-        val solrSqlDF = this.read.format("solr").options(solrSqlOpts).load
+        val solrSqlDF = this.read.format("solr").options(solrSqlOpts).load()
         solrSqlDF.registerTempTable(tempTableName)
         val selectAllFromTemp = "select * from "+tempTableName
         cachedSQLQueries += (cacheKey -> selectAllFromTemp)
@@ -97,7 +97,7 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
       }
     }
 
-    val tableNameMatcher : Matcher = SolrSQLHiveContext.solrCollectionInSqlPattern.matcher(sqlText)
+    val tableNameMatcher : Matcher = SolrSparkSession.solrCollectionInSqlPattern.matcher(sqlText)
     while (tableNameMatcher.find()) {
       checkReadAccess(tableNameMatcher.group(1), "table")
     }
@@ -123,16 +123,16 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
     }
 
     // Determine if the columns in the query are compatible with Solr SQL
-    val cols = SolrSQLHiveContext.parseColumns(sqlText).getOrElse(return sqlText)
+    val cols = SolrSparkSession.parseColumns(sqlText).getOrElse(return sqlText)
     logDebug("Parsed columns: " + cols)
     logInfo(s"Attempting to push-down sub-query into Solr: ${solrQueryStmt}")
 
-    val tableName = SolrSQLHiveContext.findSolrCollectionNameInSql(solrQueryStmt.replaceAll("\\s+"," ")).getOrElse(return sqlText)
+    val tableName = SolrSparkSession.findSolrCollectionNameInSql(solrQueryStmt.replaceAll("\\s+"," ")).getOrElse(return sqlText)
 
     checkReadAccess(tableName, "solr")
 
     logInfo(s"Extracted table name '${tableName}' from sub-query: ${solrQueryStmt}")
-    val tempTableName = SolrSQLHiveContext.getTempTableName(cacheKey, tableName)
+    val tempTableName = SolrSparkSession.getTempTableName(cacheKey, tableName)
     try {
       // load the push down query as a temp table
       registerSolrPushdownQuery(tempTableName, solrQueryStmt, tableName)
@@ -152,10 +152,10 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
 
   def isSolrQuery(sqlText: String) : Option[String] = {
     val sqlTextWs = sqlText.replaceAll("\\s+"," ")
-    val solrQueryMatcher : Matcher = SolrSQLHiveContext.solrQueryPattern.matcher(sqlTextWs)
+    val solrQueryMatcher : Matcher = SolrSparkSession.solrQueryPattern.matcher(sqlTextWs)
     if (!solrQueryMatcher.find()) return None
 
-    return SolrSQLHiveContext.findSolrCollectionNameInSql(sqlTextWs)
+    SolrSparkSession.findSolrCollectionNameInSql(sqlTextWs)
   }
 
   def registerSolrPushdownQuery(
@@ -170,7 +170,7 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
   }
 }
 
-object SolrSQLHiveContext extends Logging {
+object SolrSparkSession extends LazyLogging {
   val solrSubQueryPattern: Pattern = Pattern.compile("\\((SELECT .*?\\)) as solr", Pattern.CASE_INSENSITIVE)
   // also supports executing Solr queries directly if they use _query_ in the where clause, one of our few hints we can rely on
   val solrQueryPattern: Pattern = Pattern.compile("\\s_query_\\s?=\\s?'.*?'\\s?")
@@ -183,13 +183,13 @@ object SolrSQLHiveContext extends Logging {
     try {
       val cols = SolrSQLSupport.parseColumns(sqlText)
       if (cols.isEmpty) {
-        logInfo("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
+        logger.info("No columns found for sub-query [" + sqlText + "], cannot push down into Solr")
         return None
       }
       Some(cols.toMap)
     } catch {
       case e: Exception =>
-        logWarning("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
+        logger.warn("Failed to parse columns for sub-query [" + sqlText + "] due to: " + e)
         None
     }
   }
@@ -197,7 +197,7 @@ object SolrSQLHiveContext extends Logging {
   def findSolrCollectionNameInSql(sqlText: String): Option[String] = {
     val collectionIdMatcher = solrCollectionInSqlPattern.matcher(sqlText)
     if (!collectionIdMatcher.find()) {
-      logWarning(s"No push-down to Solr! Cannot determine collection name from Solr SQL query: ${sqlText}")
+      logger.warn(s"No push-down to Solr! Cannot determine collection name from Solr SQL query: ${sqlText}")
       return None
     }
     Some(collectionIdMatcher.group(1))
@@ -209,7 +209,17 @@ object SolrSQLHiveContext extends Logging {
   }
 }
 
+class SolrSessionCatalog(
+    solrSQLSession: SolrSparkSession)
+  extends CatalogImpl(solrSQLSession) {
+
+  override def clearCache(): Unit = {
+    solrSQLSession.clearQueryCache()
+    super.clearCache()
+  }
+}
+
 trait TablePermissionChecker {
-  def checkQueryAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit
-  def checkWriteAccess(sqlContext: SQLContext, ugi: UserGroupInformation, securedResource: SecuredResource): Unit
+  def checkQueryAccess(sparkSession: SolrSparkSession, ugi: UserGroupInformation, securedResource: SecuredResource): Unit
+  def checkWriteAccess(sparkSession: SolrSparkSession, ugi: UserGroupInformation, securedResource: SecuredResource): Unit
 }

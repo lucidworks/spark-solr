@@ -15,9 +15,10 @@ toc::[]
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:2.1.0"
+./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:3.0.0-alpha"
                           or
-./bin/spark-shell --jars spark-solr-2.0.1.jar
+./bin/spark-shell --jars spark-solr-3.0.0-alpha.jar
+
 
 === Connect to your SolrCloud Instance
 
@@ -28,7 +29,7 @@ val options = Map(
   "collection" -> "{solr_collection_name}",
   "zkhost" -> "{zk_connect_string}"
 )
-val df = sqlContext.read.format("solr")
+val df = spark.read.format("solr")
   .options(options)
   .load
 
@@ -63,7 +64,7 @@ The released jar files (1.1.2, 2.0.0, etc..) can be downloaded from the http://s
 <dependency>
    <groupId>com.lucidworks.spark</groupId>
    <artifactId>spark-solr</artifactId>
-   <version>2.0.1</version>
+   <version>3.0.0-alpha</version>
 </dependency>
 
 ==== Snapshots

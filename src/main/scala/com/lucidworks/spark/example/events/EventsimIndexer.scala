@@ -1,17 +1,15 @@
 package com.lucidworks.spark.port.example.events
 
 import java.net.URL
-import java.util.Calendar
-import java.util.TimeZone
+import java.util.{Calendar, TimeZone}
 
 import com.lucidworks.spark.SparkApp.RDDProcessor
 import com.lucidworks.spark.fusion.FusionPipelineClient
-import org.apache.commons.cli.{Option, CommandLine}
-import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.SQLContext
+import org.apache.commons.cli.{CommandLine, Option}
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.SparkSession
 
 import scala.collection.JavaConversions.bufferAsJavaList
-
 import scala.collection.mutable.ListBuffer
 
 class EventsimIndexer extends RDDProcessor {
@@ -70,10 +68,9 @@ class EventsimIndexer extends RDDProcessor {
     val url = new URL(urls(0))
     val pipelinePath = url.getPath
 
-    val sc = new SparkContext(conf)
-    val sqlContext: SQLContext = new SQLContext(sc)
+    val sparkSession: SparkSession = SparkSession.builder().config(conf).getOrCreate()
 
-    sqlContext.read.json(cli.getOptionValue("eventsimJson")).foreachPartition(rows => {
+    sparkSession.read.json(cli.getOptionValue("eventsimJson")).foreachPartition(rows => {
       val fusion: FusionPipelineClient =
         if (fusionAuthEnabled) new FusionPipelineClient(fusionEndpoints, fusionUser, fusionPass, fusionRealm)
         else new FusionPipelineClient(fusionEndpoints)
@@ -119,7 +116,7 @@ class EventsimIndexer extends RDDProcessor {
       }
     })
 
-    sc.stop()
+    sparkSession.stop()
 
     0
   }

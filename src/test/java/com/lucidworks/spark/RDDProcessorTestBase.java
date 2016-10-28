@@ -9,6 +9,7 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.sql.SparkSession;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -26,23 +27,25 @@ import static org.junit.Assert.assertTrue;
 public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements Serializable{
 
   protected static transient JavaSparkContext jsc;
+  protected static transient SparkSession sparkSession;
 
   public JavaSparkContext getJsc() {
     return jsc;
   }
 
   @BeforeClass
-  public static void setupJavaSparkContext() {
-    SparkConf conf = new SparkConf()
-      .setMaster("local")
-      .setAppName("test")
-      .set("spark.default.parallelism", "1");
-    jsc = new JavaSparkContext(conf);
+  public static void setupSparkSession() {
+    sparkSession = SparkSession.builder()
+      .appName("test")
+      .master("local")
+      .config("spark.default.parallelism", "1")
+      .getOrCreate();
+    jsc = new JavaSparkContext(sparkSession.sparkContext());
   }
 
   @AfterClass
-  public static void stopSparkContext() {
-    jsc.stop();
+  public static void stopSparkSession() {
+    sparkSession.stop();
   }
 
   protected void buildCollection(String zkHost, String collection) throws Exception {

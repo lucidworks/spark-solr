@@ -2,17 +2,14 @@ package com.lucidworks.spark.example.query
 
 import com.lucidworks.spark.SparkApp.RDDProcessor
 import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.SolrQuerySupport
+import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.commons.cli.{CommandLine, Option}
-import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.immutable.HashMap
-
-import com.lucidworks.spark.util.ConfigurationConstants._
 
 /**
  * Example of an wordCount spark app to process tweets from a Solr collection
@@ -52,8 +49,8 @@ class WordCount extends RDDProcessor{
 
     wordsCountPairs.take(20).iterator.foreach(println)
 
+    val sparkSession: SparkSession = SparkSession.builder().config(conf).getOrCreate()
     // Now use schema information in Solr to build a queryable SchemaRDD
-    val sqlContext = new SQLContext(sc)
 
     // Pro Tip: SolrRDD will figure out the schema if you don't supply a list of field names in your query
     val options = HashMap[String, String](
@@ -62,7 +59,7 @@ class WordCount extends RDDProcessor{
       SOLR_QUERY_PARAM -> queryStr
       )
 
-    val df: DataFrame = sqlContext.read.format("solr").options(options).load()
+    val df: DataFrame = sparkSession.read.format("solr").options(options).load()
     val numEchos = df.filter(df.col("type_s").equalTo("echo")).count()
     println("numEchos >> " + numEchos)
 

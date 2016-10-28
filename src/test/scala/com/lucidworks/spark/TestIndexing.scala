@@ -2,8 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.{SolrSupport, SolrQuerySupport, ConfigurationConstants, SolrCloudUtil}
+import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
 
 class TestIndexing extends TestSuiteBuilder {
 
@@ -12,7 +11,7 @@ class TestIndexing extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
       val csvFileLocation = "src/test/resources/test-data/nyc_yellow_taxi_sample_1k.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
+      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
         .option("header", "true")
         .option("inferSchema", "true")
         .load(csvFileLocation)
@@ -25,7 +24,7 @@ class TestIndexing extends TestSuiteBuilder {
       val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
       solrCloudClient.commit(collectionName, true, true)
 
-      val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
+      val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert (solrDF.count() == 999)
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)

@@ -17,7 +17,7 @@
 
 package com.lucidworks.spark
 
-import org.apache.spark.Logging
+import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSuite, Outcome}
 
 /**
@@ -25,7 +25,7 @@ import org.scalatest.{FunSuite, Outcome}
  *
  * Copied from SparkFunSuite, which is inaccessible from here.
  */
-trait SparkSolrFunSuite extends FunSuite with Logging {
+trait SparkSolrFunSuite extends FunSuite with LazyLogging {
 
   /**
    * Log the suite name and the test name before and after each test.
@@ -39,10 +39,10 @@ trait SparkSolrFunSuite extends FunSuite with Logging {
     val suiteName = this.getClass.getName
     val shortSuiteName = suiteName.replaceAll("com.lucidworks.spark", "c.l.s")
     try {
-      logInfo(s"\n\n===== TEST OUTPUT FOR $shortSuiteName: '$testName' =====\n")
+      logger.info(s"\n\n===== TEST OUTPUT FOR $shortSuiteName: '$testName' =====\n")
       test()
     } finally {
-      logInfo(s"\n\n===== FINISHED $shortSuiteName: '$testName' =====\n")
+      logger.info(s"\n\n===== FINISHED $shortSuiteName: '$testName' =====\n")
     }
   }
 }

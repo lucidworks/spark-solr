@@ -4,7 +4,7 @@
 
 Once the shaded artifact is downloaded or built, it can be imported to the spark-shell by using the `--jars` config
 
-    ./bin/spark-shell --jars spark-solr-2.1.0-SNAPSHOT-shaded.jar
+    ./bin/spark-shell --jars spark-solr-3.0.0-alpha-shaded.jar
 
 === Writing data
 
@@ -17,7 +17,7 @@ Once the shaded artifact is downloaded or built, it can be imported to the spark
 
 [source,scala]
 val csvFileLocation = "src/test/resources/test-data/nyc_yellow_taxi_sample_1k.csv"
-var csvDF = sqlContext.read.format("com.databricks.spark.csv")
+var csvDF = spark.read.format("com.databricks.spark.csv")
   .option("header", "true")
   .option("inferSchema", "true")
   .load(csvFileLocation)
@@ -64,7 +64,7 @@ val options = Map(
   "collection" -> "test-spark-solr"
 )
 
-val df = sqlContext.read.format("solr").options(options).load
+val df = spark.read.format("solr").options(options).load
 --------------
 
 * Every DataFrame has a schema. You can use the `printSchema()` function to get information about the fields available for the tweets DataFrame

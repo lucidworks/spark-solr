@@ -19,15 +19,15 @@ import org.apache.spark.ml.tuning.CrossValidatorModel;
 import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SQLContext;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.spark.sql.SparkSession;
 import scala.collection.JavaConversions$;
 
 public class MLPipeline implements SparkApp.RDDProcessor {
@@ -76,8 +76,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
   @Override
   public int run(SparkConf conf, CommandLine cli) throws Exception {
 
-    JavaSparkContext jsc = new JavaSparkContext(conf);
-    SQLContext sqlContext = new SQLContext(jsc);
+    SparkSession sparkSession = SparkSession.builder().config(conf).getOrCreate();
 
     String zkHost = cli.getOptionValue("zkHost", "localhost:9983");
     String collection = cli.getOptionValue("collection", "ml20news");
@@ -92,7 +91,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     options.put("fields", "id," + labelField + "," + contentFields);
 
     double sampleFraction = Double.parseDouble(cli.getOptionValue("sample", "1.0"));
-    DataFrame solrData = sqlContext.read().format("solr").options(options).load();
+    Dataset solrData = sparkSession.read().format("solr").options(options).load();
     solrData = solrData.sample(false, sampleFraction);
 
     // Configure an ML pipeline, which consists of the following stages:
@@ -154,9 +153,9 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     Pipeline pipeline = new Pipeline()
         .setStages(new PipelineStage[]{labelIndexer, analyzer, hashingTF, estimatorStage, labelConverter});
 
-    DataFrame[] splits = solrData.randomSplit(new double[] {0.7, 0.3});
-    DataFrame trainingData = splits[0];
-    DataFrame testData = splits[1];
+    Dataset[] splits = solrData.randomSplit(new double[] {0.7, 0.3});
+    Dataset trainingData = splits[0];
+    Dataset testData = splits[1];
 
     MulticlassClassificationEvaluator evaluator = new MulticlassClassificationEvaluator()
         .setLabelCol("label")
@@ -169,7 +168,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
     ParamGridBuilder paramGridBuilder = new ParamGridBuilder()
         .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000})
-        .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.asScalaIterable(analysisSchemas))
+        .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.collectionAsScalaIterable(analysisSchemas))
         .addGrid(analyzer.prefixTokensWithInputCol());
 
     if (estimatorStage instanceof LogisticRegression) {
@@ -200,15 +199,15 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // read it off disk
     cvModel = CrossValidatorModel.load("ml-pipeline-model");
 
-    DataFrame predictions = cvModel.transform(testData);
+    Dataset predictions = cvModel.transform(testData);
     predictions.cache();
 
     double accuracyCrossFold = evaluator.evaluate(predictions);
     System.out.println("Cross-Fold Test Error = " + (1.0 - accuracyCrossFold));
 
-    // TODO: remove - debug
-    for (Row r : predictions.select("id", labelField, "predictedLabel").sample(false, 0.1).collect()) {
-      System.out.println(r.get(0) + ": actual="+r.get(1)+", predicted=" + r.get(2));
+   // TODO: remove - debug
+    for (Object o : predictions.select("id", labelField, "predictedLabel").sample(false, 0.1).toDF().collectAsList()) {
+      System.out.println(((Row) o).get(0) + ": actual=" + ((Row) o).get(1) + ", predicted=" + ((Row) o).get(2));
     }
 
     MulticlassMetrics metrics = new MulticlassMetrics(predictions.select("prediction", "label"));
@@ -237,4 +236,5 @@ public class MLPipeline implements SparkApp.RDDProcessor {
   private String json(String singleQuoted) {
     return singleQuoted.replaceAll("'", "\"");
   }
+
 }

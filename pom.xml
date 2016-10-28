@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>2.2.2-SNAPSHOT</version>
+  <version>3.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -37,12 +37,12 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
-    <spark.version>1.6.2</spark.version>
-    <solr.version>6.1.0</solr.version>
-    <fasterxml.version>2.4.0</fasterxml.version>
-    <scala.version>2.10.5</scala.version>
-    <scala.binary.version>2.10</scala.binary.version>
+    <spark.version>2.0.1</spark.version>
+    <solr.version>6.2.1</solr.version>
+    <scala.version>2.11.8</scala.version>
+    <scala.binary.version>2.11</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
+    <fasterxml.version>2.4.0</fasterxml.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
   <profiles>
@@ -256,6 +256,7 @@
                   <exclude>org.apache.spark:spark-core_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-streaming_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-hive_${scala.binary.version}</exclude>
+                  <exclude>org.apache.derby</exclude>
                   <exclude>org.apache.hadoop:*</exclude>
                   <exclude>com.google.protobuf_spark:*</exclude>
                   <exclude>com.twitter:chill_${scala.binary.version}</exclude>
@@ -403,9 +404,9 @@
       <version>${spark.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.spark</groupId>
-      <artifactId>spark-streaming-twitter_${scala.binary.version}</artifactId>
-      <version>${spark.version}</version>
+        <groupId>org.apache.bahir</groupId>
+        <artifactId>spark-streaming-twitter_${scala.binary.version}</artifactId>
+        <version>2.0.1</version>
     </dependency>
     <dependency>
       <groupId>commons-cli</groupId>
@@ -537,11 +538,6 @@
       <version>${spark.version}</version>
     </dependency>
     <dependency>
-      <groupId>com.databricks</groupId>
-      <artifactId>spark-csv_${scala.binary.version}</artifactId>
-      <version>1.4.0</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
       <version>1.4.1</version>
@@ -552,10 +548,14 @@
       <version>1.2</version>
     </dependency>
     <dependency>
+      <groupId>com.typesafe.scala-logging</groupId>
+      <artifactId>scala-logging_${scala.binary.version}</artifactId>
+      <version>3.4.0</version>
+    </dependency>
+    <dependency>
       <groupId>com.github.tomakehurst</groupId>
       <artifactId>wiremock</artifactId>
       <version>1.56</version>
-
       <!-- Include everything below here if you have dependency conflicts -->
       <classifier>standalone</classifier>
       <exclusions>

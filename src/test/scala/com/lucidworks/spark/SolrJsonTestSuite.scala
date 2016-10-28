@@ -2,10 +2,10 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{SolrJsonSupport, SolrCloudUtil}
-import org.apache.spark.Logging
+import com.lucidworks.spark.util.SolrCloudUtil
+import com.typesafe.scalalogging.LazyLogging
 
-class SolrJsonTestSuite extends TestSuiteBuilder with Logging {
+class SolrJsonTestSuite extends TestSuiteBuilder with LazyLogging {
 
   test("Test Solr JSON") {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString

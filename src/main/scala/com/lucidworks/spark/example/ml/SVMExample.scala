@@ -2,24 +2,18 @@ package com.lucidworks.spark.example.ml
 
 import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
-import org.apache.commons.cli.{CommandLine, Option}
-import org.apache.spark.mllib.classification.{SVMWithSGD, SVMModel}
-import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
-import org.apache.spark.sql.{SaveMode, SQLContext}
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.storage.StorageLevel
-import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.mllib.regression.LabeledPoint
-import org.apache.spark.sql.Row
-import org.apache.spark.api.java.function.Function
-import org.apache.spark.mllib.feature.HashingTF
-import org.apache.spark.mllib.feature.Normalizer
-import org.apache.spark.mllib.feature.StandardScaler
-import org.apache.spark.mllib.feature.StandardScalerModel
-import scala.collection.JavaConverters._
-import scala.collection
 import com.lucidworks.spark.fusion.FusionMLModelSupport
+import org.apache.commons.cli.{CommandLine, Option}
+import org.apache.spark.SparkConf
+import org.apache.spark.mllib.classification.SVMWithSGD
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
+import org.apache.spark.mllib.feature.{HashingTF, Normalizer, StandardScaler}
+import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
+import org.apache.spark.storage.StorageLevel
 
+import scala.collection.JavaConverters._
 import scala.collection.immutable
 
 /**
@@ -66,8 +60,7 @@ class SVMExample extends SparkApp.RDDProcessor  {
   )
 
   override def run(conf: SparkConf, cli: CommandLine): Int = {
-    val sc = new SparkContext(conf)
-    val sqlContext = new SQLContext(sc)
+    val sparkSession: SparkSession = SparkSession.builder().config(conf).getOrCreate()
     val csvSchema = StructType(StructField("polarity",StringType, true) ::
       StructField("id",StringType, true) ::
       StructField("date",StringType, true) ::
@@ -82,7 +75,7 @@ class SVMExample extends SparkApp.RDDProcessor  {
 
     val indexTrainingData = cli.getOptionValue("indexTrainingData")
     if (indexTrainingData != null) {
-      var csvDF = sqlContext.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTrainingData)
+      var csvDF = sparkSession.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTrainingData)
       csvDF = csvDF.repartition(4)
 
       csvDF.write.format("solr").options(writeoptions).mode(SaveMode.Overwrite).save()
@@ -90,7 +83,7 @@ class SVMExample extends SparkApp.RDDProcessor  {
 
     val indexTestData = cli.getOptionValue("indexTestData");
     if (indexTestData != null) {
-      var csvDF = sqlContext.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTestData)
+      var csvDF = sparkSession.read.format("com.databricks.spark.csv").schema(csvSchema).option("header", "false").load(indexTestData)
       csvDF = csvDF.withColumnRenamed("polarity", "test_polarity")
 
       csvDF.write.format("solr").options(writeoptions).mode(SaveMode.Overwrite).save()
@@ -109,7 +102,7 @@ class SVMExample extends SparkApp.RDDProcessor  {
       "splits_per_shard" -> "8")
 
     val sampleFraction = cli.getOptionValue("sample", "1.0").toDouble
-    var trainingDataFromSolr = sqlContext.read.format("solr").options(trainoptions).load()
+    var trainingDataFromSolr = sparkSession.read.format("solr").options(trainoptions).load()
     trainingDataFromSolr = trainingDataFromSolr.sample(false, sampleFraction)
 
     val inputCols = contentFields.split(" ").map(_.trim)
@@ -151,7 +144,7 @@ class SVMExample extends SparkApp.RDDProcessor  {
       "query" -> "+test_polarity:[* TO *] +tweet_txt:[* TO *]",
       "fields" -> "id,test_polarity,tweet_txt")
 
-    var testDataFromSolr = sqlContext.read.format("solr").options(testoptions).load()
+    var testDataFromSolr = sparkSession.read.format("solr").options(testoptions).load()
     testDataFromSolr = testDataFromSolr.withColumnRenamed("test_polarity", "polarity")
     testDataFromSolr.show
     val testVectors = testDataFromSolr.rdd.map(row => RowtoLab(row, numFeatures, inputCols, stdTokLowerSchema)).map(x => new LabeledPoint(x.label, standardScaler.transform(x.features)))
@@ -178,13 +171,13 @@ class SVMExample extends SparkApp.RDDProcessor  {
 
       if (cli.getOptionValue("fusionUser") != null && cli.getOptionValue("fusionPassword") != null) {
         FusionMLModelSupport.saveModelInFusion(cli.getOptionValue("fusionHostAndPort"), cli.getOptionValue("fusionUser"), cli.getOptionValue("fusionPassword"),
-          cli.getOptionValue("fusionRealm", "native"), sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
+          cli.getOptionValue("fusionRealm", "native"), sparkSession.sparkContext, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
       } else {
-        FusionMLModelSupport.saveModelInLocalFusion(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
+        FusionMLModelSupport.saveModelInLocalFusion(sparkSession.sparkContext, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"), model, metadata)
       }
     }
     else {
-      model.save(sc, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"))
+      model.save(sparkSession.sparkContext, cli.getOptionValue("modelOutput", "mllib-svm-sentiment"))
     }
 
     return 0

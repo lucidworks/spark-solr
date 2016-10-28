@@ -13,6 +13,7 @@ import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -20,7 +21,6 @@ import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
-import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataTypes, DataType}
 import org.apache.spark.streaming.dstream.DStream
@@ -56,7 +56,7 @@ object CacheSolrClient {
 /**
  * TODO: Use Solr schema API to index field names
  */
-object SolrSupport extends Logging {
+object SolrSupport extends LazyLogging {
 
   def setupKerberosIfNeeded(): Unit = synchronized {
    val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
@@ -65,7 +65,7 @@ object SolrSupport extends Logging {
      if (configurer.isDefined) {
        if (!configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
          HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer)
-         log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
+         logger.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
        }
      }
    }
@@ -200,18 +200,18 @@ object SolrSupport extends Logging {
     if (commitWithin.isDefined)
       req.setCommitWithin(commitWithin.get)
 
-    log.info("Sending batch of " + batch.size + " to collection " + collection)
+    logger.info("Sending batch of " + batch.size + " to collection " + collection)
 
     req.add(asJavaCollection(batch))
 
     try {
       solrClient.request(req)
       val timeTaken = (System.currentTimeMillis() - initialTime)/1000.0
-      log.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents")
+      logger.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents")
     } catch {
       case e: Exception =>
         if (shouldRetry(e)) {
-          log.error("Send batch to collection " + collection + " failed due to " + e + " ; will retry ...")
+          logger.error("Send batch to collection " + collection + " failed due to " + e + " ; will retry ...")
           try {
             Thread.sleep(2000)
           } catch {
@@ -222,14 +222,14 @@ object SolrSupport extends Logging {
             solrClient.request(req)
           } catch {
             case ex: Exception =>
-              log.error("Send batch to collection " + collection + " failed due to: " + e, e)
+              logger.error("Send batch to collection " + collection + " failed due to: " + e, e)
               ex match {
                 case re: RuntimeException => throw re
                 case e: Exception => throw new RuntimeException(e)
               }
           }
         } else {
-          log.error("Send batch to collection " + collection + " failed due to: " + e, e)
+          logger.error("Send batch to collection " + collection + " failed due to: " + e, e)
           e match {
             case re: RuntimeException => throw re
             case ex: Exception => throw new RuntimeException(ex)
@@ -283,7 +283,7 @@ object SolrSupport extends Logging {
             try {
               value = Some(f.get(obj))
             } catch {
-              case e: IllegalAccessException => log.error("Exception during reflection ", e)
+              case e: IllegalAccessException => logger.error("Exception during reflection ", e)
             }
 
             if (value.isDefined) {
@@ -304,7 +304,7 @@ object SolrSupport extends Logging {
       val info = Introspector.getBeanInfo(objClass)
       props = Some(info.getPropertyDescriptors)
     } catch {
-      case e: IntrospectionException => log.warn("Can't get BeanInfo for class: " + objClass)
+      case e: IntrospectionException => logger.warn("Can't get BeanInfo for class: " + objClass)
     }
 
     if (props.isDefined) {
@@ -314,13 +314,13 @@ object SolrSupport extends Logging {
           if ("class".equals(propName) || fields.contains(propName)) break()
           else {
             val readMethod = pd.getReadMethod
-            readMethod.setAccessible(true);
+            readMethod.setAccessible(true)
             if (readMethod != null) {
               var value: Option[Object] = None
               try {
                 value = Some(readMethod.invoke(obj))
               } catch {
-                case e: Exception => log.warn("failed to invoke read method for property '" + pd.getName + "' on " +
+                case e: Exception => logger.warn("failed to invoke read method for property '" + pd.getName + "' on " +
                   "object of type '" + objClass.getName + "' due to: " + e)
               }
 
@@ -383,8 +383,7 @@ object SolrSupport extends Logging {
     else if ((classOf[java.lang.Float] == clazz) || (classOf[Float] == clazz)) return Some("_f")
     else if ((classOf[java.lang.Boolean] == clazz) || (classOf[Boolean] == clazz)) return Some("_b")
     else if (classOf[Date] == clazz) return Some("_tdt")
-    if (log.isDebugEnabled)
-      log.debug("failed to map class '" + clazz + "' to a known dynamic type")
+    logger.debug("failed to map class '" + clazz + "' to a known dynamic type")
     None
   }
 
@@ -441,7 +440,7 @@ object SolrSupport extends Logging {
           solr.deleteByQuery(partitionFq, 100)
           val durationNano: Long = System.nanoTime - startNano
 
-          if (log.isDebugEnabled) log.debug("Partition " + partitionId + " took " + TimeUnit.MILLISECONDS.convert(durationNano, TimeUnit.NANOSECONDS) + "ms to process " + numDocs + " docs")
+          logger.debug("Partition " + partitionId + " took " + TimeUnit.MILLISECONDS.convert(durationNano, TimeUnit.NANOSECONDS) + "ms to process " + numDocs + " docs")
           for (inputDoc <- inputDocs.values) {
             inputDoc.removeField("docfilterid_i")
           }
@@ -484,7 +483,7 @@ object SolrSupport extends Logging {
                 val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
                 replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
               } catch {
-                case e : Exception => log.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
+                case e : Exception => logger.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
                   replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
               }
 
@@ -522,7 +521,7 @@ object SolrSupport extends Logging {
         } else
           fieldDataType = Some(DataTypes.StringType)
       } else {
-        log.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
+        logger.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
         fieldDataType = Some(DataTypes.StringType)
       }
     }

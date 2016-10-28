@@ -3,6 +3,7 @@ package com.lucidworks.spark.util
 import java.io.{InputStream, InputStreamReader, BufferedReader}
 import java.net.URL
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.http.{HttpEntity, HttpResponse}
 import org.apache.http.client.HttpClient
 import org.apache.http.client.methods.{HttpGet, HttpUriRequest, HttpPost}
@@ -10,16 +11,13 @@ import org.apache.solr.client.solrj.SolrServerException
 import org.apache.solr.client.solrj.impl.HttpClientUtil
 import org.apache.solr.common.SolrException
 import org.apache.solr.common.params.ModifiableSolrParams
-import org.apache.spark.Logging
-
-import scala.util.control.Breaks._
 
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 import com.lucidworks.spark.util.JsonUtil._
 
-object SolrJsonSupport extends Logging {
+object SolrJsonSupport extends LazyLogging {
 
   /**
    * Utility function for sending HTTP GET request to Solr with built-in retry support.
@@ -68,8 +66,7 @@ object SolrJsonSupport extends Logging {
     }
 
     val httpGet = new HttpGet(newGetUrl)
-    if (log.isDebugEnabled)
-      log.debug("Requesting url: " + getUrl)
+    logger.debug("Requesting url: " + getUrl)
     doJsonRequest(httpClient, newGetUrl, httpGet)
   }
 
@@ -131,7 +128,7 @@ object SolrJsonSupport extends Logging {
           request.abort()
           throw ex
         case ex: Exception =>
-          log.error("Exception while parsing JSON stream for url '" + url + "'. The payload is " + getHttpResponseAsString(entity))
+          logger.error("Exception while parsing JSON stream for url '" + url + "'. The payload is " + getHttpResponseAsString(entity))
           throw ex
       }
     } else {

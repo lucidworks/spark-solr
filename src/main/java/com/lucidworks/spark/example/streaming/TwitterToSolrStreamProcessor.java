@@ -1,7 +1,7 @@
 package com.lucidworks.spark.example.streaming;
 
-import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;

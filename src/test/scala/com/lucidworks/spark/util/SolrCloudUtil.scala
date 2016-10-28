@@ -2,6 +2,7 @@ package com.lucidworks.spark.util
 
 import java.io.File
 
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.request.{QueryRequest, UpdateRequest}
@@ -10,19 +11,19 @@ import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.solr.common.SolrInputDocument
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.params.{CollectionParams, CoreAdminParams, ModifiableSolrParams}
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.SparkContext
 import org.junit.Assert._
 import org.noggit.{CharArr, JSONWriter}
 
 import scala.collection.JavaConversions._
 
-object SolrCloudUtil extends Logging{
+object SolrCloudUtil extends LazyLogging {
 
   def deleteCollection(collectionName: String, cluster: MiniSolrCloudCluster): Unit = {
     try {
       cluster.deleteCollection(collectionName)
     } catch {
-      case e: Exception => log.error("Failed to delete collection " + collectionName + " due to: " + e)
+      case e: Exception => logger.error("Failed to delete collection " + collectionName + " due to: " + e)
     }
   }
 
@@ -31,7 +32,7 @@ object SolrCloudUtil extends Logging{
       val deleteUrl = baseUrl + "admin/collections?action=DELETE&name=" + collectionName
       SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, deleteUrl)
     } catch {
-      case e: Exception => log.error("Failed when deleting collection " + collectionName + " due to :" + e)
+      case e: Exception => logger.error("Failed when deleting collection " + collectionName + " due to :" + e)
     }
   }
 
@@ -91,7 +92,7 @@ object SolrCloudUtil extends Logging{
     while (waitMs < maxWaitMs && !allReplicasUp) {
       // refresh state every 2 secs
       if (waitMs % 2000 == 0) {
-        log.info("Updating ClusterState")
+        logger.info("Updating ClusterState")
         cloudClient.getZkStateReader.updateLiveNodes()
       }
 
@@ -105,13 +106,13 @@ object SolrCloudUtil extends Logging{
         assertTrue(replicas.size() == replicationFactor)
         leader = shard.getLeader
         assertNotNull(leader)
-        log.info("Found " + replicas.size() + " replicas and leader on " + leader.getNodeName + " for " + shardId + " in " + collectionName)
+        logger.info("Found " + replicas.size() + " replicas and leader on " + leader.getNodeName + " for " + shardId + " in " + collectionName)
 
         // ensure all replicas are "active"
         for (replica: Replica <- replicas) {
           val replicaState = replica.getStr(ZkStateReader.STATE_PROP)
           if (!"active".equals(replicaState)) {
-            log.info("Replica " + replica.getName + " for shard " + shardId + " is currently " + replicaState)
+            logger.info("Replica " + replica.getName + " for shard " + shardId + " is currently " + replicaState)
             allReplicasUp = false
           }
         }
@@ -132,7 +133,7 @@ object SolrCloudUtil extends Logging{
         " come up within " + maxWaitMs + " ms! ClusterState: " + printClusterStateInfo(collectionName, cloudClient))
 
     val diffMs = System.currentTimeMillis() - startMs
-    log.info("Took '" + diffMs + "' ms to see all replicas become active for " + collectionName)
+    logger.info("Took '" + diffMs + "' ms to see all replicas become active for " + collectionName)
   }
 
   def printClusterStateInfo(collectionName: String, cloudClient: CloudSolrClient): String = {
@@ -164,14 +165,12 @@ object SolrCloudUtil extends Logging{
   }
 
   def dumpSolrCollection(collectionName: String, solrQuery: SolrQuery, cloudClient: CloudSolrClient): Unit = {
-    try {
-      val qr: QueryResponse = cloudClient.query(collectionName, solrQuery)
-      log.info("Found " + qr.getResults.getNumFound + " docs in " + collectionName)
-      var i = 0
-      for (doc <- qr.getResults) {
-        log.info(i + ":" + doc)
-        i += 1
-      }
+    val qr: QueryResponse = cloudClient.query(collectionName, solrQuery)
+    logger.info("Found " + qr.getResults.getNumFound + " docs in " + collectionName)
+    var i = 0
+    for (doc <- qr.getResults) {
+      logger.info(i + ":" + doc)
+      i += 1
     }
   }
 
