@@ -63,13 +63,13 @@ Let’s load the socialdata collection into Spark by executing the following Sca
 
 [source]
 ----
-val tweets = sqlContext.read.format("solr").options(
+val tweets = spark.read.format("solr").options(
  Map("zkHost" -> "localhost:9983", "collection" -> "socialdata")
  ).load
  .filter("provider_s='twitter'")
 ----
 
-On line 1, we use the sqlContext object loaded into the shell automatically by Spark to load a DataSource named “solr”. Behind the scenes, Spark locates the `solr.DefaultSource class` in the project JAR file we added to the shell using the --jars parameter.
+On line 1, we use the sparkSession object loaded into the shell automatically by Spark to load a DataSource named “solr”. Behind the scenes, Spark locates the `solr.DefaultSource class` in the project JAR file we added to the shell using the --jars parameter.
 
 On line 2, we pass configuration parameters needed by the Solr DataSource to connect to Solr using a Scala Map. At a minimum, we need to pass the ZooKeeper connection string (`zkHost`) and collection name (`collection`). By default, the DataSource matches all documents in the collection, but you can pass a Solr query to the DataSource using an optional `query` parameter. This allows to you restrict the documents seen by the DataSource using a Solr query.
 
