@@ -3,31 +3,30 @@ package com.lucidworks.spark
 import java.util.UUID
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
-import com.lucidworks.spark.util._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.QueryConstants._
+import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.io.stream.expr._
-import org.apache.solr.client.solrj.request.schema.SchemaRequest.{Update, AddField, MultiUpdate}
+import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
 import org.apache.solr.common.SolrException.ErrorCode
-import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
+import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.solr.SolrSparkSession
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{SparkSession, DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.util.control.Breaks._
 import scala.reflect.runtime.universe._
-
-import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.ConfigurationConstants._
+import scala.util.control.Breaks._
 
 class SolrRelation(
     val parameters: Map[String, String],
@@ -295,27 +294,8 @@ class SolrRelation(
 
     val collectionBaseSchema = baseSchema.get
     if (fields != null && fields.length > 0) {
-      // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
-      if (collectionBaseSchema.size == fields.length) {
-        // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
-        if (conf.docValues.getOrElse(false)) {
-          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
-          query.setFields(fields: _*)
-        } else {
-          // Reset any existing fields from previous query and set the fields from 'config' option
-          query.setFields(solrFields:_*)
-        }
-      } else {
-        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
-        query.setFields(fields: _*)
-      }
-    }
-
-    // We use aliasing to retrieve docValues (that are indexed and not stored). This can be removed after upgrading to 5.5
-    if (query.getFields != null && query.getFields.length > 0) {
-      if (conf.docValues.getOrElse(false)) {
-        SolrRelationUtil.setAliases(query.getFields.split(","), query, collectionBaseSchema)
-      }
+      fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+      query.setFields(fields: _*)
     }
 
     // Clear all existing filters except the original filters set in the config.
@@ -498,9 +478,9 @@ class SolrRelation(
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
-      breakable {
-        schema.fields.foreach(field => {
-          val fname = field.name
+      schema.fields.foreach(field => {
+        val fname = field.name
+        breakable {
           if (fname.equals("_version_")) break()
           val fieldIndex = row.fieldIndex(fname)
           val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
@@ -516,8 +496,8 @@ class SolrRelation(
               case _ => doc.setField(fname, value)
             }
           }
-        })
-      }
+        }
+     })
 
       // Generate unique key if the document doesn't have one
       if (generateUniqKey) {
