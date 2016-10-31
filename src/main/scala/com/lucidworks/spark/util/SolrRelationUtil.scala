@@ -278,11 +278,15 @@ object SolrRelationUtil extends LazyLogging {
             val iterableValues = fieldValues.iterator().map {
               case d: Date => new Timestamp(d.getTime)
               case s: String =>
-                // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
-                if (fieldType.eq(TimestampType))
-                  new Timestamp(DateTime.parse(s).getMillis)
-                else
-                  s
+                fieldType match {
+                  // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
+                  case t: ArrayType =>
+                    if (t.asInstanceOf[ArrayType].elementType.eq(TimestampType))
+                      new Timestamp(DateTime.parse(s).getMillis)
+                    else
+                      s
+                  case _ => s
+                }
               case i: java.lang.Integer => new java.lang.Long(i.longValue())
               case f: java.lang.Float => new java.lang.Double(f.doubleValue())
               case a => a
@@ -291,11 +295,10 @@ object SolrRelationUtil extends LazyLogging {
           } else {
             values.add(null)
           }
-
         } else {
           val fieldValue = solrDocument.getFieldValue(field.name)
           fieldValue match {
-            case f: Date => values.add(new Timestamp(f.getTime))
+            case d: Date => values.add(new Timestamp(d.getTime))
             case s: String =>
               // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
               if (fieldType.eq(TimestampType))
@@ -304,8 +307,8 @@ object SolrRelationUtil extends LazyLogging {
                 values.add(s)
             case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
             case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
-            case f: java.util.ArrayList[_] =>
-              val jlist = f.iterator.map {
+            case al: java.util.ArrayList[_] =>
+              val jlist = al.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
                 case s: String =>
                   if (fieldType.eq(TimestampType))
@@ -320,8 +323,8 @@ object SolrRelationUtil extends LazyLogging {
               if (arr.length >= 1) {
                 values.add(arr(0).asInstanceOf[AnyRef])
               }
-            case f: Iterable[_] =>
-              val iterableValues = f.iterator.map {
+            case it : Iterable[_] =>
+              val iterableValues = it.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
                 case s: String =>
                   if (fieldType.eq(TimestampType))
@@ -336,8 +339,7 @@ object SolrRelationUtil extends LazyLogging {
               if (!arr.isEmpty) {
                 values.add(arr(0).asInstanceOf[AnyRef])
               }
-            case f: Any => values.add(f)
-            case f => values.add(f)
+            case a => values.add(a)
           }
         }
       }
