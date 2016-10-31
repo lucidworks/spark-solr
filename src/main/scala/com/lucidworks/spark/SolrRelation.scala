@@ -370,6 +370,7 @@ class SolrRelation(
           else
             if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
+              logger.info("Added sort field '" + query.getSortField + "' to the query")
               true
             }
             else
@@ -383,6 +384,14 @@ class SolrRelation(
           logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
         logInfo(s"Sending ${query} to SolrRDD using ${requestHandler}")
+        // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
+        if (requestHandler.eq(QT_EXPORT)) {
+          if (query.getFields == null)
+            query.setFields(solrRDD.uniqueKey)
+          if (query.getSorts.isEmpty)
+            query.setSort(solrRDD.uniqueKey, SolrQuery.ORDER.asc)
+        }
+        logInfo(s"Constructed SolrQuery: ${query}")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -528,8 +537,6 @@ class SolrRelation(
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
   }
 
-
-
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
 
@@ -619,8 +626,16 @@ object SolrRelation extends Logging {
   }
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
-    query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
-    log.info("Added sort field '" + query.getSortField + "' to the query")
+    querySchema.fields.foreach(field => {
+      if (field.metadata.contains("multiValued")) {
+        if (!field.metadata.getBoolean("multiValued")) {
+          query.addSort(field.name, SolrQuery.ORDER.asc)
+          return
+        }
+      }
+      query.addSort(field.name, SolrQuery.ORDER.asc)
+      return
+    })
   }
 
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed

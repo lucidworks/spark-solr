@@ -380,7 +380,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
     String idFieldName = "id";
 
-    sourceData = sourceData.sort(idFieldName);
+    sourceData = sourceData.repartition(1).sort(idFieldName);
     sourceData.printSchema();
     Row[] testData = sourceData.collect();
     String[] cols = sourceData.columns();
@@ -389,7 +389,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
-    sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
+    sourceData.repartition(1).write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
 
     // Explicit commit to make sure all docs are visible
     CloudSolrClient solrCloudClient = SolrSupport.getCachedCloudClient(zkHost);
@@ -402,6 +402,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
+    // This test is using cursor marks because the export handler changes the order of values for multi-valued fields
+    options.put(USE_CURSOR_MARKS(), "true");
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
