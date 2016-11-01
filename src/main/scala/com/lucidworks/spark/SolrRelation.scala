@@ -347,14 +347,18 @@ class SolrRelation(
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
-        val sortClauses: List[SortClause] = query.getSorts.asScala.toList
-        if (sortClauses.isEmpty) {
+        val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+        if (!query.getSorts.isEmpty) {
+          for (sort: SortClause <- query.getSorts.asScala) {
+            sortClauses += sort
+          }
+        } else {
           val sortParams = query.getParams(CommonParams.SORT)
           if (sortParams != null && sortParams.nonEmpty) {
             for (sortString <- sortParams) {
               val sortStringParams = sortString.split(" ")
               if (sortStringParams.nonEmpty && sortStringParams.size == 2) {
-                sortClauses.::(new SortClause(sortStringParams(0), sortStringParams(1)))
+                sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
               }
             }
           }
@@ -363,7 +367,7 @@ class SolrRelation(
         logDebug(s"Existing sort clauses: ${sortClauses.mkString}")
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
-            SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
+            SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
             if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
