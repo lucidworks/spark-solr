@@ -491,9 +491,9 @@ class SolrRelation(
     val docs = df.rdd.map(row => {
       val schema: StructType = row.schema
       val doc = new SolrInputDocument
-      breakable {
-        schema.fields.foreach(field => {
-          val fname = field.name
+      schema.fields.foreach(field => {
+        val fname = field.name
+        breakable {
           if (fname.equals("_version_")) break()
           val fieldIndex = row.fieldIndex(fname)
           val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
@@ -509,8 +509,8 @@ class SolrRelation(
               case _ => doc.setField(fname, value)
             }
           }
-        })
-      }
+        }
+      })
 
       // Generate unique key if the document doesn't have one
       if (generateUniqKey) {

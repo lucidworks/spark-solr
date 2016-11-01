@@ -60,6 +60,38 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
   @Test
+  public void testMultiValuedExport() throws Exception {
+    String testCollection = "testMultiValuedStreamExport";
+    try {
+      deleteCollection(testCollection);
+      String zkHost = cluster.getZkServer().getZkAddress();
+      buildCollection(zkHost, testCollection, null, 1);
+
+      SQLContext sqlContext = new SQLContext(jsc);
+
+      String testJsonFile = "src/test/resources/test-data/em_sample.json";
+      Map<String, String> options = new HashMap<String, String>();
+      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      options.put(SOLR_COLLECTION_PARAM(), testCollection);
+      options.put(GENERATE_UNIQUE_KEY(), "true");
+
+      DataFrame jsonDF = sqlContext.read().json(testJsonFile);
+      jsonDF.write().format(Constants.SOLR_FORMAT()).options(options).save();
+      SolrSupport.getCachedCloudClient(zkHost).commit(testCollection);
+      DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      StructType schema = fromSolr.schema();
+      assertTrue(schema.fieldIndex("out_clicks_ss") >= 0);
+      Row row = (Row) fromSolr.head();
+      assertTrue(row.length() > 5);
+      assertTrue(fromSolr.count() == 100);
+
+    } finally {
+      deleteCollection(testCollection);
+    }
+  }
+
+
+  @Test
   public void testIndexOneusagovDataFrame() throws Exception {
     String testCollection = "testIndexOneusagovDataFrame";
     try {
