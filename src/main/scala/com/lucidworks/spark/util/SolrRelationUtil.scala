@@ -19,6 +19,16 @@ import scala.collection.mutable.ListBuffer
 
 object SolrRelationUtil extends LazyLogging {
 
+  val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
+    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls")
+
+  def isValidDynamicFieldName(fieldName: String): Boolean = {
+    dynamicExtensionSuffixes.foreach(ext => {
+      if (fieldName.endsWith(ext)) true
+    })
+    false
+  }
+
   def getBaseSchema(
       zkHost: String,
       collection: String,

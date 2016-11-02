@@ -14,8 +14,8 @@ import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
 import org.apache.solr.common.SolrException.ErrorCode
-import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}
+import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.solr.SolrSparkSession
@@ -444,7 +444,7 @@ class SolrRelation(
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name)) {
         logger.info(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
       }
