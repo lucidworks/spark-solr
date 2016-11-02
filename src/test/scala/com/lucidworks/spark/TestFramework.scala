@@ -4,7 +4,7 @@ import java.io.File
 import java.util.UUID
 
 import com.lucidworks.spark.example.ml.DateConverter
-import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil}
+import com.lucidworks.spark.util.{SolrSupport, EventsimUtil, SolrCloudUtil}
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
@@ -124,6 +124,8 @@ trait MovielensBuilder extends TestSuiteBuilder {
     super.beforeAll()
     createCollections()
     MovieLensUtil.indexMovieLensDataset(sqlContext, zkHost)
+    SolrSupport.getCachedCloudClient(zkHost).commit(moviesColName)
+    SolrSupport.getCachedCloudClient(zkHost).commit(ratingsColName)
   }
 
   override def afterAll(): Unit = {
