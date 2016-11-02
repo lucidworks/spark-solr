@@ -14,8 +14,8 @@ import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
 import org.apache.solr.common.SolrException.ErrorCode
-import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}
+import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.solr.SolrSparkSession
@@ -332,14 +332,18 @@ class SolrRelation(
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
-        val sortClauses: List[SortClause] = query.getSorts.asScala.toList
-        if (sortClauses.isEmpty) {
+        val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+        if (!query.getSorts.isEmpty) {
+          for (sort: SortClause <- query.getSorts.asScala) {
+            sortClauses += sort
+          }
+        } else {
           val sortParams = query.getParams(CommonParams.SORT)
           if (sortParams != null && sortParams.nonEmpty) {
             for (sortString <- sortParams) {
               val sortStringParams = sortString.split(" ")
               if (sortStringParams.nonEmpty && sortStringParams.size == 2) {
-                sortClauses.::(new SortClause(sortStringParams(0), sortStringParams(1)))
+                sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
               }
             }
           }
@@ -349,7 +353,7 @@ class SolrRelation(
 
         val isSDV: Boolean =
           if (sortClauses.nonEmpty)
-            SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses)
+            SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
             if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
@@ -440,7 +444,7 @@ class SolrRelation(
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name)) {
         logger.info(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
       }
