@@ -458,7 +458,7 @@ class SolrRelation(
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name)) {
         logInfo(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
       }
