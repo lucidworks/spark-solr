@@ -36,7 +36,7 @@ class TestQuerying extends TestSuiteBuilder {
 
       // Test to make sure sort param is being applied to the query
       {
-        val solrDF1 = sparkSession.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
+        val solrDF1 = sqlContext.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
         val rows = solrDF1.collect()
         val idFieldIndex = solrDF1.schema.fieldIndex("id")
         rows.zipWithIndex.foreach{ case(row,i) => {
