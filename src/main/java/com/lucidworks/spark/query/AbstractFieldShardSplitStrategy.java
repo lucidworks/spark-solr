@@ -3,10 +3,7 @@ package com.lucidworks.spark.query;
 import com.lucidworks.spark.util.QueryConstants;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.SolrResponse;
-import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.*;
 import org.apache.solr.client.solrj.response.FieldStatsInfo;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -70,7 +67,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
         SolrQuery missingQuery = query.getCopy();
         missingQuery.addFilterQuery("-" + splitFieldName + ":[* TO *]");
         missingQuery.setRows(0);
-        QueryResponse qr = solrClient.query(missingQuery);
+        QueryResponse qr = solrClient.query(missingQuery, SolrRequest.METHOD.POST);
         missingCount = qr.getResults().getNumFound();
       }
 
@@ -120,7 +117,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     statsQuery.setFields(splitFieldName);
     statsQuery.remove("cursorMark");
     statsQuery.setGetFieldStatistics(splitFieldName);
-    QueryResponse qr = solrClient.query(statsQuery);
+    QueryResponse qr = solrClient.query(statsQuery, SolrRequest.METHOD.POST);
     return qr.getFieldStatsInfo().get(splitFieldName);
   }
 
@@ -130,7 +127,7 @@ public abstract class AbstractFieldShardSplitStrategy<T> implements ShardSplitSt
     splitQuery.setRows(0);
     splitQuery.setStart(0);
     splitQuery.setFields(split.getSplitFieldName());
-    QueryResponse qr = solrClient.query(splitQuery);
+    QueryResponse qr = solrClient.query(splitQuery, SolrRequest.METHOD.POST);
     split.setNumHits(qr.getResults().getNumFound());
     return split.getNumHits();
   }
