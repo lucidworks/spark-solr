@@ -27,6 +27,11 @@ public class BuildQueryTest {
     assertEquals("*:*", q.getQuery());
     assertEquals(new Integer(DEFAULT_PAGE_SIZE()), q.getRows());
 
+    q = SolrQuerySupport.toQuery("q={!geofilt sfield=geo_location pt=44.9609,-93.2642 d=50}") ;
+    assertEquals("{!geofilt sfield=geo_location pt=44.9609,-93.2642 d=50}", q.getQuery());
+
+    q = SolrQuerySupport.toQuery("{!geofilt sfield=geo_location pt=44.9609,-93.2642 d=50}") ;
+    assertEquals("{!geofilt sfield=geo_location pt=44.9609,-93.2642 d=50}", q.getQuery());
 
     String qs = "text:hello";
     String fq = "price:[100 TO *]";
