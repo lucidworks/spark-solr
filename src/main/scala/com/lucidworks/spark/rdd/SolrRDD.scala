@@ -77,7 +77,6 @@ class SolrRDD(
         val resultsIterator = new StreamingExpressionResultIterator(partition.zkhost, partition.collection, partition.params)
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
       case partition: SolrRDDPartition =>
-//        log.info("Computing the partition " + partition.index + " on host name " + context.taskMetrics().hostname)
 
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
