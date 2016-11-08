@@ -1,12 +1,14 @@
 package com.lucidworks.spark
 
-import java.util.Locale
+import java.util.{Collections, Locale}
 import java.util.regex.{Matcher, Pattern}
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
+import com.lucidworks.spark.util.{SolrQuerySupport}
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.sql.{SQLContext, DataFrame}
+import org.apache.spark.sql.types.{LongType, StructField, StructType}
+import org.apache.spark.sql.{Row, SQLContext, DataFrame}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{Logging, SparkContext}
 
@@ -26,8 +28,35 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
   var tableToResource : Map[String, SecuredResource] = Map.empty
 
   override def sql(sqlText: String): DataFrame = {
+
+    // collapse all whitespace chars down to a single space
+    val sqlTextWs = sqlText.replaceAll("\\s+", " ").trim()
+
+    // short circuit for count(*) of a collection
+    val countStarMatcher: Matcher = SolrSQLHiveContext.selectCountStarPattern.matcher(sqlTextWs)
+    if (countStarMatcher.matches()) {
+      val groupOne = countStarMatcher.group(1)
+      val collection = countStarMatcher.group(2)
+      var maybeZkhost = config.get("zkhost")
+      if (!maybeZkhost.isDefined) {
+        var zkHostSysProp = System.getProperty("solr.zkhost")
+        if (zkHostSysProp != null) {
+          maybeZkhost = Some(zkHostSysProp)
+        }
+      }
+
+      if (maybeZkhost.isDefined) {
+        logInfo(s"Looking up num docs for collection $collection using zkhost ${maybeZkhost.get} to short-circuit SQL: $sqlTextWs")
+        val numDocs = SolrQuerySupport.getNumDocsFromSolr(collection, maybeZkhost.get, None)
+        val theRow : Row = Row.apply(numDocs)
+        val schema : StructType = new StructType(Array(StructField(groupOne, LongType, false)))
+        logInfo(s"Create count(*) short-circuit DF for $collection with numDocs=$numDocs with schema: $schema")
+        return super.createDataFrame(Collections.singletonList(theRow), schema)
+      }
+    }
+
     // process the statement and check for sub-queries
-    val modifiedSqlText = processSqlStmt(sqlText)
+    val modifiedSqlText = processSqlStmt(sqlTextWs)
     super.sql(modifiedSqlText)
   }
 
@@ -175,6 +204,7 @@ object SolrSQLHiveContext extends Logging {
   // also supports executing Solr queries directly if they use _query_ in the where clause, one of our few hints we can rely on
   val solrQueryPattern: Pattern = Pattern.compile("\\s_query_\\s?=\\s?'.*?'\\s?")
   val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
+  val selectCountStarPattern = Pattern.compile("select (count\\([\\*1]\\)) from ([\\w_\\-\\.]+)", Pattern.CASE_INSENSITIVE)
 
   def hasSolrAlias(sqlText: String): Boolean =
     sqlText.toLowerCase.indexOf(") as solr") != -1
