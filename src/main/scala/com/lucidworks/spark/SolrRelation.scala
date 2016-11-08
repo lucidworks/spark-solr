@@ -80,7 +80,7 @@ class SolrRelation(
       conf.getZkHost.get,
       collection,
       sqlContext.sparkContext,
-      requestHandler = Some(conf.requestHandler))
+      requestHandler = conf.requestHandler)
 
     if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
       rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
@@ -120,7 +120,7 @@ class SolrRelation(
       if (query.getFields != null) {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
-      } else if (conf.requestHandler == QT_STREAM) {
+      } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_STREAM) {
         // we have to figure out the schema of the streaming expression
         var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
@@ -145,7 +145,7 @@ class SolrRelation(
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
         logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
-      } else if (conf.requestHandler == QT_SQL) {
+      } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_SQL) {
         val sqlStmt = query.get(SOLR_SQL_STMT)
         logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
 
@@ -274,18 +274,20 @@ class SolrRelation(
       sHiveContext.checkReadAccess(collection, "solr")
     }
 
-    val rq = solrRDD.requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-    if (rq == QT_STREAM || rq == QT_SQL) {
-      // ignore any fields / filters when processing a streaming expression
-      return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
+    val rq = solrRDD.requestHandler
+    if (rq.isDefined) {
+      if (rq.get == QT_STREAM || rq.get == QT_SQL) {
+        // ignore any fields / filters when processing a streaming expression
+        return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
+      }
     }
 
-    log.info("Fields passed down from scanner: " + fields.mkString(","))
-    log.info("Filters passed down from scanner: " + filters.mkString(","))
+    logInfo("Fields passed down from scanner: " + fields.mkString(","))
+    logInfo("Filters passed down from scanner: " + filters.mkString(","))
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
-    if (!baseSchema.isDefined) {
+    if (baseSchema.isEmpty) {
       throw new IllegalStateException("No base schema defined for collection "+collection)
     }
 
@@ -342,7 +344,7 @@ class SolrRelation(
         throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
       }
 
-      if (!requiresExportHandler(rq) && !conf.useCursorMarks.getOrElse(false)) {
+      if (rq.isEmpty && !conf.useCursorMarks.getOrElse(false)) {
         logDebug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
@@ -376,7 +378,7 @@ class SolrRelation(
             else
               false
 
-        var requestHandler = rq
+        var requestHandler = rq.getOrElse(DEFAULT_REQUEST_HANDLER)
         if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
           requestHandler = QT_EXPORT
           logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
