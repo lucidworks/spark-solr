@@ -2,7 +2,6 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
 import org.apache.solr.client.solrj.request.UpdateRequest
@@ -38,7 +37,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
       updateRequest.process(cloudClient, collectionName)
       updateRequest.commit(cloudClient, collectionName)
 
-      val testDF = sparkSession.read.format("solr").options(
+      val testDF = sqlContext.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName,
           "query" -> "the_abcdefghijklmnopqrstuvwxyz_field_01:[* TO *]", "fields" -> fl, "request_handler" -> "/select", "splits" -> "true")).load
       //testDF.printSchema
@@ -54,7 +53,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
                           |           sort="the_abcdefghijklmnopqrstuvwxyz_field_01 asc",
                           |           qt="/export")
       """.stripMargin
-      val exprDF = sparkSession.read.format("solr").options(
+      val exprDF = sqlContext.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName, "expr" -> searchExpr)).load
       val exprSchema = exprDF.schema
       //exprDF.printSchema
