@@ -212,12 +212,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
       val paramString = config.get(ARBITRARY_PARAMS_STRING).get
       val params = paramString.split("&")
-
       for (param <- params) {
-        val keyValue = param.split("=")
-        val key = keyValue(0)
-        val value = keyValue(1)
-        solrParams.add(key, value)
+        val eqAt = param.indexOf('=')
+        if (eqAt != -1) {
+          val key = param.substring(0,eqAt)
+          val value = param.substring(eqAt+1)
+          solrParams.add(key, value)
+        }
       }
     }
     solrParams

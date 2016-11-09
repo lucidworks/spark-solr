@@ -1,33 +1,32 @@
 package com.lucidworks.spark.util
 
-import java.nio.charset.StandardCharsets
+import java.net.URLDecoder
 import java.util
+
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.JsonUtil._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.solr.client.solrj.SolrRequest.METHOD
+import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj._
-import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, DataFrame}
+import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.types.{StructField, StructType, DataTypes, DataType}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row}
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
-
-import com.lucidworks.spark.util.JsonUtil._
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 
 // Should we support all other additional Solr field tags?
 case class SolrFieldMeta(
@@ -108,16 +107,19 @@ object SolrQuerySupport extends LazyLogging {
       solrQuery = solrQuery.setQuery("*:*")
     } else {
       // Check to see if the query contains additional parameters. E.g., q=*:*&fl=id&sort=id asc
-      if (!queryString.contains("=")) {
-        // no name-value pairs ... just assume this single clause is the q part
+      if (!queryString.contains("q=")) {
+        // q= is required if passing list of name/value pairs, so if not there, whole string is the query
         solrQuery.setQuery(queryString)
       } else {
-        val params = new NamedList[Object]()
-        for(nvp <- URLEncodedUtils.parse(queryString, StandardCharsets.UTF_8)) {
-          val value = nvp.getValue
-          if (value != null && value.length > 0) {
-            val name = nvp.getName
-            if ("sort".equals(name)) {
+        val paramsNL = new NamedList[Object]()
+        val params = queryString.split("&")
+        for (param <- params) {
+          // only care about the first equals as value may also contain equals
+          val eqAt = param.indexOf('=')
+          if (eqAt != -1) {
+            val key = param.substring(0, eqAt)
+            val value = URLDecoder.decode(param.substring(eqAt + 1), "UTF-8")
+            if (key == "sort") {
               if (!value.contains(" ")) {
                 solrQuery.addSort(SolrQuery.SortClause.asc(value))
               } else {
@@ -125,16 +127,20 @@ object SolrQuerySupport extends LazyLogging {
                 solrQuery.addSort(SolrQuery.SortClause.create(split(0), split(1)))
               }
             } else {
-              params.add(name, value)
+              paramsNL.add(key, value)
             }
           }
         }
-        solrQuery.add(SolrParams.toSolrParams(params))
+        if (!paramsNL.isEmpty) {
+          solrQuery.add(SolrParams.toSolrParams(paramsNL))
+        }
       }
     }
     val rows = solrQuery.getRows
     if (rows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
+
+    logger.info(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
     solrQuery
   }
 
