@@ -35,13 +35,7 @@ class TestSolrSQLHiveContext extends MovielensBuilder {
       // Register movies collection as a table
       val opts = Map("zkhost" -> zkHost, "collection" -> moviesColName)
       sHiveContext.read.format("solr").options(opts).load().registerTempTable("movies")
-
-      // verify the count(*) short circuit works
-      val countStarDf = sHiveContext.sql("select count(*) from "+moviesColName)
-      val countStarRows = countStarDf.collect()
-      assert(countStarRows.length == 1)
-      assert(countStarRows(0)(0) == 1682)
-
+      
       val df = sHiveContext.sql(sqlStmt)
       val rows = df.collect()
       assert(rows.length == 1)
