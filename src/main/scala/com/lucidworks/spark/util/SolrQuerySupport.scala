@@ -1,34 +1,32 @@
 package com.lucidworks.spark.util
 
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.util
+
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.util.JsonUtil._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.http.client.utils.URLEncodedUtils
 import org.apache.solr.client.solrj.SolrRequest.METHOD
+import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj._
-import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, DataFrame}
+import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.types.{StructField, StructType, DataTypes, DataType}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row}
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
-
-import com.lucidworks.spark.util.JsonUtil._
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 
 // Should we support all other additional Solr field tags?
 case class SolrFieldMeta(
@@ -142,7 +140,7 @@ object SolrQuerySupport extends LazyLogging {
     if (rows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
 
-    logInfo(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
+    logger.info(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
     solrQuery
   }
 
