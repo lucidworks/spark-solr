@@ -293,27 +293,8 @@ class SolrRelation(
 
     val collectionBaseSchema = baseSchema.get
     if (fields != null && fields.length > 0) {
-      // If all the fields in the base schema are here, we probably don't need to explicitly add them to the query
-      if (collectionBaseSchema.size == fields.length) {
-        // Special case for docValues. Not needed after upgrading to Solr 5.5.0 (unless to maintain back-compat)
-        if (conf.docValues.getOrElse(false)) {
-          fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
-          query.setFields(fields: _*)
-        } else {
-          // Reset any existing fields from previous query and set the fields from 'config' option
-          query.setFields(solrFields:_*)
-        }
-      } else {
-        fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
-        query.setFields(fields: _*)
-      }
-    }
-
-    // We use aliasing to retrieve docValues (that are indexed and not stored). This can be removed after upgrading to 5.5
-    if (query.getFields != null && query.getFields.length > 0) {
-      if (conf.docValues.getOrElse(false)) {
-        SolrRelationUtil.setAliases(query.getFields.split(","), query, collectionBaseSchema)
-      }
+      fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
+      query.setFields(fields: _*)
     }
 
     // Clear all existing filters except the original filters set in the config.
