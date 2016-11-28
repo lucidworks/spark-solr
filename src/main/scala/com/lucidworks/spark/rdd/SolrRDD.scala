@@ -85,10 +85,10 @@ class SolrRDD(
         query.setRequestHandler(solrRequestHandler)
         val resultsIterator: ResultsIterator =
           if (solrRequestHandler == "/export") {
-            log.info("Using export handler to fetch documents from Solr")
+            log.info("Using export handler to fetch documents from "+partition.preferredReplica+" for query: "+partition.query)
             getExportHandlerBasedIterator(url, query)
           } else {
-            log.info("Using cursorMarks to fetch documents from Solr")
+            log.info("Using cursorMarks to fetch documents from "+partition.preferredReplica+" for query: "+partition.query)
             new StreamingResultsIterator(
               SolrSupport.getHttpSolrClient(url),
               partition.query,
