@@ -4,6 +4,8 @@ import java.util.UUID
 
 import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode.Overwrite
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
 
 class TestQuerying extends TestSuiteBuilder {
 
@@ -11,13 +13,7 @@ class TestQuerying extends TestSuiteBuilder {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName)
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
@@ -52,13 +48,7 @@ class TestQuerying extends TestSuiteBuilder {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "solr.params" -> "fl=id,one_txt,two_txt")
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
@@ -89,13 +79,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 2, cloudClient, sc)
     SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 2, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sqlContext.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts_writing1 = Map("zkhost" -> zkHost, "collection" -> collection1Name)
       val solrOpts_writing2 = Map("zkhost" -> zkHost, "collection" -> collection2Name)
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> s"$collection1Name,$collection2Name")
@@ -124,5 +108,21 @@ class TestQuerying extends TestSuiteBuilder {
   }
 
 
+  def buildTestData() : DataFrame = {
+    val testDataSchema : StructType = StructType(
+      StructField("id", IntegerType, true) ::
+        StructField("one_txt", StringType, false) ::
+        StructField("two_txt", StringType, false) ::
+        StructField("three_s", StringType, false) :: Nil)
 
+    val rows = Seq(
+      Row(1, "A", "B", "C"),
+      Row(2, "C", "D", "E"),
+      Row(3, "F", "G", "H")
+    )
+
+    val csvDF : DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.makeRDD(rows, 1), testDataSchema)
+    assert(csvDF.count == 3)
+    return csvDF
+  }
 }
