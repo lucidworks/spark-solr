@@ -183,6 +183,9 @@ object SolrQuerySupport extends Logging {
       if (cursorMark != null) {
         solrQuery.setStart(0)
         solrQuery.set("cursorMark", cursorMark)
+        if (solrQuery.get("sort") == null || solrQuery.get("sort").isEmpty) {
+          addDefaultSort(solrQuery, QueryConstants.DEFAULT_REQUIRED_FIELD)
+        }
       } else {
         solrQuery.setStart(startIndex)
       }
