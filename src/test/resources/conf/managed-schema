@@ -12,6 +12,7 @@
   <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
   <field name="rating_timestamp" indexed="true" stored="true" type="tdate" docValues="true"/>
   <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
+  <field name="title_text" indexed="true" stored="true" type="text_general"/>
 
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_01" type="string" indexed="true" stored="true" docValues="true" />
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_02" type="string" indexed="true" stored="true" docValues="true" />
@@ -285,4 +286,14 @@
   <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0" docValues="true"/>
   <fieldType name="binary" class="solr.BinaryField"/>
   <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
+  <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+    <analyzer type="index">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+    </analyzer>
+  </fieldType>
 </schema>

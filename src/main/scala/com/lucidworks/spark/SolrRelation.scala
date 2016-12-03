@@ -136,7 +136,8 @@ class SolrRelation(
               conf.getZkHost.get,
               sf.collection,
               conf.escapeFieldNames.getOrElse(false),
-              conf.flattenMultivalued.getOrElse(true))
+              conf.flattenMultivalued.getOrElse(true),
+              conf.skipNonDocValueFields.getOrElse(false))
           logger.debug(s"Got stream schema: ${streamSchema} for ${sf}")
           streamSchema.fields.foreach(fld => fieldSet.add(fld))
           sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
@@ -217,7 +218,8 @@ class SolrRelation(
       conf.getZkHost.get,
       collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
-      conf.flattenMultivalued.getOrElse(true))
+      conf.flattenMultivalued.getOrElse(true),
+      conf.skipNonDocValueFields.getOrElse(false))
   }
 
   def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields]) : Unit = {
@@ -626,7 +628,6 @@ object SolrRelation extends LazyLogging {
     })
   }
 
-  // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
       if (structField.dataType == BooleanType)

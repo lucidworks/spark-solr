@@ -238,6 +238,53 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
   }
 
+  test("Skip Non DocValue fields config option") {
+    val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
+    buildMoviesCollectionWithText(moviesCollection)
+
+    {
+      val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "true")
+      val df = sparkSession.read.format("solr").options(opts).load()
+      val schema = df.schema
+      assert(schema.fields.length == 4)
+      assert(schema.fieldNames.toSet  == Set("id", "movie_id", "_version_", "title"))
+    }
+
+    {
+      val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "false")
+      val df = sparkSession.read.format("solr").options(opts).load()
+      val schema = df.schema
+      assert(schema.fields.length == 5)
+      assert(schema.fieldNames.toSet == Set("id", "movie_id", "_version_", "title_text", "title"))
+    }
+
+    SolrCloudUtil.deleteCollection(moviesCollection, cluster)
+  }
+
+  def buildMoviesCollectionWithText(moviesCollection: String) : Int = {
+    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
+
+    val movieDocs : Array[String] = Array(
+      UUID.randomUUID().toString+",movie200,The Big Short",
+      UUID.randomUUID().toString+",movie201,Moneyball"
+    )
+    val indexMoviesRequest = new UpdateRequest()
+    movieDocs.foreach(row => {
+      val fields = row.split(",")
+      val doc = new SolrInputDocument()
+      doc.setField("id", fields(0))
+      doc.setField("movie_id", fields(1))
+      doc.setField("title", fields(2))
+      doc.setField("title_text", fields(2))
+      indexMoviesRequest.add(doc)
+      doc
+    })
+    indexMoviesRequest.process(cloudClient, moviesCollection)
+    indexMoviesRequest.commit(cloudClient, moviesCollection)
+
+    return movieDocs.length
+  }
+
   def buildMoviesCollection(moviesCollection: String) : Int = {
     SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
 

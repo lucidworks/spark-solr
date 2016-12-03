@@ -15,6 +15,7 @@ object ConfigurationConstants {
   val ESCAPE_FIELDNAMES_PARAM: String = "escape_fieldnames"
   val SOLR_DOC_VALUES: String = "dv"
   val FLATTEN_MULTIVALUED: String = "flatten_multivalued"
+  val SKIP_NON_DOCVALUE_FIELDS: String = "skip_non_dv"
   @deprecated
   val USE_EXPORT_HANDLER: String = "use_export_handler"
   val REQUEST_HANDLER: String = "request_handler"
