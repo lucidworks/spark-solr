@@ -12,7 +12,7 @@ import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
-import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
+import com.lucidworks.spark.query._
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -534,21 +534,8 @@ object SolrSupport extends Logging {
   }
 
   def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit[_]]= {
-    var splitStrategy: Option[ShardSplitStrategy] = None
-
-    if (fd.equals(DataTypes.LongType) || fd.equals(DataTypes.IntegerType)) {
-      splitStrategy = Some(new NumberFieldShardSplitStrategy)
-    } else if (fd.equals(DataTypes.StringType)) {
-      splitStrategy = Some(new StringFieldShardSplitStrategy)
-    } else {
-      throw new IllegalArgumentException("Can only split shards on fields of type: long, int or String!")
-    }
-
-    if (splitStrategy.isDefined) {
-      splitStrategy.get.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
-    } else {
-      throw new IllegalArgumentException("No split strategy found for DataType '" + fd + "'")
-    }
+    val hashSplitStrategy = new HashQParserShardSplitStrategy(shard)
+    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
   }
 
 }
