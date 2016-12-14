@@ -22,7 +22,6 @@ import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
 import org.apache.spark.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{DataTypes, DataType}
 import org.apache.spark.streaming.dstream.DStream
 
 import scala.collection.mutable
@@ -30,7 +29,6 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import scala.collection.JavaConversions._
 import util.control.Breaks._
-
 
 object CacheSolrClient {
   private val loader = new CacheLoader[String, CloudSolrClient]() {
@@ -508,34 +506,8 @@ object SolrSupport extends Logging {
       splitFieldName: String,
       splitsPerShard: Int): List[ShardSplit[_]] = {
 
-    var fieldDataType: Option[DataType] = None
-    if ("_version_".equals(splitFieldName)) {
-      fieldDataType = Some(DataTypes.LongType)
-    } else {
-      // Get the field type of split field
-      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Set(splitFieldName), SolrRDD.randomReplicaLocation(solrShard))
-      val solrFieldMeta = fieldMetaMap.get(splitFieldName)
-      if (solrFieldMeta.isDefined) {
-        val fieldTypeClass  = solrFieldMeta.get.fieldTypeClass
-        if (fieldTypeClass.isDefined) {
-          fieldDataType = SolrQuerySupport.SOLR_DATA_TYPES.get(fieldTypeClass.get)
-        } else
-          fieldDataType = Some(DataTypes.StringType)
-      } else {
-        log.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
-        fieldDataType = Some(DataTypes.StringType)
-      }
-    }
-    if (fieldDataType.isEmpty) {
-      throw new IllegalArgumentException("Cannot determine DataType for split field " + splitFieldName)
-    }
-
-    getSplits(fieldDataType.get, splitFieldName, splitsPerShard, query, solrShard)
+    val hashSplitStrategy = new HashQParserShardSplitStrategy(solrShard)
+    logInfo(s"Creating $splitsPerShard splits using field $splitFieldName")
+    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
   }
-
-  def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit[_]]= {
-    val hashSplitStrategy = new HashQParserShardSplitStrategy(shard)
-    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
-  }
-
 }
