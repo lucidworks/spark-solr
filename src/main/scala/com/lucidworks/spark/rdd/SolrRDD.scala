@@ -122,19 +122,13 @@ class SolrRDD(
     val numSplits = splitsPerShard.getOrElse(numReplicas)
     logInfo(s"Using splitField=${splitField}, splitsPerShard=${splitsPerShard}, and numReplicas=${numReplicas} for computing partitions.")
 
-    val partitions : Array[Partition] = if (rq != QT_EXPORT && splitField.isDefined) {
-      // split field is explicitly specified by the user ... but don't try splitting if the user is using /export
-      SolrPartitioner.getSplitPartitions(shards, query, splitField.get, numSplits)
+    val partitions : Array[Partition] = if (rq != QT_EXPORT && numSplits > 1) {
+      val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
+      logInfo(s"Applied ${numSplits} intra-shard splits on the ${splitFieldName} field for ${collection} to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
+      SolrPartitioner.getSplitPartitions(shards, query, splitFieldName, numSplits)
     } else {
-      // split field is not defined ... but if there are multiple replicas per shard, we should use them unless using /export which we don't want to split
-      if (rq != QT_EXPORT && numReplicas > 1 && numSplits > 1) {
-        // multiple replicas available ... do at least one split per replica
-        logInfo(s"Applied ${numSplits} intra-shard splits on the ${DEFAULT_SPLIT_FIELD} field for ${collection} to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
-        SolrPartitioner.getSplitPartitions(shards, query, DEFAULT_SPLIT_FIELD, numSplits)
-      } else {
-        // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
-        SolrPartitioner.getShardPartitions(shards, query)
-      }
+      // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
+      SolrPartitioner.getShardPartitions(shards, query)
     }
 
     if (log.isDebugEnabled) {
