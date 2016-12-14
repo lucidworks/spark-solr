@@ -507,7 +507,7 @@ object SolrSupport extends Logging {
       splitsPerShard: Int): List[ShardSplit[_]] = {
 
     val hashSplitStrategy = new HashQParserShardSplitStrategy(solrShard)
-    logInfo(s"Creating $splitsPerShard splits using field $splitFieldName")
+    logDebug(s"Creating $splitsPerShard splits using field $splitFieldName for $solrShard")
     return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
   }
 }

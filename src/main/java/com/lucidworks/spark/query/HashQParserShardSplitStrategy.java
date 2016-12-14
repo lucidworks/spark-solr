@@ -2,7 +2,6 @@ package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.SolrReplica;
 import com.lucidworks.spark.SolrShard;
-import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 
