@@ -370,7 +370,7 @@ class SolrRelation(
           else
             if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
-              logger.info("Added sort field '" + query.getSortField + "' to the query")
+              logInfo("Added sort field '" + query.getSortField + "' to the query")
               true
             }
             else
