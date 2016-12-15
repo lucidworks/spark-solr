@@ -1,33 +1,31 @@
 package com.lucidworks.spark.util
 
 import java.net.URLDecoder
-import java.nio.charset.StandardCharsets
 import java.util
+
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
-import org.apache.http.client.utils.URLEncodedUtils
+import com.lucidworks.spark.util.JsonUtil._
 import org.apache.solr.client.solrj.SolrRequest.METHOD
+import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.QueryRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj._
-import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
+import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, DataFrame}
-import org.apache.spark.{SparkContext, Logging}
-import org.apache.spark.sql.types.{StructField, StructType, DataTypes, DataType}
+import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.{Logging, SparkContext}
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
-
-import com.lucidworks.spark.util.JsonUtil._
-import org.json4s._
-import org.json4s.jackson.JsonMethods._
 
 // Should we support all other additional Solr field tags?
 case class SolrFieldMeta(
@@ -702,4 +700,33 @@ object SolrQuerySupport extends Logging {
     listOfFields.toList
   }
 
+  def getNumericFieldStatsInfo(solrClient: SolrClient, collection: String, solrQuery: SolrQuery, fieldName: String): (Option[Long], Option[Long]) = {
+
+    // Do not do this for collection aliases
+    if (collection.split(",").length > 1)
+      return (None, None)
+
+    val statsQuery = solrQuery.getCopy()
+    statsQuery.setRows(1)
+    statsQuery.setStart(0)
+    statsQuery.remove("cursorMark")
+    statsQuery.setFields(fieldName)
+    statsQuery.setDistrib(true)
+    statsQuery.setSort(fieldName, SolrQuery.ORDER.asc)
+    logInfo("query: " + statsQuery)
+
+    val qr: QueryResponse = solrClient.query(collection, statsQuery, SolrRequest.METHOD.POST)
+    if (qr.getResults.getNumFound != 0) {
+      val minO = qr.getResults.get(0).getFirstValue(fieldName)
+      val min = java.lang.Long.parseLong(minO.toString)
+
+      statsQuery.setSort(fieldName, SolrQuery.ORDER.desc)
+      val maxQR = solrClient.query(collection, statsQuery, SolrRequest.METHOD.POST)
+      val maxO = maxQR.getResults.get(0).getFirstValue(fieldName)
+      val max = java.lang.Long.parseLong(maxO.toString)
+
+      return (Some(min), Some(max))
+    }
+    (None, None)
+  }
 }

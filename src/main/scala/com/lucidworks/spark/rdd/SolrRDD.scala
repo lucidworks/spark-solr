@@ -2,10 +2,10 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.{StreamingExpressionResultIterator, ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
+import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, StreamingExpressionResultIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.QueryConstants._
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -113,9 +113,16 @@ class SolrRDD(
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
+
     if (rq != QT_EXPORT) {
       logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
+      // Freeze the index by adding a filter query on _version_ field
+      val (min, max) = SolrQuerySupport.getNumericFieldStatsInfo(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
+      if (min.isDefined && max.isDefined) {
+        log.debug("min: " + min + " max: " + max)
+        query.addFilterQuery(DEFAULT_SPLIT_FIELD + ":[" + min.get + " TO " + max.get + "]")
+      }
     }
 
     val numReplicas = shards.apply(0).replicas.length
