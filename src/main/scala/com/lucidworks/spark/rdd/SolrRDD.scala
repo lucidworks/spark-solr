@@ -120,8 +120,9 @@ class SolrRDD(
       // Freeze the index by adding a filter query on _version_ field
       val (min, max) = SolrQuerySupport.getNumericFieldStatsInfo(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
       if (min.isDefined && max.isDefined) {
-        log.debug("min: " + min + " max: " + max)
-        query.addFilterQuery(DEFAULT_SPLIT_FIELD + ":[" + min.get + " TO " + max.get + "]")
+        val rangeFilter = DEFAULT_SPLIT_FIELD + ":[" + min.get + " TO " + max.get + "]"
+        log.debug("range filter added to the query: " + rangeFilter)
+        query.addFilterQuery(rangeFilter)
       }
     }
 
