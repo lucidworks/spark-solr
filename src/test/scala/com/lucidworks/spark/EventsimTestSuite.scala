@@ -18,7 +18,7 @@ class EventsimTestSuite extends EventsimBuilder {
       .query("*:*")
       .rows(10)
       .select(Array("id"))
-    assert(solrRDD.getNumPartitions == numShards)
+    assert(solrRDD.getNumPartitions == numShards*2)
     testCommons(solrRDD)
   }
 

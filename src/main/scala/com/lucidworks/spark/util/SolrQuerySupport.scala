@@ -700,33 +700,25 @@ object SolrQuerySupport extends Logging {
     listOfFields.toList
   }
 
-  def getNumericFieldStatsInfo(solrClient: SolrClient, collection: String, solrQuery: SolrQuery, fieldName: String): (Option[Long], Option[Long]) = {
+  def getMaxVersion(solrClient: SolrClient, collection: String, solrQuery: SolrQuery, fieldName: String): Option[Long] = {
 
     // Do not do this for collection aliases
     if (collection.split(",").length > 1)
-      return (None, None)
+      return None
 
     val statsQuery = solrQuery.getCopy()
     statsQuery.setRows(1)
     statsQuery.setStart(0)
     statsQuery.remove("cursorMark")
+    statsQuery.remove("distrib")
     statsQuery.setFields(fieldName)
-    statsQuery.setDistrib(true)
-    statsQuery.setSort(fieldName, SolrQuery.ORDER.asc)
-    logInfo("query: " + statsQuery)
-
+    statsQuery.setSort(fieldName, SolrQuery.ORDER.desc)
     val qr: QueryResponse = solrClient.query(collection, statsQuery, SolrRequest.METHOD.POST)
     if (qr.getResults.getNumFound != 0) {
-      val minO = qr.getResults.get(0).getFirstValue(fieldName)
-      val min = java.lang.Long.parseLong(minO.toString)
-
-      statsQuery.setSort(fieldName, SolrQuery.ORDER.desc)
-      val maxQR = solrClient.query(collection, statsQuery, SolrRequest.METHOD.POST)
-      val maxO = maxQR.getResults.get(0).getFirstValue(fieldName)
+      val maxO = qr.getResults.get(0).getFirstValue(fieldName)
       val max = java.lang.Long.parseLong(maxO.toString)
-
-      return (Some(min), Some(max))
+      return Some(max)
     }
-    (None, None)
+    None
   }
 }

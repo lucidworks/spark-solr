@@ -118,10 +118,10 @@ class SolrRDD(
       logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
       // Freeze the index by adding a filter query on _version_ field
-      val (min, max) = SolrQuerySupport.getNumericFieldStatsInfo(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
-      if (min.isDefined && max.isDefined) {
-        val rangeFilter = DEFAULT_SPLIT_FIELD + ":[" + min.get + " TO " + max.get + "]"
-        log.debug("range filter added to the query: " + rangeFilter)
+      val max = SolrQuerySupport.getMaxVersion(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
+      if (max.isDefined) {
+        val rangeFilter = DEFAULT_SPLIT_FIELD + ":[* TO " + max.get + "]"
+        logInfo("Range filter added to the query: " + rangeFilter)
         query.addFilterQuery(rangeFilter)
       }
     }
