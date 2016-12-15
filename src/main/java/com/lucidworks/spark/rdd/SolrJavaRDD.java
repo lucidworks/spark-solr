@@ -36,6 +36,10 @@ public class SolrJavaRDD extends JavaRDD<SolrDocument> {
     return wrap(rdd().query(solrQuery).splitField(splitFieldName).splitsPerShard(splitsPerShard));
   }
 
+  public JavaRDD<SolrDocument> queryNoSplits(String query) {
+    return wrap(rdd().query(query).splitsPerShard(1));
+  }
+
   @Override
   public SolrRDD rdd() {
     return solrRDD;

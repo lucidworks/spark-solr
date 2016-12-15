@@ -74,7 +74,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
     // index some docs into the new collection
     if (inputDocs != null) {
       int numDocsIndexed = indexDocs(zkHost, collection, inputDocs);
-      Thread.sleep(1000L);
+      SolrSupport.getCachedCloudClient(zkHost).commit(collection);
       // verify docs got indexed ... relies on soft auto-commits firing frequently
       SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
       JavaRDD<SolrDocument> resultsRDD = solrRDD.query("*:*");

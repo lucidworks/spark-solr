@@ -2,10 +2,10 @@ package com.lucidworks.spark.rdd
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.{StreamingExpressionResultIterator, ResultsIterator, SolrStreamIterator, StreamingResultsIterator}
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
+import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, StreamingExpressionResultIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.QueryConstants._
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.spark._
@@ -24,7 +24,7 @@ class SolrRDD(
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
     splitField: Option[String] = None,
-    splitsPerShard: Option[Int] = Option(DEFAULT_SPLITS_PER_SHARD),
+    splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None)
   extends RDD[SolrDocument](sc, Seq.empty)
   with Logging {
@@ -113,14 +113,37 @@ class SolrRDD(
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     // Add defaults for shards. TODO: Move this for different implementations (Streaming)
+
     if (rq != QT_EXPORT) {
       logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
       SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
+      // Freeze the index by adding a filter query on _version_ field
+      val max = SolrQuerySupport.getMaxVersion(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
+      if (max.isDefined) {
+        val rangeFilter = DEFAULT_SPLIT_FIELD + ":[* TO " + max.get + "]"
+        logInfo("Range filter added to the query: " + rangeFilter)
+        query.addFilterQuery(rangeFilter)
+      }
     }
-    val partitions = if (splitField.isDefined)
-      SolrPartitioner.getSplitPartitions(shards, query, splitField.get, splitsPerShard.get) else SolrPartitioner.getShardPartitions(shards, query)
-    if (log.isDebugEnabled)
+
+    val numReplicas = shards.apply(0).replicas.length
+    val numSplits = splitsPerShard.getOrElse(2 * numReplicas)
+    logInfo(s"Using splitField=${splitField}, splitsPerShard=${splitsPerShard}, and numReplicas=${numReplicas} for computing partitions.")
+
+    val partitions : Array[Partition] = if (rq != QT_EXPORT && numSplits > 1) {
+      val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
+      logInfo(s"Applied ${numSplits} intra-shard splits on the ${splitFieldName} field for ${collection} to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
+      SolrPartitioner.getSplitPartitions(shards, query, splitFieldName, numSplits)
+    } else {
+      // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
+      SolrPartitioner.getShardPartitions(shards, query)
+    }
+
+    if (log.isDebugEnabled) {
       log.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    } else {
+      logInfo(s"Found ${partitions.length} partitions.")
+    }
     partitions
   }
 

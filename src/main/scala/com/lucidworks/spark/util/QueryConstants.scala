@@ -10,7 +10,7 @@ object QueryConstants {
   val DEFAULT_REQUIRED_FIELD: String = "id"
   val DEFAULT_PAGE_SIZE: Int = 1000
   val DEFAULT_QUERY: String = "*:*"
-  val DEFAULT_SPLITS_PER_SHARD: Int = 20
+  val DEFAULT_SPLITS_PER_SHARD: Int = 10
   val DEFAULT_SPLIT_FIELD: String = "_version_"
   val DEFAULT_REQUEST_HANDLER: String = QT_SELECT
   val DEFAULT_TIME_STAMP_FIELD_NAME: String = "timestamp_tdt"

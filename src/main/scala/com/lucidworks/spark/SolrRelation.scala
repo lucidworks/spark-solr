@@ -82,16 +82,29 @@ class SolrRelation(
       sqlContext.sparkContext,
       requestHandler = conf.requestHandler)
 
-    if (conf.splits.isDefined && conf.getSplitsPerShard.isDefined) {
-      rdd = rdd.doSplits().splitsPerShard(conf.getSplitsPerShard.get)
-    } else if (conf.splits.isDefined) {
-      rdd = rdd.doSplits()
+    if (conf.getSplitsPerShard.isDefined) {
+      // always apply this whether we're doing splits or not so that the user
+      // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
+      // as we now will do splitting using the HashQParser when there are multiple active replicas
+      rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
     }
 
-    if (conf.getSplitField.isDefined && conf.getSplitsPerShard.isDefined) {
-      rdd = rdd.splitField(conf.getSplitField.get).splitsPerShard(conf.getSplitsPerShard.get)
-    } else if (conf.getSplitField.isDefined) {
+    if (conf.splits.isDefined) {
+      rdd = rdd.doSplits()
+
+      if (!conf.getSplitsPerShard.isDefined) {
+        // user wants splits, but didn't specify how many per shard
+        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+      }
+    }
+
+    if (conf.getSplitField.isDefined) {
       rdd = rdd.splitField(conf.getSplitField.get)
+
+      if (!conf.getSplitsPerShard.isDefined) {
+        // user wants splits, but didn't specify how many per shard
+        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+      }
     }
 
     rdd
@@ -282,8 +295,7 @@ class SolrRelation(
       }
     }
 
-    logInfo("Fields passed down from scanner: " + fields.mkString(","))
-    logInfo("Filters passed down from scanner: " + filters.mkString(","))
+    logInfo("push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
@@ -316,8 +328,6 @@ class SolrRelation(
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
-    logInfo(s"Constructed SolrQuery: ${query}")
-
     try {
       val querySchema = if (!fields.isEmpty) SolrRelationUtil.deriveQuerySchema(fields, collectionBaseSchema) else schema
 
@@ -339,9 +349,15 @@ class SolrRelation(
           val sortParams = query.getParams(CommonParams.SORT)
           if (sortParams != null && sortParams.nonEmpty) {
             for (sortString <- sortParams) {
-              val sortStringParams = sortString.split(" ")
-              if (sortStringParams.nonEmpty && sortStringParams.size == 2) {
-                sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
+              for (pair <- sortString.split(",")) {
+                val sortStringParams = pair.split(" ")
+                if (sortStringParams.nonEmpty) {
+                  if (sortStringParams.size == 2) {
+                    sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
+                  } else {
+                    sortClauses += SortClause.asc(pair)
+                  }
+                }
               }
             }
           }
@@ -366,10 +382,12 @@ class SolrRelation(
         } else {
           logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
+        logInfo(s"Sending ${query} to SolrRDD using ${requestHandler}")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
       } else {
+        logInfo(s"Sending ${query} to SolrRDD using ${rq}")
         val docs = solrRDD.query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -601,8 +619,16 @@ object SolrRelation extends Logging {
   }
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
-    query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
-    log.info("Added sort field '" + query.getSortField + "' to the query")
+    querySchema.fields.foreach(field => {
+      if (field.metadata.contains("multiValued")) {
+        if (!field.metadata.getBoolean("multiValued")) {
+          query.addSort(field.name, SolrQuery.ORDER.asc)
+          return
+        }
+      }
+      query.addSort(field.name, SolrQuery.ORDER.asc)
+      return
+    })
   }
 
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
