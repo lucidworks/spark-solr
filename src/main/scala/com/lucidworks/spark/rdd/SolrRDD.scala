@@ -127,7 +127,7 @@ class SolrRDD(
     }
 
     val numReplicas = shards.apply(0).replicas.length
-    val numSplits = splitsPerShard.getOrElse(numReplicas)
+    val numSplits = splitsPerShard.getOrElse(2 * numReplicas)
     logInfo(s"Using splitField=${splitField}, splitsPerShard=${splitsPerShard}, and numReplicas=${numReplicas} for computing partitions.")
 
     val partitions : Array[Partition] = if (rq != QT_EXPORT && numSplits > 1) {
