@@ -59,13 +59,8 @@ object SolrSupport extends Logging {
   def setupKerberosIfNeeded(): Unit = synchronized {
    val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
    if (solrJaasAuthConfig.isDefined) {
-     val configurer: Option[HttpClientConfigurer] = Some(HttpClientUtil.getConfigurer)
-     if (configurer.isDefined) {
-       if (!configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
-         HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer)
-         log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
-       }
-     }
+     HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
+     log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
    }
   }
 
