@@ -619,8 +619,16 @@ object SolrRelation extends Logging {
   }
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
-    query.addSort(querySchema.fields(0).name, SolrQuery.ORDER.asc)
-    log.info("Added sort field '" + query.getSortField + "' to the query")
+    querySchema.fields.foreach(field => {
+      if (field.metadata.contains("multiValued")) {
+        if (!field.metadata.getBoolean("multiValued")) {
+          query.addSort(field.name, SolrQuery.ORDER.asc)
+          return
+        }
+      }
+      query.addSort(field.name, SolrQuery.ORDER.asc)
+      return
+    })
   }
 
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
