@@ -361,15 +361,14 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int replicationFactor = 1;
       createCollection(testCollection2, numShards, replicationFactor, 2, confName, confDir);
 
-      options = new HashMap<String, String>();
-      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-      options.put(SOLR_COLLECTION_PARAM(), testCollection2);
-      options.put(FLATTEN_MULTIVALUED(), "false");
+      HashMap<String, String> newOptions = new HashMap<String, String>();
+      newOptions.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      newOptions.put(SOLR_COLLECTION_PARAM(), testCollection2);
+      newOptions.put(FLATTEN_MULTIVALUED(), "false");
 
-      assert(df.count() == 4);
-//      df.explain(true);
-      log.info("Writing data to Solr");
-      df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+      DataFrame cleanDF = sqlContext.read().format("solr").options(options).load();
+
+      cleanDF.write().format("solr").options(newOptions).mode(SaveMode.Overwrite).save();
       SolrSupport.getCachedCloudClient(zkHost).commit(testCollection2);
 
       DataFrame df2 = sqlContext.read().format("solr").options(options).load();
