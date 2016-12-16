@@ -206,7 +206,9 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
   @Test
   public void testDynamicFieldNames() throws Exception {
-    Dataset aggDF = sparkSession.read().json("src/test/resources/test-data/em_sample.json");
+    SQLContext sqlContext = new SQLContext(jsc);
+
+    DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
     for (String fieldName : aggDF.schema().fieldNames()) {
       if (!fieldName.equals("id") && !fieldName.equals("_version_"))
         assertTrue("Failed for field name '" + fieldName + "'", SolrRelationUtil.isValidDynamicFieldName(fieldName));
