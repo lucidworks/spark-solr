@@ -39,7 +39,7 @@ class TestSolrSQLHiveContext extends MovielensBuilder {
       val df = sHiveContext.sql(sqlStmt)
       val rows = df.collect()
       assert(rows.length == 1)
-      assert(rows(0)(1) == 23)
+      assert(rows(0)(1) == 35)
 
       // Check if the temp table is created
 
@@ -59,7 +59,7 @@ class TestSolrSQLHiveContext extends MovielensBuilder {
       val df = sHiveContext.sql(sqlStmt)
       val rows = df.collect()
       assert(rows.length == 1)
-      assert(rows(0)(1) == 23)
+      assert(rows(0)(1) == 35)
 
       assert(sHiveContext.cachedSQLQueries.size == 1)
     }
