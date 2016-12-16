@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode.Overwrite
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -11,7 +11,7 @@ class TestQuerying extends TestSuiteBuilder {
 
   test("vary queried columns") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
-    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
     try {
       val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName)
@@ -30,19 +30,11 @@ class TestQuerying extends TestSuiteBuilder {
       assert(firstRow.size === 6)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
-      // Test to make sure sort param is being applied to the query
-      {
-        val solrDF1 = sqlContext.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
-        val rows = solrDF1.collect()
-        val idFieldIndex = solrDF1.schema.fieldIndex("id")
-        rows.zipWithIndex.foreach{ case(row,i) => {
-          assert(row.get(idFieldIndex).equals(Integer.toString(i+1)))
-        }}
-      }
-    } finally {
+   } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
+
 
   test("vary queried columns with fields option") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString

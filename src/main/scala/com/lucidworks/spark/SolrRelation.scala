@@ -340,7 +340,7 @@ class SolrRelation(
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
-        val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+        var sortClauses: ListBuffer[SortClause] = ListBuffer.empty
         if (!query.getSorts.isEmpty) {
           for (sort: SortClause <- query.getSorts.asScala) {
             sortClauses += sort
@@ -349,16 +349,7 @@ class SolrRelation(
           val sortParams = query.getParams(CommonParams.SORT)
           if (sortParams != null && sortParams.nonEmpty) {
             for (sortString <- sortParams) {
-              for (pair <- sortString.split(",")) {
-                val sortStringParams = pair.split(" ")
-                if (sortStringParams.nonEmpty) {
-                  if (sortStringParams.size == 2) {
-                    sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
-                  } else {
-                    sortClauses += SortClause.asc(pair)
-                  }
-                }
-              }
+              sortClauses = sortClauses ++ SolrRelation.parseSortParamFromString(sortString)
             }
           }
         }
@@ -388,7 +379,7 @@ class SolrRelation(
         if (requestHandler.eq(QT_EXPORT)) {
           if (query.getFields == null)
             query.setFields(solrRDD.uniqueKey)
-          if (query.getSorts.isEmpty)
+          if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
             query.setSort(solrRDD.uniqueKey, SolrQuery.ORDER.asc)
         }
         logInfo(s"Constructed SolrQuery: ${query}")
@@ -555,6 +546,12 @@ class SolrRelation(
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
+    if (conf.getSort.isDefined) {
+      val sortClauses = SolrRelation.parseSortParamFromString(conf.getSort.get)
+      for (sortClause <- sortClauses) {
+        query.addSort(sortClause)
+      }
+    }
     query.add(conf.getArbitrarySolrParams)
     query.set("collection", collection)
     query
@@ -645,6 +642,21 @@ object SolrRelation extends Logging {
         return true
     }
     false
+  }
+
+  def parseSortParamFromString(sortParam: String):  List[SortClause] = {
+    val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+    for (pair <- sortParam.split(",")) {
+      val sortStringParams = pair.split(" ")
+      if (sortStringParams.nonEmpty) {
+        if (sortStringParams.size == 2) {
+          sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
+        } else {
+          sortClauses += SortClause.asc(pair)
+        }
+      }
+    }
+    sortClauses.toList
   }
 }
 
