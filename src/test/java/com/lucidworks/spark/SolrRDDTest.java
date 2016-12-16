@@ -2,6 +2,8 @@ package com.lucidworks.spark;
 
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.rdd.SolrRDD;
+import com.lucidworks.spark.util.ConfigurationConstants;
+import com.lucidworks.spark.util.QueryConstants;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
@@ -122,7 +124,8 @@ public class SolrRDDTest extends RDDProcessorTestBase {
         String queryStr = "q=*:*&sort=id&fq=field3_i:[2 TO 3]";
 
         SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, testCollection, jsc.sc());
-        List<SolrDocument> docs = solrRDD.query(queryStr).collect();
+
+        List<SolrDocument> docs = solrRDD.queryNoSplits(queryStr).collect();
 
         assert docs.size() == 2;
         assert docs.get(0).get("id").equals(testCollection + "-2");
