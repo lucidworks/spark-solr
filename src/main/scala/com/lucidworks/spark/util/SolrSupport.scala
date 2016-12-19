@@ -57,11 +57,11 @@ object CacheSolrClient {
 object SolrSupport extends Logging {
 
   def setupKerberosIfNeeded(): Unit = synchronized {
-   val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
-   if (solrJaasAuthConfig.isDefined) {
-     HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
-     log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
-   }
+    val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
+    if (loginProp != null && !loginProp.isEmpty) {
+      HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
+      logDebug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+    }
   }
 
   def getHttpSolrClient(shardUrl: String): HttpSolrClient = {
