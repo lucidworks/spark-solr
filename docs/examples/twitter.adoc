@@ -92,7 +92,6 @@ Behind the scenes, our DataSource implementation uses Solr’s Schema API to det
 ----
 scala> tweets.printSchema()
  root
- |-- _version_: long (nullable = true)
  |-- accessLevel_i: integer (nullable = true)
  |-- author_s: string (nullable = true)
  |-- createdAt_tdt: timestamp (nullable = true)

@@ -53,9 +53,6 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
         String[] fieldNames = schema.fieldNames();
         // list of fields that are present in src/test/resources/eventsim/fields_schema.json
-
-        log.info("fieldNames("+fieldNames.length+")="+ Arrays.asList(fieldNames));
-
         assert fieldNames.length == 19; // 18 in fields_schema.json + 1 for the id field
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());

@@ -212,7 +212,6 @@ class SolrRelation(
           var tmp = baseSchema.get
           if (tmp.fieldNames.contains("_version_")) {
             tmp = StructType(tmp.filter(p => p.name != "_version_"))
-            logInfo(s"Dropped _version_ field from schema, not it is: "+tmp)
           }
           tmp
         }
@@ -564,6 +563,16 @@ class SolrRelation(
         query.addSort(sortClause)
       }
     }
+    
+    val sortParams = conf.getArbitrarySolrParams.remove("sort")
+    if (sortParams != null && sortParams.length > 0) {
+      for (p <- sortParams) {
+        val sortClauses = SolrRelation.parseSortParamFromString(p)
+        for (sortClause <- sortClauses) {
+          query.addSort(sortClause)
+        }
+      }
+    }
     query.add(conf.getArbitrarySolrParams)
     query.set("collection", collection)
     query
@@ -636,6 +645,7 @@ object SolrRelation extends Logging {
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
 
+    // if doc values enabled for the id field, then sort by that
     if (querySchema.fieldNames.contains("id")) {
       query.addSort("id", SolrQuery.ORDER.asc)
       return
