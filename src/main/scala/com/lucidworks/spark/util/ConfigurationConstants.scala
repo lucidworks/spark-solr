@@ -21,6 +21,7 @@ object ConfigurationConstants {
   val USE_CURSOR_MARKS: String = "use_cursor_marks"
   val SOLR_STREAMING_EXPR: String = "expr"
   val SOLR_SQL_STMT: String = "sql"
+  val SORT_PARAM: String = "sort"
 
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"

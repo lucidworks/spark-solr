@@ -207,6 +207,11 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
     None
   }
 
+  def getSort: Option[String] = {
+    if (config.contains(SORT_PARAM) && config.get(SORT_PARAM).isDefined) return config.get(SORT_PARAM)
+    None
+  }
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
