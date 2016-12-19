@@ -269,6 +269,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
     options.put(FLATTEN_MULTIVALUED(), "false");
+    options.put(ARBITRARY_PARAMS_STRING(), "sort=id asc");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
