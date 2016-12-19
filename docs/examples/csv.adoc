@@ -73,7 +73,6 @@ val df = sqlContext.read.format("solr").options(options).load
 scala> df.printSchema()
 root
  |-- improvement_surcharge: double (nullable = true)
- |-- _indexed_at_tdt: timestamp (nullable = true)
  |-- vendor_id: long (nullable = true)
  |-- trip_distance: double (nullable = true)
  |-- tolls_amount: double (nullable = true)
@@ -87,7 +86,6 @@ root
  |-- store_and_fwd_flag: string (nullable = true)
  |-- extra: double (nullable = true)
  |-- dropoff_datetime: timestamp (nullable = true)
- |-- _version_: long (nullable = true)
  |-- rate_code_id: long (nullable = true)
  |-- total_amount: double (nullable = true)
  |-- pickup_datetime: timestamp (nullable = true)

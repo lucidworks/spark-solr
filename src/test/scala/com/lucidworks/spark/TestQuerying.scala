@@ -23,11 +23,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
    } finally {
@@ -87,11 +87,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 6)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
     } finally {
       SolrCloudUtil.deleteCollection(collection1Name, cluster)

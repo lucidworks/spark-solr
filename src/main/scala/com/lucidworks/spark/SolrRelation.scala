@@ -203,8 +203,18 @@ class SolrRelation(
         logInfo(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
         sqlSchema
       } else {
+        // don't return the _version_ field unless specifically asked for by the user
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
-        baseSchema.get
+        if (solrFields.contains("_version_")) {
+          // user specifically requested _version_
+          baseSchema.get
+        } else {
+          var tmp = baseSchema.get
+          if (tmp.fieldNames.contains("_version_")) {
+            tmp = StructType(tmp.filter(p => p.name != "_version_"))
+          }
+          tmp
+        }
       }
     }
   }
@@ -370,6 +380,7 @@ class SolrRelation(
         var requestHandler = rq.getOrElse(DEFAULT_REQUEST_HANDLER)
         if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
           requestHandler = QT_EXPORT
+          query.setRequestHandler(requestHandler)
           logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
           logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
@@ -552,6 +563,16 @@ class SolrRelation(
         query.addSort(sortClause)
       }
     }
+    
+    val sortParams = conf.getArbitrarySolrParams.remove("sort")
+    if (sortParams != null && sortParams.length > 0) {
+      for (p <- sortParams) {
+        val sortClauses = SolrRelation.parseSortParamFromString(p)
+        for (sortClause <- sortClauses) {
+          query.addSort(sortClause)
+        }
+      }
+    }
     query.add(conf.getArbitrarySolrParams)
     query.set("collection", collection)
     query
@@ -623,6 +644,13 @@ object SolrRelation extends Logging {
   }
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
+
+    // if doc values enabled for the id field, then sort by that
+    if (querySchema.fieldNames.contains("id")) {
+      query.addSort("id", SolrQuery.ORDER.asc)
+      return
+    }
+
     querySchema.fields.foreach(field => {
       if (field.metadata.contains("multiValued")) {
         if (!field.metadata.getBoolean("multiValued")) {

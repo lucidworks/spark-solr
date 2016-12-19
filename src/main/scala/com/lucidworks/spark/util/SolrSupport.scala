@@ -157,11 +157,9 @@ object SolrSupport extends Logging {
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
       val batch = new ArrayBuffer[SolrInputDocument]()
-      val indexedAt: Date = new Date()
       var numDocs = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
-        doc.setField("_indexed_at_tdt", indexedAt)
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
