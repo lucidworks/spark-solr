@@ -42,6 +42,10 @@ object SolrRelationUtil extends Logging {
       collection: String,
       escapeFields: Boolean,
       flattenMultivalued: Boolean): StructType = {
+    // If the collection is empty (no documents), return an empty schema
+    if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
+      return new StructType()
+
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
