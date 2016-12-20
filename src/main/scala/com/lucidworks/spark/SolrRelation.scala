@@ -203,8 +203,18 @@ class SolrRelation(
         logInfo(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
         sqlSchema
       } else {
+        // don't return the _version_ field unless specifically asked for by the user
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
-        baseSchema.get
+        if (solrFields.contains("_version_")) {
+          // user specifically requested _version_
+          baseSchema.get
+        } else {
+          var tmp = baseSchema.get
+          if (tmp.fieldNames.contains("_version_")) {
+            tmp = StructType(tmp.filter(p => p.name != "_version_"))
+          }
+          tmp
+        }
       }
     }
   }
@@ -335,12 +345,12 @@ class SolrRelation(
         throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
       }
 
-      if (rq.isEmpty && !conf.useCursorMarks.getOrElse(false)) {
+      if (rq.isEmpty && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
         logDebug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
         val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
-        val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+        var sortClauses: ListBuffer[SortClause] = ListBuffer.empty
         if (!query.getSorts.isEmpty) {
           for (sort: SortClause <- query.getSorts.asScala) {
             sortClauses += sort
@@ -349,16 +359,7 @@ class SolrRelation(
           val sortParams = query.getParams(CommonParams.SORT)
           if (sortParams != null && sortParams.nonEmpty) {
             for (sortString <- sortParams) {
-              for (pair <- sortString.split(",")) {
-                val sortStringParams = pair.split(" ")
-                if (sortStringParams.nonEmpty) {
-                  if (sortStringParams.size == 2) {
-                    sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
-                  } else {
-                    sortClauses += SortClause.asc(pair)
-                  }
-                }
-              }
+              sortClauses = sortClauses ++ SolrRelation.parseSortParamFromString(sortString)
             }
           }
         }
@@ -370,6 +371,7 @@ class SolrRelation(
           else
             if (isFDV && !hasUnsupportedExportTypes) {
               SolrRelation.addSortField(querySchema, query)
+              logInfo("Added sort field '" + query.getSortField + "' to the query")
               true
             }
             else
@@ -378,11 +380,20 @@ class SolrRelation(
         var requestHandler = rq.getOrElse(DEFAULT_REQUEST_HANDLER)
         if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
           requestHandler = QT_EXPORT
+          query.setRequestHandler(requestHandler)
           logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
           logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
         logInfo(s"Sending ${query} to SolrRDD using ${requestHandler}")
+        // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
+        if (requestHandler.eq(QT_EXPORT)) {
+          if (query.getFields == null)
+            query.setFields(solrRDD.uniqueKey)
+          if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
+            query.setSort(solrRDD.uniqueKey, SolrQuery.ORDER.asc)
+        }
+        logInfo(s"Constructed SolrQuery: ${query}")
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
@@ -449,7 +460,7 @@ class SolrRelation(
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
       // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !f.name.endsWith("_txt") && !f.name.endsWith("_txt_en")) {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name)) {
         logInfo(s"adding new field: "+toAddFieldMap(f).asJava)
         fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
       }
@@ -528,8 +539,6 @@ class SolrRelation(
     SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
   }
 
-
-
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
 
@@ -548,6 +557,22 @@ class SolrRelation(
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
+    if (conf.getSort.isDefined) {
+      val sortClauses = SolrRelation.parseSortParamFromString(conf.getSort.get)
+      for (sortClause <- sortClauses) {
+        query.addSort(sortClause)
+      }
+    }
+    
+    val sortParams = conf.getArbitrarySolrParams.remove("sort")
+    if (sortParams != null && sortParams.length > 0) {
+      for (p <- sortParams) {
+        val sortClauses = SolrRelation.parseSortParamFromString(p)
+        for (sortClause <- sortClauses) {
+          query.addSort(sortClause)
+        }
+      }
+    }
     query.add(conf.getArbitrarySolrParams)
     query.set("collection", collection)
     query
@@ -619,6 +644,13 @@ object SolrRelation extends Logging {
   }
 
   def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
+
+    // if doc values enabled for the id field, then sort by that
+    if (querySchema.fieldNames.contains("id")) {
+      query.addSort("id", SolrQuery.ORDER.asc)
+      return
+    }
+
     querySchema.fields.foreach(field => {
       if (field.metadata.contains("multiValued")) {
         if (!field.metadata.getBoolean("multiValued")) {
@@ -634,10 +666,25 @@ object SolrRelation extends Logging {
   // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
-      if (structField.dataType == BooleanType || structField.dataType == TimestampType)
+      if (structField.dataType == BooleanType)
         return true
     }
     false
+  }
+
+  def parseSortParamFromString(sortParam: String):  List[SortClause] = {
+    val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
+    for (pair <- sortParam.split(",")) {
+      val sortStringParams = pair.split(" ")
+      if (sortStringParams.nonEmpty) {
+        if (sortStringParams.size == 2) {
+          sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))
+        } else {
+          sortClauses += SortClause.asc(pair)
+        }
+      }
+    }
+    sortClauses.toList
   }
 }
 

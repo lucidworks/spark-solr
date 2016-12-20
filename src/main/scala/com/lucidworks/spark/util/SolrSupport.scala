@@ -57,16 +57,11 @@ object CacheSolrClient {
 object SolrSupport extends Logging {
 
   def setupKerberosIfNeeded(): Unit = synchronized {
-   val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
-   if (solrJaasAuthConfig.isDefined) {
-     val configurer: Option[HttpClientConfigurer] = Some(HttpClientUtil.getConfigurer)
-     if (configurer.isDefined) {
-       if (!configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
-         HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer)
-         log.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
-       }
-     }
-   }
+    val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
+    if (loginProp != null && !loginProp.isEmpty) {
+      HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
+      logDebug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+    }
   }
 
   def getHttpSolrClient(shardUrl: String): HttpSolrClient = {
@@ -162,11 +157,9 @@ object SolrSupport extends Logging {
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
       val batch = new ArrayBuffer[SolrInputDocument]()
-      val indexedAt: Date = new Date()
       var numDocs = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
-        doc.setField("_indexed_at_tdt", indexedAt)
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length

@@ -1,6 +1,7 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.Constants;
+import com.lucidworks.spark.util.SolrRelationUtil;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
@@ -68,12 +69,16 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       buildCollection(zkHost, testCollection, null, 1);
 
       SQLContext sqlContext = new SQLContext(jsc);
-
-      String testJsonFile = "src/test/resources/test-data/em_sample.json";
       Map<String, String> options = new HashMap<String, String>();
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(GENERATE_UNIQUE_KEY(), "true");
+
+      // Validate that schema fields are not loaded when no docs are present
+      DataFrame noDocs = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      assert(noDocs.schema().length()==0);
+
+      String testJsonFile = "src/test/resources/test-data/em_sample.json";
 
       DataFrame jsonDF = sqlContext.read().json(testJsonFile);
       jsonDF.write().format(Constants.SOLR_FORMAT()).options(options).save();
@@ -203,7 +208,17 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     }
   }
 
-  //@Ignore
+  @Test
+  public void testDynamicFieldNames() throws Exception {
+    SQLContext sqlContext = new SQLContext(jsc);
+
+    DataFrame aggDF = sqlContext.read().json("src/test/resources/test-data/em_sample.json");
+    for (String fieldName : aggDF.schema().fieldNames()) {
+      if (!fieldName.equals("id") && !fieldName.equals("_version_"))
+        assertTrue("Failed for field name '" + fieldName + "'", SolrRelationUtil.isValidDynamicFieldName(fieldName));
+    }
+  }
+
   @Test
   public void testAggDataFrame() throws Exception {
     String testCollection = "testAggDataFrame";
@@ -258,6 +273,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
     options.put(FLATTEN_MULTIVALUED(), "false");
+    options.put(ARBITRARY_PARAMS_STRING(), "sort=id asc");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();
@@ -350,19 +366,17 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int replicationFactor = 1;
       createCollection(testCollection2, numShards, replicationFactor, 2, confName, confDir);
 
-      options = new HashMap<String, String>();
-      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-      options.put(SOLR_COLLECTION_PARAM(), testCollection2);
-      options.put(FLATTEN_MULTIVALUED(), "false");
+      HashMap<String, String> newOptions = new HashMap<String, String>();
+      newOptions.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      newOptions.put(SOLR_COLLECTION_PARAM(), testCollection2);
+      newOptions.put(FLATTEN_MULTIVALUED(), "false");
 
-      assert(df.count() == 4);
-      df.explain(true);
-      log.info("Writing data to Solr");
-      df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+      DataFrame cleanDF = sqlContext.read().format("solr").options(options).load();
+
+      cleanDF.write().format("solr").options(newOptions).mode(SaveMode.Overwrite).save();
       SolrSupport.getCachedCloudClient(zkHost).commit(testCollection2);
 
       DataFrame df2 = sqlContext.read().format("solr").options(options).load();
-      df2.show();
       assert(df2.count() == 4);
     } finally {
       deleteCollection(testCollection);
@@ -380,7 +394,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   protected static Row[] validateDataFrameStoreLoad(SQLContext sqlContext, String testCollection, DataFrame sourceData) throws Exception {
     String idFieldName = "id";
 
-    sourceData = sourceData.sort(idFieldName);
+    sourceData = sourceData.repartition(1).sort(idFieldName);
     sourceData.printSchema();
     Row[] testData = sourceData.collect();
     String[] cols = sourceData.columns();
@@ -389,7 +403,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
-    sourceData.write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
+    sourceData.repartition(1).write().format(Constants.SOLR_FORMAT()).options(options).mode(SaveMode.Overwrite).save();
 
     // Explicit commit to make sure all docs are visible
     CloudSolrClient solrCloudClient = SolrSupport.getCachedCloudClient(zkHost);
@@ -402,6 +416,8 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
+    // This test is using cursor marks because the export handler changes the order of values for multi-valued fields
+    options.put(USE_CURSOR_MARKS(), "true");
     options.put(FLATTEN_MULTIVALUED(), "false");
 
     DataFrame fromSolr = sqlContext.read().format(Constants.SOLR_FORMAT()).options(options).load();

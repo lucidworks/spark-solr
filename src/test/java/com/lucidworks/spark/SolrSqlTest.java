@@ -9,10 +9,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
 
@@ -39,7 +36,6 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
       deleteCollection(testCollectionName);
       buildCollection(zkHost, testCollectionName, null, 2);
-      EventsimUtil.defineSchemaForEventSim(zkHost, testCollectionName);
       EventsimUtil.loadEventSimDataSet(zkHost, testCollectionName, sqlContext);
 
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
@@ -57,14 +53,14 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
         String[] fieldNames = schema.fieldNames();
         // list of fields that are present in src/test/resources/eventsim/fields_schema.json
-        assert fieldNames.length == 19 + 1 + 1; // extra fields are id and _version_
+        assert fieldNames.length == 19; // 18 in fields_schema.json + 1 for the id field
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
         Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert rows.get(0).length() == 21;
+        assert rows.get(0).length() == 19;
       }
 
       // Filter using SQL syntax and escape field names

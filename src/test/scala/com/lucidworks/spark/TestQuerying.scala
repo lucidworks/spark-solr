@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode.Overwrite
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -11,7 +11,7 @@ class TestQuerying extends TestSuiteBuilder {
 
   test("vary queried columns") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
-    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
     try {
       val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName)
@@ -23,26 +23,18 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
-      // Test to make sure sort param is being applied to the query
-      {
-        val solrDF1 = sqlContext.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
-        val rows = solrDF1.collect()
-        val idFieldIndex = solrDF1.schema.fieldIndex("id")
-        rows.zipWithIndex.foreach{ case(row,i) => {
-          assert(row.get(idFieldIndex).equals(Integer.toString(i+1)))
-        }}
-      }
-    } finally {
+   } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
+
 
   test("vary queried columns with fields option") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
@@ -95,11 +87,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sqlContext.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 6)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
     } finally {
       SolrCloudUtil.deleteCollection(collection1Name, cluster)

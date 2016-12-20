@@ -52,11 +52,16 @@ class SolrRDD(
     query.set("distrib", false)
 
     val sorts = query.getSorts
-    if (sorts == null || sorts.isEmpty) {
+    val sortParam = query.get("sort")
+    if ((sorts == null || sorts.isEmpty) && (sortParam == null || sortParam.isEmpty)) {
       val fields = query.getFields
       if (fields != null) {
-        val firstField = fields.split(",")(0)
-        query.addSort(firstField, SolrQuery.ORDER.asc)
+        if (fields.contains("id")) {
+          query.addSort("id", SolrQuery.ORDER.asc)
+        } else {
+          val firstField = fields.split(",")(0)
+          query.addSort(firstField, SolrQuery.ORDER.asc)
+        }
       } else {
         query.addSort("id", SolrQuery.ORDER.asc)
       }

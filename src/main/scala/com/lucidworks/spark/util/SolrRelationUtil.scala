@@ -10,6 +10,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
 import scala.collection.JavaConversions._
@@ -17,6 +18,16 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 object SolrRelationUtil extends Logging {
+
+  val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
+    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls").seq
+
+  def isValidDynamicFieldName(fieldName: String): Boolean = {
+    dynamicExtensionSuffixes.foreach(ext => {
+      if (fieldName.endsWith(ext)) return true
+    })
+    false
+  }
 
   def getBaseSchema(
       zkHost: String,
@@ -31,6 +42,10 @@ object SolrRelationUtil extends Logging {
       collection: String,
       escapeFields: Boolean,
       flattenMultivalued: Boolean): StructType = {
+    // If the collection is empty (no documents), return an empty schema
+    if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
+      return new StructType()
+
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
@@ -269,12 +284,23 @@ object SolrRelationUtil extends Logging {
       val values = new ListBuffer[AnyRef]
       for (field <- fields) {
         val metadata = field.metadata
+        val fieldType = schema.get(schema.indexOf(field)).dataType
         val isMultiValued = if (metadata.contains("multiValued")) metadata.getBoolean("multiValued") else false
         if (isMultiValued) {
           val fieldValues = solrDocument.getFieldValues(field.name)
           if (fieldValues != null) {
             val iterableValues = fieldValues.iterator().map {
               case d: Date => new Timestamp(d.getTime)
+              case s: String =>
+                fieldType match {
+                  // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
+                  case t: ArrayType =>
+                    if (t.asInstanceOf[ArrayType].elementType.eq(TimestampType))
+                      new Timestamp(DateTime.parse(s).getMillis)
+                    else
+                      s
+                  case _ => s
+                }
               case i: java.lang.Integer => new java.lang.Long(i.longValue())
               case f: java.lang.Float => new java.lang.Double(f.doubleValue())
               case a => a
@@ -283,17 +309,26 @@ object SolrRelationUtil extends Logging {
           } else {
             values.add(null)
           }
-
         } else {
           val fieldValue = solrDocument.getFieldValue(field.name)
           fieldValue match {
-            case f: String => values.add(f)
-            case f: Date => values.add(new Timestamp(f.getTime))
+            case d: Date => values.add(new Timestamp(d.getTime))
+            case s: String =>
+              // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
+              if (fieldType.eq(TimestampType))
+                values.add(new Timestamp(DateTime.parse(s).getMillis))
+              else
+                values.add(s)
             case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
             case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
-            case f: java.util.ArrayList[_] =>
-              val jlist = f.iterator.map {
+            case al: java.util.ArrayList[_] =>
+              val jlist = al.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
+                case s: String =>
+                  if (fieldType.eq(TimestampType))
+                    new Timestamp(DateTime.parse(s).getMillis)
+                  else
+                    s
                 case i: java.lang.Integer => new java.lang.Long(i.longValue())
                 case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
@@ -302,9 +337,14 @@ object SolrRelationUtil extends Logging {
               if (arr.length >= 1) {
                 values.add(arr(0).asInstanceOf[AnyRef])
               }
-            case f: Iterable[_] =>
-              val iterableValues = f.iterator.map {
+            case it : Iterable[_] =>
+              val iterableValues = it.iterator.map {
                 case d: Date => new Timestamp(d.getTime)
+                case s: String =>
+                  if (fieldType.eq(TimestampType))
+                    new Timestamp(DateTime.parse(s).getMillis)
+                  else
+                    s
                 case i: java.lang.Integer => new java.lang.Long(i.longValue())
                 case f: java.lang.Float => new java.lang.Double(f.doubleValue())
                 case v: Any => v
@@ -313,8 +353,7 @@ object SolrRelationUtil extends Logging {
               if (!arr.isEmpty) {
                 values.add(arr(0).asInstanceOf[AnyRef])
               }
-            case f: Any => values.add(f)
-            case f => values.add(f)
+            case a => values.add(a)
           }
         }
       }
