@@ -301,7 +301,7 @@ class SolrRelation(
     if (rq.isDefined) {
       if (rq.get == QT_STREAM || rq.get == QT_SQL) {
         // ignore any fields / filters when processing a streaming expression
-        return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
+        return SolrRelationUtil.toRows(querySchema, solrRDD.query(query).requestHandler(rq.get))
       }
     }
 
@@ -397,9 +397,14 @@ class SolrRelation(
         val docs = solrRDD.requestHandler(requestHandler).query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
-      } else {
+      } else if (rq.isDefined) {
         logInfo(s"Sending ${query} to SolrRDD using ${rq}")
         val docs = solrRDD.query(query).requestHandler(rq.get)
+        val rows = SolrRelationUtil.toRows(querySchema, docs)
+        rows
+      } else {
+        logInfo(s"Sending ${query} to SolrRDD")
+        val docs = solrRDD.query(query)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
       }

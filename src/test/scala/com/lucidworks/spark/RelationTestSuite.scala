@@ -115,7 +115,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
     val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
     val numMovies = buildMoviesCollection(moviesCollection)
 
-    var moviesDF = sqlContext.read.format("solr").options(
+    val moviesDF = sqlContext.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> moviesCollection, "fields" -> "movie_id,title")).load
     assert(moviesDF.count == numMovies)
     var schema = moviesDF.schema
@@ -129,7 +129,7 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
     val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
     val numRatings = buildRatingsCollection(ratingsCollection)
 
-    var ratingsDF = sqlContext.read.format("solr").options(
+    val ratingsDF = sqlContext.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "fields" -> "user_id,movie_id,rating,rating_timestamp")).load
     assert(ratingsDF.count == numRatings)
     schema = ratingsDF.schema

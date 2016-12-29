@@ -52,15 +52,15 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         assert records.count() == 1000;
 
         String[] fieldNames = schema.fieldNames();
-        // list of fields that are present in src/test/resources/eventsim/fields_schema.json
-        assert fieldNames.length == 19; // 18 in fields_schema.json + 1 for the id field
+        // list of fields that are indexed from {@code EventsimUtil#loadEventSimDataSet}
+        assert fieldNames.length == 20; // 18 fields from the file + 1 extra artist_txt field  + 1 for the id field
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
         Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert rows.get(0).length() == 19;
+        assert rows.get(0).length() == 20;
       }
 
       // Filter using SQL syntax and escape field names
@@ -85,8 +85,6 @@ public class SolrSqlTest extends RDDProcessorTestBase{
     } finally {
       deleteCollection(testCollectionName);
     }
-
-
   }
 
   @Test(expected=IllegalArgumentException.class)
