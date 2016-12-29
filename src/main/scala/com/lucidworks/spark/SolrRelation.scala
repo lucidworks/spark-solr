@@ -79,8 +79,7 @@ class SolrRelation(
     var rdd = new SolrRDD(
       conf.getZkHost.get,
       collection,
-      sqlContext.sparkContext,
-      requestHandler = conf.requestHandler)
+      sqlContext.sparkContext)
 
     if (conf.getSplitsPerShard.isDefined) {
       // always apply this whether we're doing splits or not so that the user
@@ -122,20 +121,20 @@ class SolrRelation(
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
-  val query: SolrQuery = buildQuery
+  val initialQuery: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
-  var queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+  var queryFilters: Array[String] = if (initialQuery.getFilterQueries != null) initialQuery.getFilterQueries else Array.empty[String]
 
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
     } else {
-      if (query.getFields != null) {
+      if (initialQuery.getFields != null) {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
-        SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
+        SolrRelationUtil.deriveQuerySchema(initialQuery.getFields.split(","), baseSchema.get)
       } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_STREAM) {
         // we have to figure out the schema of the streaming expression
-        var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
+        var streamingExpr = StreamExpressionParser.parse(initialQuery.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
         findStreamingExpressionFields(streamingExpr, streamOutputFields)
         logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
@@ -159,7 +158,7 @@ class SolrRelation(
         logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_SQL) {
-        val sqlStmt = query.get(SOLR_SQL_STMT)
+        val sqlStmt = initialQuery.get(SOLR_SQL_STMT)
         logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
 
         val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
@@ -182,12 +181,12 @@ class SolrRelation(
 
             // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
             // based on the aggregation mode used to execute the SQL statement
-            var promoteFields = query.get("promote_to_double")
+            var promoteFields = initialQuery.get("promote_to_double")
             if (promoteFields == null) {
               promoteFields = kvp._2
-              query.set("promote_to_double", promoteFields)
+              initialQuery.set("promote_to_double", promoteFields)
             } else {
-              query.set("promote_to_double", promoteFields+","+kvp._2)
+              initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
             }
           } else {
             if (allFieldsSchema.fieldNames.contains(kvp._2)) {
@@ -297,7 +296,8 @@ class SolrRelation(
       sHiveContext.checkReadAccess(collection, "solr")
     }
 
-    val rq = solrRDD.requestHandler
+    val query = initialQuery.getCopy
+    val rq = conf.requestHandler
     if (rq.isDefined) {
       if (rq.get == QT_STREAM || rq.get == QT_SQL) {
         // ignore any fields / filters when processing a streaming expression
@@ -399,7 +399,7 @@ class SolrRelation(
         rows
       } else {
         logInfo(s"Sending ${query} to SolrRDD using ${rq}")
-        val docs = solrRDD.query(query)
+        val docs = solrRDD.query(query).requestHandler(rq.get)
         val rows = SolrRelationUtil.toRows(querySchema, docs)
         rows
       }
