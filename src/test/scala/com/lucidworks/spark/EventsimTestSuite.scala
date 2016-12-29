@@ -235,9 +235,9 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_COLLECTION_PARAM -> collectionName
     )
     val df = sqlContext.read.format("solr").options(options).load()
-    df.take(1)
+    df.take(1) // This should use the '/select' handler because of the field 'artist_txt'
 
-    df.select("artist").take(1)
+    df.select("artist").take(1) // This should use '/export' handler because we are only requesting the field 'artist'
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {
