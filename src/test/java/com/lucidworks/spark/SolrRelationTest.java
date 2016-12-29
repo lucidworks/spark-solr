@@ -203,6 +203,19 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int replicationFactor = 1;
       createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
       validateDataFrameStoreLoad(sqlContext, testCollection, eventsDF);
+
+      // Validate that SQL works with fields that have dots
+      {
+        Map<String, String> options = new HashMap<String, String>();
+        options.put(SOLR_ZK_HOST_PARAM(), cluster.getZkServer().getZkAddress());
+        options.put(SOLR_COLLECTION_PARAM(), testCollection);
+
+        DataFrame df = sqlContext.read().format("solr").options(options).load();
+        df.registerTempTable("events");
+        Row[] row = sqlContext.sql("SELECT * FROM events").take(1);
+
+        sqlContext.sql("SELECT `params.title_s` from events").take(2);
+      }
     } finally {
       deleteCollection(testCollection);
     }
@@ -412,7 +425,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     SolrQuery q = new SolrQuery("*:*");
     q.setRows(100);
     q.addSort(idFieldName, SolrQuery.ORDER.asc);
-    dumpSolrCollection(testCollection, q);
+//    dumpSolrCollection(testCollection, q);
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     options.put(SOLR_FIELD_PARAM(), array2cdl(cols));
