@@ -2,6 +2,7 @@ package com.lucidworks.spark
 
 import java.net.InetAddress
 
+import com.lucidworks.spark.query.HashQParserShardSplitStrategy.WorkerShardSplit
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import org.apache.solr.client.solrj.SolrQuery
@@ -31,7 +32,10 @@ object SolrPartitioner {
       val replicaContinuousIterator: Iterator[SolrReplica] = Iterator.continually(shard.replicas).flatten
       val splits = SolrSupport.splitShards(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        splitPartitions += SplitRDDPartition(counter, "*", shard, split.getSplitQuery, replicaContinuousIterator.next())
+        split match {
+          case wss: WorkerShardSplit => splitPartitions += SplitRDDPartition(counter, "*", shard, wss.getSplitQuery, wss.getReplica)
+          case _ => splitPartitions += SplitRDDPartition(counter, "*", shard, split.getSplitQuery, replicaContinuousIterator.next())
+        }
         counter = counter + 1
       })
     })
