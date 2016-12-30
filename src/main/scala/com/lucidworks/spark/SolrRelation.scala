@@ -89,6 +89,7 @@ class SolrRelation(
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
+  val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
   val initialQuery: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
   var queryFilters: Array[String] = if (initialQuery.getFilterQueries != null) initialQuery.getFilterQueries else Array.empty[String]
@@ -274,7 +275,8 @@ class SolrRelation(
         conf.getZkHost.get,
         collection,
         sqlContext.sparkContext,
-        Some(qt))
+        Some(qt),
+        uKey = Some(uniqueKey))
 
       if (conf.getSplitsPerShard.isDefined) {
         // always apply this whether we're doing splits or not so that the user
@@ -495,8 +497,6 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-
-    val uniqueKey: String = SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
