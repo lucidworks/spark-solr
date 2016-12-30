@@ -4,13 +4,10 @@ import com.lucidworks.spark.SolrReplica;
 import com.lucidworks.spark.SolrShard;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
-import scala.Function2;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 public class HashQParserShardSplitStrategy implements ShardSplitStrategy, Serializable {

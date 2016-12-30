@@ -186,41 +186,6 @@ class SolrRelation(
     }
   }
 
-  val solrRDD = {
-    var rdd = new SolrRDD(
-      conf.getZkHost.get,
-      collection,
-      sqlContext.sparkContext,
-      Some(initialQuery.getRequestHandler))
-
-    if (conf.getSplitsPerShard.isDefined) {
-      // always apply this whether we're doing splits or not so that the user
-      // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
-      // as we now will do splitting using the HashQParser when there are multiple active replicas
-      rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
-    }
-
-    if (conf.splits.isDefined) {
-      rdd = rdd.doSplits()
-
-      if (!conf.getSplitsPerShard.isDefined) {
-        // user wants splits, but didn't specify how many per shard
-        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-      }
-    }
-
-    if (conf.getSplitField.isDefined) {
-      rdd = rdd.splitField(conf.getSplitField.get)
-
-      if (!conf.getSplitsPerShard.isDefined) {
-        // user wants splits, but didn't specify how many per shard
-        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-      }
-    }
-
-    rdd
-  }
-
   def getSQLDialect(dialectClassName: String): ParserDialect = {
     val clazz = Utils.classForName(dialectClassName)
     clazz.newInstance().asInstanceOf[ParserDialect]
@@ -303,6 +268,42 @@ class SolrRelation(
 
     val query = initialQuery.getCopy
     var qt = query.getRequestHandler
+
+    val solrRDD = {
+      var rdd = new SolrRDD(
+        conf.getZkHost.get,
+        collection,
+        sqlContext.sparkContext,
+        Some(qt))
+
+      if (conf.getSplitsPerShard.isDefined) {
+        // always apply this whether we're doing splits or not so that the user
+        // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
+        // as we now will do splitting using the HashQParser when there are multiple active replicas
+        rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
+      }
+
+      if (conf.splits.isDefined) {
+        rdd = rdd.doSplits()
+
+        if (!conf.getSplitsPerShard.isDefined) {
+          // user wants splits, but didn't specify how many per shard
+          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+        }
+      }
+
+      if (conf.getSplitField.isDefined) {
+        rdd = rdd.splitField(conf.getSplitField.get)
+
+        if (!conf.getSplitsPerShard.isDefined) {
+          // user wants splits, but didn't specify how many per shard
+          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+        }
+      }
+
+      rdd
+    }
+
     if (qt == QT_STREAM || qt == QT_SQL) {
       // ignore any fields / filters when processing a streaming expression
       return SolrRelationUtil.toRows(querySchema, solrRDD.requestHandler(qt).query(query))
@@ -494,7 +495,8 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-    val uniqueKey: String = solrRDD.uniqueKey
+
+    val uniqueKey: String = SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
@@ -529,7 +531,7 @@ class SolrRelation(
       }
       doc
     })
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin)
   }
 
   private def buildQuery: SolrQuery = {
