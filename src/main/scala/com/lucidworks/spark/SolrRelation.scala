@@ -349,7 +349,7 @@ class SolrRelation(
         throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
       }
 
-      if (conf.requestHandler.isEmpty && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
+      if (conf.requestHandler.isEmpty && !requiresExportHandler(qt) && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
         logInfo(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
