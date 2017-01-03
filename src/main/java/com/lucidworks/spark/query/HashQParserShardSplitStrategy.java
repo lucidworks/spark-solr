@@ -24,21 +24,36 @@ public class HashQParserShardSplitStrategy implements ShardSplitStrategy, Serial
     List<ShardSplit> splits = new ArrayList<>(numSplits);
     scala.collection.immutable.List<SolrReplica> replicas = shard.replicas();
     final int numReplicas = replicas.size();
+
+    List<SolrReplica> sortedReplicas = new ArrayList<>(numReplicas);
+    for (int r=0; r < numReplicas; r++) sortedReplicas.add(replicas.apply(r));
+    sortedReplicas.sort((o1, o2) -> o1.replicaName().compareTo(o2.replicaName()));
+
     for (int i=0; i < numSplits; i++) {
       String fq = "{!hash workers="+numSplits+" worker="+i+"}";
       // with hash, we can hit all replicas in the shard in parallel
-      String splitShardUrl = shardUrl;
+      SolrReplica replica;
       if (numReplicas > 1) {
-        splitShardUrl = (i < numReplicas) ? replicas.apply(i).replicaUrl() : replicas.apply(i % numReplicas).replicaUrl();
+        replica = (i < numReplicas) ? sortedReplicas.get(i) : sortedReplicas.get(i % numReplicas);
+      } else {
+        replica = sortedReplicas.get(0);
       }
-      splits.add(new WorkerShardSplit(query, splitShardUrl, splitFieldName, fq));
+      splits.add(new WorkerShardSplit(query, replica.replicaUrl(), splitFieldName, fq, replica));
     }
     return splits;
   }
 
-  class WorkerShardSplit extends AbstractShardSplit<String> {
-    WorkerShardSplit(SolrQuery query, String shardUrl, String rangeField, String fq) {
+  public static class WorkerShardSplit extends AbstractShardSplit<String> {
+
+    SolrReplica myReplica;
+
+    WorkerShardSplit(SolrQuery query, String shardUrl, String rangeField, String fq, SolrReplica myReplica) {
       super(query, shardUrl, rangeField, fq);
+      this.myReplica = myReplica;
+    }
+
+    public SolrReplica getReplica() {
+      return myReplica;
     }
 
     @Override

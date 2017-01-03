@@ -41,6 +41,8 @@ class SolrRelation(
   with InsertableRelation
   with Logging {
 
+  logInfo("Creating new SolrRelation with options: "+parameters)
+
   def this(parameters: Map[String, String], sqlContext: SQLContext) {
     this(parameters, sqlContext, None)
   }
@@ -75,41 +77,6 @@ class SolrRelation(
     collection = allCollections mkString ","
   }
 
-  val solrRDD = {
-    var rdd = new SolrRDD(
-      conf.getZkHost.get,
-      collection,
-      sqlContext.sparkContext,
-      requestHandler = conf.requestHandler)
-
-    if (conf.getSplitsPerShard.isDefined) {
-      // always apply this whether we're doing splits or not so that the user
-      // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
-      // as we now will do splitting using the HashQParser when there are multiple active replicas
-      rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
-    }
-
-    if (conf.splits.isDefined) {
-      rdd = rdd.doSplits()
-
-      if (!conf.getSplitsPerShard.isDefined) {
-        // user wants splits, but didn't specify how many per shard
-        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-      }
-    }
-
-    if (conf.getSplitField.isDefined) {
-      rdd = rdd.splitField(conf.getSplitField.get)
-
-      if (!conf.getSplitsPerShard.isDefined) {
-        // user wants splits, but didn't specify how many per shard
-        rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-      }
-    }
-
-    rdd
-  }
-
   val arbitraryParams = conf.getArbitrarySolrParams
   val solrFields: Array[String] = {
     if (arbitraryParams.getParameterNames.contains(CommonParams.FL)) {
@@ -122,20 +89,21 @@ class SolrRelation(
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
-  val query: SolrQuery = buildQuery
+  val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
+  val initialQuery: SolrQuery = buildQuery
   // Preserve the initial filters if any present in arbitrary config
-  var queryFilters: Array[String] = if (query.getFilterQueries != null) query.getFilterQueries else Array.empty[String]
+  var queryFilters: Array[String] = if (initialQuery.getFilterQueries != null) initialQuery.getFilterQueries else Array.empty[String]
 
   val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
     } else {
-      if (query.getFields != null) {
+      if (initialQuery.getFields != null) {
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
-        SolrRelationUtil.deriveQuerySchema(query.getFields.split(","), baseSchema.get)
-      } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_STREAM) {
+        SolrRelationUtil.deriveQuerySchema(initialQuery.getFields.split(","), baseSchema.get)
+      } else if (initialQuery.getRequestHandler == QT_STREAM) {
         // we have to figure out the schema of the streaming expression
-        var streamingExpr = StreamExpressionParser.parse(query.get(SOLR_STREAMING_EXPR))
+        var streamingExpr = StreamExpressionParser.parse(initialQuery.get(SOLR_STREAMING_EXPR))
         var streamOutputFields = new ListBuffer[StreamFields]
         findStreamingExpressionFields(streamingExpr, streamOutputFields)
         logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
@@ -158,8 +126,8 @@ class SolrRelation(
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
         logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
-      } else if (conf.requestHandler.isDefined && conf.requestHandler.get == QT_SQL) {
-        val sqlStmt = query.get(SOLR_SQL_STMT)
+      } else if (initialQuery.getRequestHandler == QT_SQL) {
+        val sqlStmt = initialQuery.get(SOLR_SQL_STMT)
         logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
 
         val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
@@ -182,12 +150,12 @@ class SolrRelation(
 
             // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
             // based on the aggregation mode used to execute the SQL statement
-            var promoteFields = query.get("promote_to_double")
+            var promoteFields = initialQuery.get("promote_to_double")
             if (promoteFields == null) {
               promoteFields = kvp._2
-              query.set("promote_to_double", promoteFields)
+              initialQuery.set("promote_to_double", promoteFields)
             } else {
-              query.set("promote_to_double", promoteFields+","+kvp._2)
+              initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
             }
           } else {
             if (allFieldsSchema.fieldNames.contains(kvp._2)) {
@@ -292,20 +260,56 @@ class SolrRelation(
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
 
+    logInfo("buildScan: push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
+
     if (sqlContext.isInstanceOf[SolrSQLHiveContext]) {
       val sHiveContext = sqlContext.asInstanceOf[SolrSQLHiveContext]
       sHiveContext.checkReadAccess(collection, "solr")
     }
 
-    val rq = solrRDD.requestHandler
-    if (rq.isDefined) {
-      if (rq.get == QT_STREAM || rq.get == QT_SQL) {
-        // ignore any fields / filters when processing a streaming expression
-        return SolrRelationUtil.toRows(querySchema, solrRDD.query(query))
+    val query = initialQuery.getCopy
+    var qt = query.getRequestHandler
+
+    val solrRDD = {
+      var rdd = new SolrRDD(
+        conf.getZkHost.get,
+        collection,
+        sqlContext.sparkContext,
+        Some(qt),
+        uKey = Some(uniqueKey))
+
+      if (conf.getSplitsPerShard.isDefined) {
+        // always apply this whether we're doing splits or not so that the user
+        // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
+        // as we now will do splitting using the HashQParser when there are multiple active replicas
+        rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
       }
+
+      if (conf.splits.isDefined) {
+        rdd = rdd.doSplits()
+
+        if (!conf.getSplitsPerShard.isDefined) {
+          // user wants splits, but didn't specify how many per shard
+          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+        }
+      }
+
+      if (conf.getSplitField.isDefined) {
+        rdd = rdd.splitField(conf.getSplitField.get)
+
+        if (!conf.getSplitsPerShard.isDefined) {
+          // user wants splits, but didn't specify how many per shard
+          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
+        }
+      }
+
+      rdd
     }
 
-    logInfo("push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
+    if (qt == QT_STREAM || qt == QT_SQL) {
+      // ignore any fields / filters when processing a streaming expression
+      return SolrRelationUtil.toRows(querySchema, solrRDD.requestHandler(qt).query(query))
+    }
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
@@ -345,11 +349,11 @@ class SolrRelation(
         throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
       }
 
-      if (rq.isEmpty && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
-        logDebug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
+      if (conf.requestHandler.isEmpty && !requiresExportHandler(qt) && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
+        logInfo(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
-        val isFDV: Boolean = SolrRelation.checkQueryFieldsForDV(querySchema)
+        val isFDV: Boolean = if (fields.isEmpty && query.getFields == null) true else SolrRelation.checkQueryFieldsForDV(querySchema)
         var sortClauses: ListBuffer[SortClause] = ListBuffer.empty
         if (!query.getSorts.isEmpty) {
           for (sort: SortClause <- query.getSorts.asScala) {
@@ -377,33 +381,25 @@ class SolrRelation(
             else
               false
 
-        var requestHandler = rq.getOrElse(DEFAULT_REQUEST_HANDLER)
-        if (requestHandler != QT_EXPORT && isFDV && isSDV && !hasUnsupportedExportTypes) {
-          requestHandler = QT_EXPORT
-          query.setRequestHandler(requestHandler)
+        if (isFDV && isSDV && !hasUnsupportedExportTypes) {
+          qt = QT_EXPORT
+          query.setRequestHandler(qt)
           logInfo("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
-          logDebug(s"Using requestHandler: $rq isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+          logDebug(s"Using requestHandler: $qt isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
-        logInfo(s"Sending ${query} to SolrRDD using ${requestHandler}")
         // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
-        if (requestHandler.eq(QT_EXPORT)) {
+        if (qt == QT_EXPORT) {
           if (query.getFields == null)
             query.setFields(solrRDD.uniqueKey)
           if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
             query.setSort(solrRDD.uniqueKey, SolrQuery.ORDER.asc)
         }
-        logInfo(s"Constructed SolrQuery: ${query}")
-        val docs = solrRDD.requestHandler(requestHandler).query(query)
-        val rows = SolrRelationUtil.toRows(querySchema, docs)
-        rows
-      } else {
-        logInfo(s"Sending ${query} to SolrRDD using ${rq}")
-        val docs = solrRDD.query(query)
-        val rows = SolrRelationUtil.toRows(querySchema, docs)
-        rows
       }
-
+      logInfo(s"Sending ${query} to SolrRDD using ${qt}")
+      val docs = solrRDD.requestHandler(qt).query(query)
+      val rows = SolrRelationUtil.toRows(querySchema, docs)
+      rows
     } catch {
       case e: Throwable => throw new RuntimeException(e)
     }
@@ -501,7 +497,6 @@ class SolrRelation(
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-    val uniqueKey: String = solrRDD.uniqueKey
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
@@ -536,7 +531,7 @@ class SolrRelation(
       }
       doc
     })
-    SolrSupport.indexDocs(solrRDD.zkHost, solrRDD.collection, batchSize, docs, conf.commitWithin)
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin)
   }
 
   private def buildQuery: SolrQuery = {
@@ -545,11 +540,13 @@ class SolrRelation(
     if (conf.getStreamingExpr.isDefined) {
       query.setRequestHandler(QT_STREAM)
       query.set(SOLR_STREAMING_EXPR, conf.getStreamingExpr.get.replaceAll("\\s+", " "))
-    }
-
-    if (conf.getSqlStmt.isDefined) {
+    } else if (conf.getSqlStmt.isDefined) {
       query.setRequestHandler(QT_SQL)
       query.set(SOLR_SQL_STMT, conf.getSqlStmt.get.replaceAll("\\s+", " "))
+    } else if (conf.requestHandler.isDefined) {
+      query.setRequestHandler(conf.requestHandler.get)
+    } else {
+      query.setRequestHandler(DEFAULT_REQUEST_HANDLER)
     }
 
     if (solrFields.nonEmpty) {

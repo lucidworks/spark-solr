@@ -56,7 +56,7 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
   }
 
-  test("SQL query") {
+  test("count query") {
     val df: DataFrame = sqlContext.read.format("solr").option("zkHost", zkHost).option("collection", collectionName).load()
     assert(df.count() == eventSimCount)
   }
@@ -219,14 +219,25 @@ class EventsimTestSuite extends EventsimBuilder {
     val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
     assert(areFieldsDocValues)
 
-    solrRelation.query.addSort("registration", SolrQuery.ORDER.asc)
-    val sortClauses = solrRelation.query.getSorts.asScala.toList
+    solrRelation.initialQuery.addSort("registration", SolrQuery.ORDER.asc)
+    val sortClauses = solrRelation.initialQuery.getSorts.asScala.toList
     val isSortFieldDocValue = SolrRelation.checkSortFieldsForDV(solrRelation.baseSchema.get, sortClauses)
     assert(isSortFieldDocValue)
 
-    solrRelation.query.setSorts(Collections.emptyList())
-    SolrRelation.addSortField(querySchema, solrRelation.query)
-    assert(solrRelation.query.getSorts == Collections.singletonList(new SortClause("userId", SolrQuery.ORDER.asc)))
+    solrRelation.initialQuery.setSorts(Collections.emptyList())
+    SolrRelation.addSortField(querySchema, solrRelation.initialQuery)
+    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause("userId", SolrQuery.ORDER.asc)))
+  }
+
+  test("Multiple queries with same Dataframe to test request handler switch") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName
+    )
+    val df = sqlContext.read.format("solr").options(options).load()
+    df.take(1) // This should use the '/select' handler because of the field 'artist_txt'
+
+    df.select("artist").take(1) // This should use '/export' handler because we are only requesting the field 'artist'
   }
 
   def testCommons(solrRDD: SolrRDD): Unit = {

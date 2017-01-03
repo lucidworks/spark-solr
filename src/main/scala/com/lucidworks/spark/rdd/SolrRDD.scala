@@ -25,11 +25,12 @@ class SolrRDD(
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = None,
-    solrQuery: Option[SolrQuery] = None)
+    solrQuery: Option[SolrQuery] = None,
+    uKey: Option[String] = None)
   extends RDD[SolrDocument](sc, Seq.empty)
   with Logging {
 
-  val uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
+  val uniqueKey = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
   protected def copy(
       requestHandler: Option[String] = requestHandler,
