@@ -228,4 +228,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
     }
     solrParams
   }
+
+  def getStreamingExpressionSchema: Option[String] = {
+    if (config.contains(STREAMING_EXPR_SCHEMA) && config.get(STREAMING_EXPR_SCHEMA).isDefined) return config.get(STREAMING_EXPR_SCHEMA)
+    None
+  }
+
 }
