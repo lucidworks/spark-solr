@@ -238,4 +238,12 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
     if (config.contains(EXCLUDE_FIELDS) && config.get(EXCLUDE_FIELDS).isDefined) return config.get(EXCLUDE_FIELDS)
     None
   }
+
+  def skipNonDocValueFields: Option[Boolean] = {
+    if (config.contains(SKIP_NON_DOCVALUE_FIELDS) && config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) {
+      return Some(config.get(SKIP_NON_DOCVALUE_FIELDS).get.toBoolean)
+    }
+    None
+  }
+
 }
