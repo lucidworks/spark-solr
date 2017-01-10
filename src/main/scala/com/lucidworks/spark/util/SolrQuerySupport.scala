@@ -636,7 +636,7 @@ object SolrQuerySupport extends Logging {
       pivotFields: Array[PivotField],
       solrRDD: SolrRDD,
       escapeFieldNames: Boolean): DataFrame = {
-    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, true)
+    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, true, false)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {

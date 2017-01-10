@@ -124,7 +124,8 @@ class SolrRelation(
                 conf.getZkHost.get,
                 sf.collection,
                 conf.escapeFieldNames.getOrElse(false),
-                conf.flattenMultivalued.getOrElse(true))
+                conf.flattenMultivalued.getOrElse(true),
+                conf.skipNonDocValueFields.getOrElse(false))
             logDebug(s"Got stream schema: ${streamSchema} for ${sf}")
             sf.fields.foreach(fld => {
               val fieldName = fld.alias.getOrElse(fld.name)
@@ -275,7 +276,8 @@ class SolrRelation(
       conf.getZkHost.get,
       collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
-      conf.flattenMultivalued.getOrElse(true))
+      conf.flattenMultivalued.getOrElse(true),
+      conf.skipNonDocValueFields.getOrElse(false))
   }
 
   def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields], depth: Int) : Unit = {
