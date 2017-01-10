@@ -11,6 +11,21 @@ import org.apache.spark.sql.types.{TimestampType, StringType, LongType, DoubleTy
 
 class RelationTestSuite extends TestSuiteBuilder with Logging {
 
+  test("exclude_fields param") {
+    val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
+    val numRatings = buildRatingsCollection(ratingsCollection)
+
+    val ratingsDF = sqlContext.read.format("solr").options(
+      Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "exclude_fields" -> "id,*_timestamp,user*")).load
+    val schema = ratingsDF.schema
+    assert(schema.fields.length == 2)
+    assert(schema.fields(0).name == "movie_id")
+    assert(schema.fields(0).dataType == StringType)
+    assert(schema.fields(1).name == "rating")
+    assert(schema.fields(1).dataType == LongType)
+    SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
+  }
+
   test("Unknown params") {
     val paramsToCheck = Set(SOLR_ZK_HOST_PARAM, SOLR_COLLECTION_PARAM, SOLR_QUERY_PARAM, ESCAPE_FIELDNAMES_PARAM, "fl", "q")
     val unknownParams = SolrRelation.checkUnknownParams(paramsToCheck)

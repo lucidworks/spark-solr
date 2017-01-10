@@ -44,4 +44,5 @@ object ConfigurationConstants {
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
 
   val STREAMING_EXPR_SCHEMA: String = "expr_schema"
+  val EXCLUDE_FIELDS: String = "exclude_fields"
 }

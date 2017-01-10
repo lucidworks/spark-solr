@@ -234,4 +234,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with Logging {
     None
   }
 
+  def getExcludeFields: Option[String] = {
+    if (config.contains(EXCLUDE_FIELDS) && config.get(EXCLUDE_FIELDS).isDefined) return config.get(EXCLUDE_FIELDS)
+    None
+  }
 }
