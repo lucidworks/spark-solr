@@ -103,29 +103,69 @@ class SolrRelation(
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         SolrRelationUtil.deriveQuerySchema(initialQuery.getFields.split(","), baseSchema.get)
       } else if (initialQuery.getRequestHandler == QT_STREAM) {
-        // we have to figure out the schema of the streaming expression
-        var streamingExpr = StreamExpressionParser.parse(initialQuery.get(SOLR_STREAMING_EXPR))
-        var streamOutputFields = new ListBuffer[StreamFields]
-        findStreamingExpressionFields(streamingExpr, streamOutputFields)
-        logDebug(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
-        for (sf <- streamOutputFields) {
-          val streamSchema: StructType =
-            SolrRelationUtil.getBaseSchema(
-              sf.fields.toSet,
-              conf.getZkHost.get,
-              sf.collection,
-              conf.escapeFieldNames.getOrElse(false),
-              conf.flattenMultivalued.getOrElse(true))
-          logDebug(s"Got stream schema: ${streamSchema} for ${sf}")
-          streamSchema.fields.foreach(fld => fieldSet.add(fld))
-          sf.metrics.foreach(m => fieldSet.add(toMetricStructField(m)))
+        var streamingExpr = StreamExpressionParser.parse(initialQuery.get(SOLR_STREAMING_EXPR))
+        if (conf.getStreamingExpressionSchema.isDefined) {
+          // the user is telling us the schema of the expression
+          var streamingExprSchema = conf.getStreamingExpressionSchema.get
+          streamingExprSchema.split(',').foreach(f => {
+            val pair : Array[String] = f.split(':')
+            fieldSet.add(new StructField(pair.apply(0), DataType.fromJson("\""+pair.apply(1)+"\"")))
+          })
+        } else {
+          // we have to figure out the schema of the streaming expression
+          var streamOutputFields = new ListBuffer[StreamFields]
+          findStreamingExpressionFields(streamingExpr, streamOutputFields, 0)
+          logInfo(s"Found ${streamOutputFields.size} stream output fields: ${streamOutputFields}")
+          for (sf <- streamOutputFields) {
+            val streamSchema: StructType =
+              SolrRelationUtil.getBaseSchema(
+                sf.fields.map(f => f.name).toSet,
+                conf.getZkHost.get,
+                sf.collection,
+                conf.escapeFieldNames.getOrElse(false),
+                conf.flattenMultivalued.getOrElse(true))
+            logDebug(s"Got stream schema: ${streamSchema} for ${sf}")
+            sf.fields.foreach(fld => {
+              val fieldName = fld.alias.getOrElse(fld.name)
+              if (fld.hasReplace) {
+                // completely ignore the Solr type ... force to the replace type
+                fieldSet.add(new StructField(fieldName, fld.dataType))
+              } else {
+                if (streamSchema.fieldNames.contains(fieldName)) {
+                  fieldSet.add(streamSchema.apply(fieldName))
+                } else {
+                  // ugh ... this field coming out of the streaming expression isn't known to solr, so likely a select
+                  // expression here with some renaming going on ... just assume string and keep going
+                  fieldSet.add(new StructField(fieldName, fld.dataType))
+                }
+              }
+            })
+
+            sf.metrics.foreach(m => {
+              val metricName = m.alias.getOrElse(m.name)
+              // crazy hack here but Solr might return a long which we registered as a double in the schema
+              if (!m.name.startsWith("count(")) {
+                var promoteFields = initialQuery.get("promote_to_double")
+                if (promoteFields == null) {
+                  initialQuery.set("promote_to_double", metricName)
+                } else {
+                  initialQuery.set("promote_to_double", promoteFields+","+metricName)
+                }
+                logInfo(s"Set promote_to_double="+initialQuery.get("promote_to_double"))
+                fieldSet.add(new StructField(metricName, DoubleType))
+              } else {
+                fieldSet.add(new StructField(metricName, m.dataType))
+              }
+            })
+          }
         }
+
         if (fieldSet.isEmpty) {
           throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + streamingExpr)
         }
         var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
-        logDebug(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        logInfo(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else if (initialQuery.getRequestHandler == QT_SQL) {
         val sqlStmt = initialQuery.get(SOLR_SQL_STMT)
@@ -229,14 +269,6 @@ class SolrRelation(
     clazz.newInstance().asInstanceOf[ParserDialect]
   }
 
-  def toMetricStructField(m: String) : StructField = {
-    if (m.toLowerCase.startsWith("count(")) {
-      return new StructField(m, LongType)
-    } else {
-      return new StructField(m, DoubleType)
-    }
-  }
-
   def getBaseSchemaFromConfig(collection: String, solrFields: Array[String]) : StructType = {
     SolrRelationUtil.getBaseSchema(
       solrFields.toSet,
@@ -246,46 +278,127 @@ class SolrRelation(
       conf.flattenMultivalued.getOrElse(true))
   }
 
-  def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields]) : Unit = {
+  def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields], depth: Int) : Unit = {
+
+    logInfo(s"findStreamingExpressionFields(depth=$depth): expr = $expr")
+
+    var currDepth = depth
+
     expr match {
       case subExpr : StreamExpression =>
         val funcName = subExpr.getFunctionName
         if (funcName == "search" || funcName == "random" || funcName == "facet") {
           extractSearchFields(subExpr).foreach(fld => streamOutputFields += fld)
+        } else if (funcName == "select") {
+          // the top-level select is the schema we care about so we don't need to scan expressions below the
+          // top-level select for fields in the schema, hence the special casing here
+          if (depth == 0) {
+
+            currDepth += 1
+
+            logInfo(s"Extracting search fields from top-level select")
+            var exprCollection : Option[String] = Option.empty[String]
+            var fields = scala.collection.mutable.ListBuffer.empty[StreamField]
+            var metrics = scala.collection.mutable.ListBuffer.empty[StreamField]
+            var replaceFields = scala.collection.mutable.Map[String, DataType]()
+            subExpr.getParameters.asScala.foreach(sub => {
+              sub match {
+                case v : StreamExpressionValue => {
+                  val selectFieldName = v.getValue
+                  val asAt = selectFieldName.indexOf(" as ")
+                  if (asAt != -1) {
+                    val key = selectFieldName.substring(0, asAt).trim()
+                    val alias = selectFieldName.substring(asAt + 4).trim()
+                    if (key.indexOf("(") != -1 && key.endsWith(")")) {
+                      metrics += getStreamMetricField(key, Some(alias))
+                    } else {
+                      fields += new StreamField(key, StringType, Some(alias))
+                    }
+                  } else {
+                    if (selectFieldName.indexOf("(") != -1 && selectFieldName.endsWith(")")) {
+                      metrics += getStreamMetricField(selectFieldName, None)
+                    } else {
+                      fields += new StreamField(selectFieldName, StringType, None)
+                    }
+                  }
+                }
+                case e : StreamExpression => {
+                  val exprFuncName = e.getFunctionName
+                  if (exprFuncName == "replace") {
+                    // we have to handle type-conversion from the Solr type to the replace type
+                    logDebug(s"Found a replace expression in select: $e")
+                    val params = e.getParameters.asScala
+                    val tmp = params.apply(0)
+                    tmp match {
+                      case v: StreamExpressionValue => replaceFields += (v.getValue -> StringType)
+                    }
+                  } else if (exprFuncName == "search" || exprFuncName == "random" || exprFuncName == "facet") {
+                    val maybeSF = extractSearchFields(e)
+                    if (maybeSF.isDefined) {
+                      exprCollection = Some(maybeSF.get.collection)
+                      logDebug(s"Found exprCollection name ")
+                    }
+                  }
+                }
+                case _ => // ugly, but let's not fail b/c of unhandled stuff as the expression stuff is changing rapidly
+              }
+            })
+
+            // for any fields that have a replace function applied, we need to override the
+            fields = fields.map(f => {
+              if (replaceFields.contains(f.name)) new StreamField(f.name, replaceFields.getOrElse(f.name, StringType), None, true) else f
+            })
+
+            val streamFields = new StreamFields(exprCollection.getOrElse(collection), fields, metrics)
+            logInfo(s"Extracted $streamFields for $subExpr")
+            streamOutputFields += streamFields
+          } else {
+            // not a top-level select, so just push it down to find fields
+            extractSearchFields(subExpr).foreach(fld => streamOutputFields += fld)
+          }
         } else {
-          subExpr.getParameters.asScala.foreach(subParam => findStreamingExpressionFields(subParam, streamOutputFields))
+          subExpr.getParameters.asScala.foreach(subParam => findStreamingExpressionFields(subParam, streamOutputFields, currDepth))
         }
-      case namedParam : StreamExpressionNamedParameter => findStreamingExpressionFields(namedParam.getParameter, streamOutputFields)
+      case namedParam : StreamExpressionNamedParameter => findStreamingExpressionFields(namedParam.getParameter, streamOutputFields, currDepth)
       case _ => // no op
+    }
+  }
+
+  private def getStreamMetricField(key: String, alias: Option[String]) : StreamField = {
+    return if (key.startsWith("count(")) {
+      new StreamField(key, LongType, alias)
+    } else {
+      // just treat all other metrics as double type
+      new StreamField(key, DoubleType, alias)
     }
   }
 
   def extractSearchFields(subExpr: StreamExpression) : Option[StreamFields] = {
     logDebug(s"Extracting search fields from ${subExpr.getFunctionName} stream expression ${subExpr} of type ${subExpr.getClass.getName}")
     var collection : Option[String] = Option.empty[String]
-    var fields = scala.collection.mutable.ListBuffer.empty[String]
-    var metrics = scala.collection.mutable.ListBuffer.empty[String]
+    var fields = scala.collection.mutable.ListBuffer.empty[StreamField]
+    var metrics = scala.collection.mutable.ListBuffer.empty[StreamField]
     subExpr.getParameters.asScala.foreach(sub => {
+      logDebug(s"Next expression param is $sub of type ${sub.getClass.getName}")
       sub match {
         case p : StreamExpressionNamedParameter =>
           if (p.getName == "fl" || p.getName == "buckets" && subExpr.getFunctionName == "facet") {
             p.getParameter match {
-              case value : StreamExpressionValue => value.getValue.split(",").foreach(v => fields += v)
+              case value : StreamExpressionValue => value.getValue.split(",").foreach(v => fields += new StreamField(v, StringType, None))
               case _ => // ugly!
             }
           }
         case v : StreamExpressionValue => collection = Some(v.getValue)
-        case e : StreamExpression =>
-          if (subExpr.getFunctionName == "facet") {
+        case e : StreamExpression => if (subExpr.getFunctionName == "facet") {
             // a metric for a facet stream
-            metrics += e.toString
+            metrics += getStreamMetricField(e.toString, None)
           }
         case _ => // ugly!
       }
     })
     if (collection.isDefined && !fields.isEmpty) {
       val streamFields = new StreamFields(collection.get, fields, metrics)
-      logDebug(s"extracted $streamFields for $subExpr")
+      logInfo(s"Extracted $streamFields for $subExpr")
       return Some(streamFields)
     }
     None
@@ -722,5 +835,6 @@ object SolrRelation extends Logging {
   }
 }
 
-case class StreamFields(collection:String,fields:ListBuffer[String],metrics:ListBuffer[String])
+case class StreamField(name:String, dataType: DataType, alias:Option[String], hasReplace: Boolean = false)
+case class StreamFields(collection:String,fields:ListBuffer[StreamField],metrics:ListBuffer[StreamField])
 

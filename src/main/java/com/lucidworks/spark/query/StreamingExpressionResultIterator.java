@@ -23,6 +23,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
   protected String zkHost;
   protected String collection;
+  protected String qt;
 
   protected Set<String> promoteToDoubleFields = Collections.EMPTY_SET;
 
@@ -33,7 +34,10 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
     this.zkHost = zkHost;
     this.collection = collection;
 
-    if ("/sql".equals(solrParams.get(CommonParams.QT))) {
+    qt = solrParams.get(CommonParams.QT);
+    if (qt == null) qt = "/stream";
+
+    if ("/sql".equals(qt) || "/stream".equals(qt)) {
       String promoteToDoubleFieldList = solrParams.get("promote_to_double");
       if (promoteToDoubleFieldList != null) {
         promoteToDoubleFields = new HashSet<>();
@@ -45,9 +49,6 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
   protected TupleStream openStream() {
     TupleStream stream;
-
-    String qt = solrParams.get(CommonParams.QT);
-    if (qt == null) qt = "/stream";
 
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.set(CommonParams.QT, qt);
@@ -70,8 +71,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
       log.info("Executing streaming expression " + expr + " against collection " + collection);
       params.set("expr", expr);
     }
-    
-    
+
     try {
       String url = (new ZkCoreNodeProps(getRandomReplica())).getCoreUrl();
       log.info("Sending "+qt+" request to replica "+url+" of "+collection+" with params: "+params);
@@ -98,7 +98,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
     for (Object key : tuple.fields.keySet()) {
       String keyStr = (String) key;
       Object value = tuple.get(key);
-      if (promoteToDoubleFields.contains(keyStr) && value instanceof Number) {
+      if (value instanceof Number && promoteToDoubleFields.contains(keyStr)) {
         doc.setField(keyStr, ((Number)value).doubleValue());
       } else {
         doc.setField(keyStr, value);

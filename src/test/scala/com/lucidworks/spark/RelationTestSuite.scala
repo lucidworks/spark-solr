@@ -248,6 +248,162 @@ class RelationTestSuite extends TestSuiteBuilder with Logging {
     val row0 = sqlResults.get(0)
     assert(row0.getString(4) == "movie200")
 
+    // proper handling of select expression decorator
+    var selectExpr = s"""select(
+      facet(
+        ${moviesCollection},
+        q="*:*",
+        buckets="title",
+        bucketSorts="count(*) desc",
+        bucketSizeLimit=100,
+        count(*)
+      ),
+      title,
+      count(*) as the_count)"""
+    var selectExprDF =
+      sqlContext.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> moviesCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 2)
+    assert(schema.fields(0).name == "the_count")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "title")
+    assert(schema.fields(1).dataType == StringType)
+
+    var selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 2)
+    var selectExprRow0 = selectExprResults.get(0)
+    assert(selectExprRow0.getLong(0) == 1L)
+    assert(selectExprRow0.getString(1) == "Moneyball")
+    var selectExprRow1 = selectExprResults.get(1)
+    assert(selectExprRow1.getLong(0) == 1L)
+    assert(selectExprRow1.getString(1) == "The Big Short")
+
+    selectExpr = s"""select(
+      facet(
+        ${ratingsCollection},
+        q="*:*",
+        buckets="rating",
+        bucketSorts="count(*) desc",
+        bucketSizeLimit=100,
+        count(*),
+        sum(rating),
+        min(rating),
+        max(rating),
+        avg(rating)
+      ),
+      rating,
+      count(*) as the_count,
+      sum(rating) as the_sum,
+      min(rating) as the_min,
+      max(rating) as the_max,
+      avg(rating) as the_avg)
+    """
+    selectExprDF =
+      sqlContext.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 6)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    assert(schema.fields(3).name == "the_max")
+    assert(schema.fields(3).dataType == DoubleType)
+    assert(schema.fields(4).name == "the_min")
+    assert(schema.fields(4).dataType == DoubleType)
+    assert(schema.fields(5).name == "the_sum")
+    assert(schema.fields(5).dataType == DoubleType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
+    selectExpr = s"""select(
+                    |  facet(
+                    |    ${ratingsCollection},
+                    |    q="*:*",
+                    |    buckets="rating",
+                    |    bucketSorts="count(*) desc",
+                    |    bucketSizeLimit=100,
+                    |    count(*),
+                    |    sum(rating),
+                    |    min(rating),
+                    |    max(rating),
+                    |    avg(rating)
+                    |  ),
+                    |  rating,
+                    |  count(*) as the_count,
+                    |  sum(rating) as the_sum,
+                    |  min(rating) as the_min,
+                    |  max(rating) as the_max,
+                    |  avg(rating) as the_avg,
+                    |  replace(rating,5,withValue=excellent),
+                    |  replace(rating,4,withValue=good),
+                    |  replace(rating,3,withValue=avg),
+                    |  replace(rating,2,withValue=poor),
+                    |  replace(rating,1,withValue=awful)
+                    |)
+    """.stripMargin
+    selectExprDF =
+      sqlContext.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 6)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == StringType) // important, replace makes rating a string
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    assert(schema.fields(3).name == "the_max")
+    assert(schema.fields(3).dataType == DoubleType)
+    assert(schema.fields(4).name == "the_min")
+    assert(schema.fields(4).dataType == DoubleType)
+    assert(schema.fields(5).name == "the_sum")
+    assert(schema.fields(5).dataType == DoubleType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
+    // test user-supplied schema
+    selectExpr = s"""select(
+                    |  facet(
+                    |    ${ratingsCollection},
+                    |    q="*:*",
+                    |    buckets="rating",
+                    |    bucketSorts="count(*) desc",
+                    |    bucketSizeLimit=100,
+                    |    count(*),
+                    |    sum(rating),
+                    |    min(rating),
+                    |    max(rating),
+                    |    avg(rating)
+                    |  ),
+                    |  rating,
+                    |  count(*) as the_count,
+                    |  avg(rating) as the_avg,
+                    |  replace(rating,5,withValue=excellent),
+                    |  replace(rating,4,withValue=good),
+                    |  replace(rating,3,withValue=avg),
+                    |  replace(rating,2,withValue=poor),
+                    |  replace(rating,1,withValue=awful)
+                    |)
+    """.stripMargin
+    selectExprDF =
+      sqlContext.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr,
+        "expr_schema" -> "rating:string,the_avg:double,the_count:long")).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 3)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == StringType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
