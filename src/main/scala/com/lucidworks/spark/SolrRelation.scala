@@ -1,6 +1,7 @@
 package com.lucidworks.spark
 
 import java.util.UUID
+import java.util.regex.Pattern
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.util._
@@ -174,17 +175,53 @@ class SolrRelation(
         // don't return the _version_ field unless specifically asked for by the user
         baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
         if (solrFields.contains("_version_")) {
-          // user specifically requested _version_
-          baseSchema.get
+          // user specifically requested _version_, so keep it
+          var tmp = applyExcludeFieldsToSchema(baseSchema.get)
+          StructType(tmp.fields.sortBy(f => f.name))
         } else {
           var tmp = baseSchema.get
           if (tmp.fieldNames.contains("_version_")) {
             tmp = StructType(tmp.filter(p => p.name != "_version_"))
           }
-          tmp
+          tmp = applyExcludeFieldsToSchema(tmp)
+          StructType(tmp.fields.sortBy(f => f.name))
         }
       }
     }
+  }
+
+  private def applyExcludeFieldsToSchema(querySchema: StructType) : StructType = {
+    if (!conf.getExcludeFields.isDefined)
+      return querySchema
+
+    val excludeFields = conf.getExcludeFields.get.trim()
+    if (excludeFields.isEmpty)
+      return querySchema
+
+    logInfo(s"Found field name exclusion patterns: ${excludeFields}")
+    val excludePatterns = excludeFields.split(",").map(pat => {
+      var namePattern = pat.trim()
+      val len = namePattern.length()
+      // since leading or trailing wildcards are so common, we'll convert those to proper regex for the user
+      // otherwise, newbies will get the ol' "Dangling meta character '*' near index 0" error
+      if (namePattern.startsWith("*") && namePattern.indexOf("*", 1) == -1) {
+        namePattern = "^.*"+namePattern.substring(1)+"$"
+      } else if (namePattern.endsWith("*") && namePattern.substring(0,len-1).indexOf("*") == -1) {
+        namePattern = "^"+namePattern.substring(0,len-1)+".*$"
+      }
+      Pattern.compile(namePattern, Pattern.CASE_INSENSITIVE)
+    })
+
+    return StructType(querySchema.filter(p => {
+      var isExcluded = false
+      for (regex <- excludePatterns) {
+        if (regex.matcher(p.name).matches()) {
+          isExcluded = true
+          logDebug(s"Excluding ${p.name} from the query schema because it matches exclude pattern: ${regex.pattern()}")
+        }
+      }
+      !isExcluded
+    }))
   }
 
   def getSQLDialect(dialectClassName: String): ParserDialect = {

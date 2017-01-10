@@ -42,4 +42,6 @@ object ConfigurationConstants {
   val MAX_ACTIVE_PARTITIONS:String="max_active_partitions"
 
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
+  val EXCLUDE_FIELDS: String = "exclude_fields"
+
 }
