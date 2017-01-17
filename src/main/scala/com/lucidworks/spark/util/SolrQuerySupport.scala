@@ -266,9 +266,8 @@ object SolrQuerySupport extends Logging {
   def getFieldTypes(fields: Set[String], solrUrl: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
-    val fieldNames = if (fields == null || fields.isEmpty) getFieldsFromLuke(solrUrl) else fields
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fieldNames)
-    fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields)
+    fieldDefinitionsFromSchema.foreach {
       case(name, payloadRef) =>
       payloadRef match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>

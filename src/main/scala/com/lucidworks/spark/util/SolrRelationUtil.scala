@@ -49,10 +49,17 @@ object SolrRelationUtil extends Logging {
       return new StructType()
 
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
-    val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
+    val solrUrl = solrBaseUrl + collection + "/"
+    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl)
+    if (fieldsFromLuke.isEmpty)
+      return new StructType()
+
+    val fieldTypeMap = SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl)
+
     val structFields = new ListBuffer[StructField]
 
-    fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
+    // keep only keys that are present in the Luke handler
+    fieldTypeMap.filterKeys(f => fieldsFromLuke.contains(f)).foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
         if (fieldMeta.fieldTypeClass.isDefined) {
