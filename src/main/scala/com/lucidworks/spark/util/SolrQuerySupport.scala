@@ -266,7 +266,8 @@ object SolrQuerySupport extends Logging {
   def getFieldTypes(fields: Set[String], solrUrl: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields)
+    log.debug("Get field types for fields: " + fields.mkString(","))
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq)
     fieldDefinitionsFromSchema.foreach {
       case(name, payloadRef) =>
       payloadRef match {
@@ -361,32 +362,37 @@ object SolrQuerySupport extends Logging {
     fieldTypeMap.toMap
   }
 
-  def getFieldDefinitionsFromSchema(solrUrl: String, fieldNames: Set[String]): Map[String, Any] = {
-    val fl: Option[String] = if (fieldNames.nonEmpty) {
-      val sb = new StringBuilder
-      sb.append("&fl=")
-      fieldNames.zipWithIndex.foreach{ case(name, index) =>
-        sb.append(name)
-        if (index < fieldNames.size) sb.append(",")
-      }
-      Some(sb.toString())
-    } else None
-
+  def getFieldDefinitionsFromSchema(
+      solrUrl: String,
+      fieldNames: Seq[String],
+      fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
-    val flList = fl.getOrElse("")
-    if (flList.length > (2048 - fieldsUrlBase.length)) {
-      val fieldDefs = scala.collection.mutable.HashMap.empty[String,Any]
-      // go get all fields from Solr and then prune from there
-      val allFields = fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
-      fieldNames.foreach(fname => {
-        if (allFields.containsKey(fname)) {
-          fieldDefs.put(fname, allFields.get(fname).get)
-        }
-      })
-      fieldDefs.toMap
-    } else {
-      fetchFieldSchemaInfoFromSolr(fieldsUrlBase+flList)
+    log.debug("Requesting schema for fields: " + fieldNames.mkString(","))
+
+    if (fieldNames.isEmpty && fieldDefs.isEmpty)
+      return fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
+
+    if (fieldNames.isEmpty && fieldDefs.nonEmpty)
+      return fieldDefs
+
+    val allowedUrlLimit = 2048 - fieldsUrlBase.length
+    var flLength = 0
+    val sb = new StringBuilder()
+    sb.append("&fl=")
+
+    for (i <- fieldNames.indices) {
+      val fieldName = fieldNames(i)
+      if (flLength + fieldName.length + 1 < allowedUrlLimit) {
+        sb.append(fieldName)
+        if (i < fieldNames.size) sb.append(",")
+        flLength = flLength + fieldName.length + 1
+      } else {
+        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
+        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), defs ++ fieldDefs)
+      }
     }
+    val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
+    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, defs ++ fieldDefs)
   }
 
   def fetchFieldSchemaInfoFromSolr(fieldsUrl: String) : Map[String, Any] = {
