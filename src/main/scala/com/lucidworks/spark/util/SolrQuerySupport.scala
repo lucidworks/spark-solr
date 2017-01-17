@@ -362,6 +362,14 @@ object SolrQuerySupport extends Logging {
     fieldTypeMap.toMap
   }
 
+  /**
+   * Do multiple requests if the length of url exceeds limit size (2048).
+   * We need this to retrieve schema of dynamic fields
+   * @param solrUrl
+   * @param fieldNames
+   * @param fieldDefs
+   * @return
+   */
   def getFieldDefinitionsFromSchema(
       solrUrl: String,
       fieldNames: Seq[String],

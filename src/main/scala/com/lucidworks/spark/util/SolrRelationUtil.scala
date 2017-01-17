@@ -63,7 +63,7 @@ object SolrRelationUtil extends Logging {
     log.debug("Fields from schema handler " + fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
-    // keep only keys that are present in the Luke handler
+    // Retain the keys that are present in the Luke handler
     fieldTypeMap.filterKeys(f => fieldsFromLuke.contains(f)).foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
