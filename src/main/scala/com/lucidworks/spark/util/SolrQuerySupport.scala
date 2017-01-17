@@ -268,7 +268,7 @@ object SolrQuerySupport extends Logging {
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
     log.debug("Get field types for fields: {} ", fields.mkString(","))
     val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq)
-    fieldDefinitionsFromSchema.foreach {
+    fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
       case(name, payloadRef) =>
       payloadRef match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
