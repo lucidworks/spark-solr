@@ -81,7 +81,7 @@ class SolrRelation(
   val arbitraryParams = conf.getArbitrarySolrParams
   val solrFields: Array[String] = {
     if (arbitraryParams.getParameterNames.contains(CommonParams.FL)) {
-      arbitraryParams.getParams(CommonParams.FL)
+      arbitraryParams.getParams(CommonParams.FL).flatMap(f => f.split(",")).map(field => field.trim)
     } else {
       conf.getFields
     }
