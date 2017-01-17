@@ -51,7 +51,7 @@ object SolrRelationUtil extends Logging {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrUrl = solrBaseUrl + collection + "/"
     val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl)
-    log.debug("Fields from luke handler: " + fieldsFromLuke.mkString(","))
+    log.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
     if (fieldsFromLuke.isEmpty)
       return new StructType()
 
@@ -60,7 +60,7 @@ object SolrRelationUtil extends Logging {
         SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl)
       else
         SolrQuerySupport.getFieldTypes(fields, solrUrl)
-    log.debug("Fields from schema handler " + fieldTypeMap.keySet.mkString(","))
+    log.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
     // Retain the keys that are present in the Luke handler

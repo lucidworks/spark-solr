@@ -266,7 +266,7 @@ object SolrQuerySupport extends Logging {
   def getFieldTypes(fields: Set[String], solrUrl: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
-    log.debug("Get field types for fields: " + fields.mkString(","))
+    log.debug("Get field types for fields: {} ", fields.mkString(","))
     val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq)
     fieldDefinitionsFromSchema.foreach {
       case(name, payloadRef) =>
@@ -375,7 +375,7 @@ object SolrQuerySupport extends Logging {
       fieldNames: Seq[String],
       fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
-    log.debug("Requesting schema for fields: " + fieldNames.mkString(","))
+    log.debug("Requesting schema for fields: {} ", fieldNames.mkString(","))
 
     if (fieldNames.isEmpty && fieldDefs.isEmpty)
       return fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
