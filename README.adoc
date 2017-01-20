@@ -8,6 +8,23 @@ This project includes tools for reading data from Solr as a Spark RDD and indexi
 
 toc::[]
 
+//tag::version-compatibility[]
+== Version Compatibility
+
+The spark-solr project has several releases, each of which support different versions of Spark and Solr. The compatibility
+chart below shows the versions supported across the past releases. 'Connector' refers to the 'spark-solr' library
+
+[width="40%",frame="topbot",options="header,footer"]
+|======================
+|Connector      | Spark | Solr
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-alpha.2%7Cjar[3.0.0-alpha.2]  | 2.0.1 | 6.2.1
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.3.3%7Cjar[2.3.3]          | 1.6.3 | 6.3.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.2.3%7Cjar[2.2.3]          | 1.6.2 | 6.1.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.1.0%7Cjar[2.1.0]          | 1.6.2 | 6.1.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.0.4%7Cjar[2.0.4]          | 1.6.1 | 5.5.2
+|======================
+
+
 //tag::getting-started[]
 == Getting started
 
