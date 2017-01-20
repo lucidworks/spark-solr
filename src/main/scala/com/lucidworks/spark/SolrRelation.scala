@@ -15,10 +15,9 @@ import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
 import org.apache.solr.common.SolrException.ErrorCode
-import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
+import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.solr.SolrSparkSession
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -263,11 +262,6 @@ class SolrRelation(
       }
       !isExcluded
     }))
-  }
-
-  def getSQLDialect(dialectClassName: String): ParserDialect = {
-    val clazz = Utils.classForName(dialectClassName)
-    clazz.newInstance().asInstanceOf[ParserInterface]
   }
 
   def getBaseSchemaFromConfig(collection: String, solrFields: Array[String]) : StructType = {
