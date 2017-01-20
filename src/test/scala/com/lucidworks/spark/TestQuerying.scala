@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode.Overwrite
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
@@ -30,15 +30,6 @@ class TestQuerying extends TestSuiteBuilder {
       assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
-      // Test to make sure sort param is being applied to the query
-      {
-        val solrDF1 = sparkSession.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
-        val rows = solrDF1.collect()
-        val idFieldIndex = solrDF1.schema.fieldIndex("id")
-        rows.zipWithIndex.foreach{ case(row,i) => {
-          assert(row.get(idFieldIndex).equals(Integer.toString(i+1)))
-        }}
-      }
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
