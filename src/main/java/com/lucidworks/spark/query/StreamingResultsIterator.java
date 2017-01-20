@@ -77,6 +77,8 @@ public class StreamingResultsIterator extends ResultsIterator {
       try {
         hasNext = fetchNextPage();
       } catch (Exception e) {
+        log.error("Fetch next page ("+iterPos+") from Solr "+solrId+" using query ["+solrQuery+
+                "], cursorMarks? "+usingCursors+", cursorMarkOfCurrentPage="+cursorMarkOfCurrentPage+" failed due to: "+e);
         if (e instanceof RuntimeException) {
           throw (RuntimeException)e;
         } else {

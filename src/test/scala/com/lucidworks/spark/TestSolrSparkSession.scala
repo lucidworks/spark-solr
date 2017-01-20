@@ -37,11 +37,11 @@ class TestSolrSparkSession extends MovielensBuilder {
       // Register movies collection as a table
       val opts = Map("zkhost" -> zkHost, "collection" -> moviesColName)
       sHiveContext.read.format("solr").options(opts).load().registerTempTable("movies")
-
+      
       val df = sHiveContext.sql(sqlStmt)
       val rows = df.collect()
       assert(rows.length == 1)
-      assert(rows(0)(1) == 23)
+      assert(rows(0)(1) == 35)
 
       // Check if the temp table is created
 
@@ -62,9 +62,9 @@ class TestSolrSparkSession extends MovielensBuilder {
       val df = sHiveContext.sql(sqlStmt)
       val rows = df.collect()
       assert(rows.length == 1)
-      assert(rows(0)(1) == 23)
+      assert(rows(0)(1) == 35)
 
       assert(sHiveContext.cachedSQLQueries.size == 1)
     }
- }
+  }
 }

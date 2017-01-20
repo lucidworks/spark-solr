@@ -94,7 +94,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
     CoreContainer coreContainer = new CoreContainer(solrResourceLoader);
     coreContainer.load();
 
-    SolrCore core = coreContainer.create(coreName, instanceDir.toPath(), Collections.<String, String>emptyMap());
+    SolrCore core = coreContainer.create(coreName, instanceDir.toPath(), Collections.<String, String>emptyMap(), false);
     return new EmbeddedSolrServer(coreContainer, coreName);
   }
 

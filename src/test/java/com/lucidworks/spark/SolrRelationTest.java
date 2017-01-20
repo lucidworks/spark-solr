@@ -66,6 +66,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(GENERATE_UNIQUE_KEY(), "true");
 
+      // Validate that schema fields are not loaded when no docs are present
+      Dataset noDocs = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
+      assert(noDocs.schema().length()==0);
+
       Dataset jsonDF = sparkSession.read().json(testJsonFile);
       jsonDF.write().format(Constants.SOLR_FORMAT()).options(options).save();
       SolrSupport.getCachedCloudClient(zkHost).commit(testCollection);
@@ -182,6 +186,19 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int replicationFactor = 1;
       createCollection(testCollection, numShards, replicationFactor, numShards /* maxShardsPerNode */, confName, confDir);
       validateDataFrameStoreLoad(sparkSession, testCollection, eventsDF);
+
+      // Validate that SQL works with fields that have dots
+      {
+        Map<String, String> options = new HashMap<String, String>();
+        options.put(SOLR_ZK_HOST_PARAM(), cluster.getZkServer().getZkAddress());
+        options.put(SOLR_COLLECTION_PARAM(), testCollection);
+
+        Dataset df = sparkSession.read().format("solr").options(options).load();
+        df.registerTempTable("events");
+        Row[] row = sparkSession.sql("SELECT * FROM events").take(1);
+
+        sparkSession.sql("SELECT `params.title_s` from events").take(2);
+      }
     } finally {
       deleteCollection(testCollection);
     }
@@ -247,6 +264,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
     options.put(FLATTEN_MULTIVALUED(), "false");
+    options.put(ARBITRARY_PARAMS_STRING(), "sort=id asc");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
     Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
@@ -337,19 +355,18 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       int replicationFactor = 1;
       createCollection(testCollection2, numShards, replicationFactor, 2, confName, confDir);
 
-      options = new HashMap<String, String>();
-      options.put(SOLR_ZK_HOST_PARAM(), zkHost);
-      options.put(SOLR_COLLECTION_PARAM(), testCollection2);
-      options.put(FLATTEN_MULTIVALUED(), "false");
+      HashMap<String, String> newOptions = new HashMap<String, String>();
+      newOptions.put(SOLR_ZK_HOST_PARAM(), zkHost);
+      newOptions.put(SOLR_COLLECTION_PARAM(), testCollection2);
+      newOptions.put(FLATTEN_MULTIVALUED(), "false");
 
-      assert(df.count() == 4);
-//      df.explain(true);
+      Dataset cleanDF = sparkSession.read().format("solr").options(options).load();
       log.info("Writing data to Solr");
-      df.write().format("solr").options(options).mode(SaveMode.Overwrite).save();
+
+      cleanDF.write().format("solr").options(newOptions).mode(SaveMode.Overwrite).save();
       SolrSupport.getCachedCloudClient(zkHost).commit(testCollection2);
 
       Dataset df2 = sparkSession.read().format("solr").options(options).load();
-//      df2.show();
       assert(df2.count() == 4);
     } finally {
       deleteCollection(testCollection);

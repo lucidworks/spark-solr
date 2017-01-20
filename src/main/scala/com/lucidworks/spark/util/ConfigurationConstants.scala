@@ -13,6 +13,7 @@ object ConfigurationConstants {
   val SOLR_SPLIT_FIELD_PARAM: String = "split_field"
   val SOLR_SPLITS_PER_SHARD_PARAM: String = "splits_per_shard"
   val ESCAPE_FIELDNAMES_PARAM: String = "escape_fieldnames"
+  val SKIP_NON_DOCVALUE_FIELDS: String = "skip_non_dv"
   val SOLR_DOC_VALUES: String = "dv"
   val FLATTEN_MULTIVALUED: String = "flatten_multivalued"
   @deprecated
@@ -21,6 +22,7 @@ object ConfigurationConstants {
   val USE_CURSOR_MARKS: String = "use_cursor_marks"
   val SOLR_STREAMING_EXPR: String = "expr"
   val SOLR_SQL_STMT: String = "sql"
+  val SORT_PARAM: String = "sort"
 
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
@@ -41,4 +43,7 @@ object ConfigurationConstants {
   val MAX_ACTIVE_PARTITIONS:String="max_active_partitions"
 
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
+
+  val STREAMING_EXPR_SCHEMA: String = "expr_schema"
+  val EXCLUDE_FIELDS: String = "exclude_fields"
 }
