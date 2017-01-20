@@ -15,9 +15,9 @@ toc::[]
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:2.1.0"
+./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:2.3.3"
                           or
-./bin/spark-shell --jars spark-solr-2.0.1.jar
+./bin/spark-shell --jars spark-solr-2.3.3.jar
 
 === Connect to your SolrCloud Instance
 
@@ -63,7 +63,7 @@ The released jar files (1.1.2, 2.0.0, etc..) can be downloaded from the http://s
 <dependency>
    <groupId>com.lucidworks.spark</groupId>
    <artifactId>spark-solr</artifactId>
-   <version>2.0.1</version>
+   <version>2.3.3</version>
 </dependency>
 
 ==== Snapshots
@@ -81,7 +81,7 @@ This will build 2 jars in the `target` directory:
 * `spark-solr-${VERSION}.jar`
 * `spark-solr-${VERSION}-shaded.jar`
 
-`${VERSION}` will be something like 2.1.0-SNAPSHOT, for development builds.
+`${VERSION}` will be something like 2.3.3-SNAPSHOT, for development builds.
 
 The first .jar is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
 //end::build-source[]
@@ -170,6 +170,13 @@ By default, the implementation uses 1000 rows but if your documents are smaller,
 Usage: `option("rows","10000")`
 Default: 1000
 
+==== sort
+
+You can use the `sort` option to specify how to sort results.
+
+Usage: `option("sort","id asc")`
+
+
 ==== request_handler
 
 Set the Solr request handler for queries. This option can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://cwiki.apache.org/confluence/display/solr/Exporting+Result+Sets[Exporting Result Sets] for more information.
@@ -228,31 +235,7 @@ Usage: `option("dv", "true")`
 
 Default: false
 
-=== Index parameters
-
-==== soft_commit_secs
-
-If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
-
-Usage: `option("soft_commit_secs", "10")`
-
-Default: None
-
-==== batch_size
-
-The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
-
-Usage: `option("batch_size", "10000")`
-
-Default: 500
-
-==== gen_uniq_key
-
-If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
-
-Usage: `option("gen_uniq_key", "true")`
-
-Default: false
+==== Other Options to Fine-tune Reads from Solr
 
 ==== sample_seed
 
@@ -270,6 +253,37 @@ Usage: `option("sample_pct", "0.05")`
 
 Default: 0.1
 
+==== exclude_fields
+
+The `exclude_fields` option allows you to exclude fields by name or regular expression when not using the `fields` option. When you don't specify the fields to fetch from Solr using the `fields` option, then all stored fields are retrieved. The `exclude_fields` allows you to exclude specific fields instead of listing out a large number of fields to include.
+
+Usage: `option("exclude_fields", "id,_version_,\\d_coordinate,_raw_content_")`
+
+Default: None
+
+==== expr
+
+The `expr` option allows you to specify a Solr streaming expression to execute instead of a Solr query.
+
+Usage: `option("expr", "hashJoin(search(ratings, q=*:*, qt=\"/export\", fl=\"user_id,movie_id,rating\", sort=\"movie_id asc\", partitionKeys=\"movie_id\"), hashed=search(movies, q=*:*, fl=\"movie_id,title\", qt=\"/export\", sort=\"movie_id asc\",partitionKeys=\"movie_id\"),on=\"movie_id\")")`
+
+Default: None
+
+==== expr_schema
+
+The `expr_schema` option allows you to specify the exact schema for a Solr streaming expression. By default, the library tries to determine the schema of the expression result but this option allows you to override that decision-making process.
+
+Usage: `option("expr_schema", "name:string,avg_rating:double,total_sum:long")`
+
+Default: None
+
+==== sql
+
+The `sql` option allows you to specify a Solr SQL query to execute instead of a Solr query.
+
+Usage: `option("sql", "select movie_id from movies where _query_='plot_txt_en:dogs'")`
+
+Default: None
 
 === solr.params
 
@@ -278,6 +292,9 @@ The `solr.params` option can be used to specify any arbitrary Solr parameters in
 Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
 
 === Querying Time Series Data
+
+If your Solr collections are partitioned by time, then the following options can help you read documents across
+multiple collections for a desired time-range.
 
 ==== partition_by
 
@@ -326,6 +343,32 @@ This option is used to specify the maximum number of partitions that must be all
 Usage: `option("max_active_partitions", "100")`
 
 Default: null
+
+=== Indexing Parameters
+
+==== soft_commit_secs
+
+If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
+
+Usage: `option("soft_commit_secs", "10")`
+
+Default: None
+
+==== batch_size
+
+The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
+
+Usage: `option("batch_size", "10000")`
+
+Default: 500
+
+==== gen_uniq_key
+
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
+
+Usage: `option("gen_uniq_key", "true")`
+
+Default: false
 
 //end::tuning[]
 
