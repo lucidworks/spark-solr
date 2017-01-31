@@ -17,22 +17,18 @@
 
 package com.lucidworks.spark.ml.feature
 
+import java.io.{PrintWriter, StringWriter}
+
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
-import org.apache.spark.ml.{TransformerParamsReader, HasInputColsTransformer}
-import org.apache.spark.ml.param.Param
-import org.apache.spark.sql.types.ArrayType
-import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Dataset, Row, DataFrame}
-import org.apache.spark.sql.functions._
-import org.apache.spark.annotation.{Since, Experimental}
-import org.apache.spark.ml.param._
+import org.apache.spark.annotation.Experimental
+import org.apache.spark.ml.param.{Param, _}
 import org.apache.spark.ml.util._
-import org.apache.spark.sql.types._
-
-import java.io.{PrintWriter, StringWriter}
+import org.apache.spark.ml.{HasInputColsTransformer, TransformerParamsReader}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.{ArrayType, StringType, StructType, _}
+import org.apache.spark.sql.{DataFrame, Dataset, Row}
 
 import scala.util.control.NonFatal
 
@@ -106,7 +102,9 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
     }
     analyzer.exists(_.isValid)
   }
+
   override def transformSchema(schema: StructType): StructType = {
+    validateParams()
     val fieldNames = schema.fieldNames.toSet
     $(inputCols).foreach { colName =>
       if (fieldNames.contains(colName)) {
@@ -122,10 +120,13 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
     }
     StructType(schema.fields :+ new StructField($(outputCol), outputDataType, nullable = false))
   }
+
   override def transform(dataset: Dataset[_]): DataFrame = {
     val schema = dataset.schema
     val existingInputCols = $(inputCols).filter(schema.fieldNames.contains(_))
-    val outputSchema = transformSchema(schema)
+    if (analyzer == null || (analyzer.isEmpty && analyzerInitFailure.isEmpty)) {
+      validateAnalysisSchema($(analysisSchema)) // make sure analyzer has been instantiated
+    }
     val analysisFunc = udf { row: Row =>
       if (analyzer == null || (analyzer.isEmpty && analyzerInitFailure.isEmpty)) {
         validateAnalysisSchema($(analysisSchema)) // make sure analyzer has been instantiated
@@ -146,19 +147,20 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
       seqBuilder.result()
     }
     val args = existingInputCols.map(dataset(_))
+    val outputSchema = transformSchema(schema)
     val metadata = outputSchema($(outputCol)).metadata
     val resultDF = dataset.select(col("*"), analysisFunc(struct(args: _*)).as($(outputCol), metadata))
     resultDF
   }
 
-  override def validateParams(): Unit = {
-    super.validateParams()
+  def validateParams(): Unit = {
     if (analyzer.exists(_.isValid)) {
       buildReferencedAnalyzers()
     }
     require(analyzer.exists(_.isValid),
       analyzer.map(_.invalidMessages).getOrElse(analyzerInitFailure.get))
   }
+
   private def buildReferencedAnalyzers(): Unit = {
     $(inputCols) foreach { inputCol =>
       require(analyzer.get.getFieldAnalyzer(inputCol).isDefined,
