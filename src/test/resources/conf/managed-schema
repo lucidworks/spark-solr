@@ -267,8 +267,8 @@
   <dynamicField indexed="true" name="*_tdts" stored="true" type="tdate" multiValued="true"/>
   <dynamicField indexed="true" name="*_ss" stored="true" type="string" multiValued="true"/>
   <dynamicField indexed="true" name="*_ii" stored="true" type="int" multiValued="true"/>
-  <dynamicField indexed="true" name="*_txt" stored="true" type="string" multiValued="true"/>
-  <dynamicField indexed="true" name="*_txt_en" stored="true" type="string" multiValued="true"/>
+  <dynamicField indexed="true" name="*_txt" stored="true" type="text_en" multiValued="true"/>
+  <dynamicField indexed="true" name="*_txt_en" stored="true" type="text_en" multiValued="true"/>
   <dynamicField indexed="true" name="*_ls" stored="true" type="long" multiValued="true"/>
   <dynamicField name="random_*" type="random"/>
   <uniqueKey>id</uniqueKey>
@@ -285,4 +285,20 @@
   <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0" docValues="true"/>
   <fieldType name="binary" class="solr.BinaryField"/>
   <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
+  <fieldType name="text_en" class="solr.TextField" positionIncrementGap="100">
+    <analyzer type="index">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.StopFilterFactory" words="lang/stopwords_en.txt" ignoreCase="true"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.EnglishPossessiveFilterFactory"/>
+      <filter class="solr.PorterStemFilterFactory"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.StopFilterFactory" words="lang/stopwords_en.txt" ignoreCase="true"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+      <filter class="solr.EnglishPossessiveFilterFactory"/>
+      <filter class="solr.PorterStemFilterFactory"/>
+    </analyzer>
+  </fieldType>
 </schema>

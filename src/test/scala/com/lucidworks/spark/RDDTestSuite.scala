@@ -27,7 +27,7 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     try {
       val newRDD = new SolrRDD(zkHost, collectionName, sc)
       val partitions = newRDD.partitions
-      assert(partitions.length === 4)
+      assert(partitions.length == 8)
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }

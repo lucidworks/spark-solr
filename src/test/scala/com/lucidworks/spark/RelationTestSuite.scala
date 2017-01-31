@@ -11,6 +11,21 @@ import org.apache.spark.sql.types.{TimestampType, StringType, LongType, DoubleTy
 
 class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
 
+  test("exclude_fields param") {
+    val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
+    val numRatings = buildRatingsCollection(ratingsCollection)
+
+    val ratingsDF = sparkSession.read.format("solr").options(
+      Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "exclude_fields" -> "id,*_timestamp,user*")).load
+    val schema = ratingsDF.schema
+    assert(schema.fields.length == 2)
+    assert(schema.fields(0).name == "movie_id")
+    assert(schema.fields(0).dataType == StringType)
+    assert(schema.fields(1).name == "rating")
+    assert(schema.fields(1).dataType == LongType)
+    SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
+  }
+
   test("Unknown params") {
     val paramsToCheck = Set(SOLR_ZK_HOST_PARAM, SOLR_COLLECTION_PARAM, SOLR_QUERY_PARAM, ESCAPE_FIELDNAMES_PARAM, "fl", "q")
     val unknownParams = SolrRelation.checkUnknownParams(paramsToCheck)
@@ -233,8 +248,187 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val row0 = sqlResults.get(0)
     assert(row0.getString(4) == "movie200")
 
+    // proper handling of select expression decorator
+    var selectExpr = s"""select(
+      facet(
+        ${moviesCollection},
+        q="*:*",
+        buckets="title",
+        bucketSorts="count(*) desc",
+        bucketSizeLimit=100,
+        count(*)
+      ),
+      title,
+      count(*) as the_count)"""
+    var selectExprDF =
+      sparkSession.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> moviesCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 2)
+    assert(schema.fields(0).name == "the_count")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "title")
+    assert(schema.fields(1).dataType == StringType)
+
+    var selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 2)
+    var selectExprRow0 = selectExprResults.get(0)
+    assert(selectExprRow0.getLong(0) == 1L)
+    assert(selectExprRow0.getString(1) == "Moneyball")
+    var selectExprRow1 = selectExprResults.get(1)
+    assert(selectExprRow1.getLong(0) == 1L)
+    assert(selectExprRow1.getString(1) == "The Big Short")
+
+    selectExpr = s"""select(
+      facet(
+        ${ratingsCollection},
+        q="*:*",
+        buckets="rating",
+        bucketSorts="count(*) desc",
+        bucketSizeLimit=100,
+        count(*),
+        sum(rating),
+        min(rating),
+        max(rating),
+        avg(rating)
+      ),
+      rating,
+      count(*) as the_count,
+      sum(rating) as the_sum,
+      min(rating) as the_min,
+      max(rating) as the_max,
+      avg(rating) as the_avg)
+    """
+    selectExprDF =
+      sparkSession.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 6)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    assert(schema.fields(3).name == "the_max")
+    assert(schema.fields(3).dataType == DoubleType)
+    assert(schema.fields(4).name == "the_min")
+    assert(schema.fields(4).dataType == DoubleType)
+    assert(schema.fields(5).name == "the_sum")
+    assert(schema.fields(5).dataType == DoubleType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
+    selectExpr = s"""select(
+                    |  facet(
+                    |    ${ratingsCollection},
+                    |    q="*:*",
+                    |    buckets="rating",
+                    |    bucketSorts="count(*) desc",
+                    |    bucketSizeLimit=100,
+                    |    count(*),
+                    |    sum(rating),
+                    |    min(rating),
+                    |    max(rating),
+                    |    avg(rating)
+                    |  ),
+                    |  rating,
+                    |  count(*) as the_count,
+                    |  sum(rating) as the_sum,
+                    |  min(rating) as the_min,
+                    |  max(rating) as the_max,
+                    |  avg(rating) as the_avg,
+                    |  replace(rating,5,withValue=excellent),
+                    |  replace(rating,4,withValue=good),
+                    |  replace(rating,3,withValue=avg),
+                    |  replace(rating,2,withValue=poor),
+                    |  replace(rating,1,withValue=awful)
+                    |)
+    """.stripMargin
+    selectExprDF =
+      sparkSession.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr)).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 6)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == StringType) // important, replace makes rating a string
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    assert(schema.fields(3).name == "the_max")
+    assert(schema.fields(3).dataType == DoubleType)
+    assert(schema.fields(4).name == "the_min")
+    assert(schema.fields(4).dataType == DoubleType)
+    assert(schema.fields(5).name == "the_sum")
+    assert(schema.fields(5).dataType == DoubleType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
+    // test user-supplied schema
+    selectExpr = s"""select(
+                    |  facet(
+                    |    ${ratingsCollection},
+                    |    q="*:*",
+                    |    buckets="rating",
+                    |    bucketSorts="count(*) desc",
+                    |    bucketSizeLimit=100,
+                    |    count(*),
+                    |    sum(rating),
+                    |    min(rating),
+                    |    max(rating),
+                    |    avg(rating)
+                    |  ),
+                    |  rating,
+                    |  count(*) as the_count,
+                    |  avg(rating) as the_avg,
+                    |  replace(rating,5,withValue=excellent),
+                    |  replace(rating,4,withValue=good),
+                    |  replace(rating,3,withValue=avg),
+                    |  replace(rating,2,withValue=poor),
+                    |  replace(rating,1,withValue=awful)
+                    |)
+    """.stripMargin
+    selectExprDF =
+      sparkSession.read.format("solr").options(Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "expr" -> selectExpr,
+        "expr_schema" -> "rating:string,the_avg:double,the_count:long")).load
+    selectExprDF.printSchema()
+    schema = selectExprDF.schema
+    assert(schema.fields.length == 3)
+    assert(schema.fields(0).name == "rating")
+    assert(schema.fields(0).dataType == StringType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "the_count")
+    assert(schema.fields(2).dataType == LongType)
+    selectExprResults = selectExprDF.collectAsList()
+    assert(selectExprResults.size() == 4)
+
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
+    SolrCloudUtil.deleteCollection(moviesCollection, cluster)
+  }
+
+  test("Skip Non DocValue fields config option") {
+    val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
+    buildMoviesCollectionWithText(moviesCollection)
+
+    {
+      val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "true")
+      val df = sparkSession.read.format("solr").options(opts).load()
+      val schema = df.schema
+      assert(schema.fields.length == 3)
+      assert(schema.fieldNames.toSet  == Set("id", "movie_id", "title"))
+    }
+
+    {
+      val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "false")
+      val df = sparkSession.read.format("solr").options(opts).load()
+      val schema = df.schema
+      assert(schema.fields.length == 4)
+      assert(schema.fieldNames.toSet == Set("id", "movie_id",  "title_txt", "title"))
+    }
+
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
   }
 
@@ -286,5 +480,30 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     indexRatingsRequest.commit(cloudClient, ratingsCollection)
 
     return ratingDocs.length
+  }
+
+
+  def buildMoviesCollectionWithText(moviesCollection: String) : Int = {
+    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
+
+    val movieDocs : Array[String] = Array(
+      UUID.randomUUID().toString+",movie200,The Big Short",
+      UUID.randomUUID().toString+",movie201,Moneyball"
+    )
+    val indexMoviesRequest = new UpdateRequest()
+    movieDocs.foreach(row => {
+      val fields = row.split(",")
+      val doc = new SolrInputDocument()
+      doc.setField("id", fields(0))
+      doc.setField("movie_id", fields(1))
+      doc.setField("title", fields(2))
+      doc.setField("title_txt", fields(2))
+      indexMoviesRequest.add(doc)
+      doc
+    })
+    indexMoviesRequest.process(cloudClient, moviesCollection)
+    indexMoviesRequest.commit(cloudClient, moviesCollection)
+
+    return movieDocs.length
   }
 }

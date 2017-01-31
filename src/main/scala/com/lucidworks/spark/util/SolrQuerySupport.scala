@@ -182,6 +182,9 @@ object SolrQuerySupport extends LazyLogging {
       if (cursorMark != null) {
         solrQuery.setStart(0)
         solrQuery.set("cursorMark", cursorMark)
+        if (solrQuery.get("sort") == null || solrQuery.get("sort").isEmpty) {
+          addDefaultSort(solrQuery, QueryConstants.DEFAULT_REQUIRED_FIELD)
+        }
       } else {
         solrQuery.setStart(startIndex)
       }
@@ -264,9 +267,9 @@ object SolrQuerySupport extends LazyLogging {
   def getFieldTypes(fields: Set[String], solrUrl: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
-    val fieldNames = if (fields == null || fields.isEmpty) getFieldsFromLuke(solrUrl) else fields
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fieldNames)
-    fieldDefinitionsFromSchema.foreach {
+    logger.debug("Get field types for fields: {} ", fields.mkString(","))
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq)
+    fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
       case(name, payloadRef) =>
       payloadRef match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
@@ -358,32 +361,45 @@ object SolrQuerySupport extends LazyLogging {
     fieldTypeMap.toMap
   }
 
-  def getFieldDefinitionsFromSchema(solrUrl: String, fieldNames: Set[String]): Map[String, Any] = {
-    val fl: Option[String] = if (fieldNames.nonEmpty) {
-      val sb = new StringBuilder
-      sb.append("&fl=")
-      fieldNames.zipWithIndex.foreach{ case(name, index) =>
-        sb.append(name)
-        if (index < fieldNames.size) sb.append(",")
-      }
-      Some(sb.toString())
-    } else None
-
+  /**
+   * Do multiple requests if the length of url exceeds limit size (2048).
+   * We need this to retrieve schema of dynamic fields
+   * @param solrUrl
+   * @param fieldNames
+   * @param fieldDefs
+   * @return
+   */
+  def getFieldDefinitionsFromSchema(
+      solrUrl: String,
+      fieldNames: Seq[String],
+      fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
-    val flList = fl.getOrElse("")
-    if (flList.length > (2048 - fieldsUrlBase.length)) {
-      val fieldDefs = scala.collection.mutable.HashMap.empty[String,Any]
-      // go get all fields from Solr and then prune from there
-      val allFields = fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
-      fieldNames.foreach(fname => {
-        if (allFields.containsKey(fname)) {
-          fieldDefs.put(fname, allFields.get(fname).get)
-        }
-      })
-      fieldDefs.toMap
-    } else {
-      fetchFieldSchemaInfoFromSolr(fieldsUrlBase+flList)
+    logger.debug("Requesting schema for fields: {} ", fieldNames.mkString(","))
+
+    if (fieldNames.isEmpty && fieldDefs.isEmpty)
+      return fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
+
+    if (fieldNames.isEmpty && fieldDefs.nonEmpty)
+      return fieldDefs
+
+    val allowedUrlLimit = 2048 - fieldsUrlBase.length
+    var flLength = 0
+    val sb = new StringBuilder()
+    sb.append("&fl=")
+
+    for (i <- fieldNames.indices) {
+      val fieldName = fieldNames(i)
+      if (flLength + fieldName.length + 1 < allowedUrlLimit) {
+        sb.append(fieldName)
+        if (i < fieldNames.size) sb.append(",")
+        flLength = flLength + fieldName.length + 1
+      } else {
+        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
+        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), defs ++ fieldDefs)
+      }
     }
+    val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
+    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, defs ++ fieldDefs)
   }
 
   def fetchFieldSchemaInfoFromSolr(fieldsUrl: String) : Map[String, Any] = {
@@ -632,7 +648,7 @@ object SolrQuerySupport extends LazyLogging {
       pivotFields: Array[PivotField],
       solrRDD: SolrRDD,
       escapeFieldNames: Boolean): DataFrame = {
-    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, true)
+    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, true, false)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {
@@ -696,4 +712,25 @@ object SolrQuerySupport extends LazyLogging {
     listOfFields.toList
   }
 
+  def getMaxVersion(solrClient: SolrClient, collection: String, solrQuery: SolrQuery, fieldName: String): Option[Long] = {
+
+    // Do not do this for collection aliases
+    if (collection.split(",").length > 1)
+      return None
+
+    val statsQuery = solrQuery.getCopy()
+    statsQuery.setRows(1)
+    statsQuery.setStart(0)
+    statsQuery.remove("cursorMark")
+    statsQuery.remove("distrib")
+    statsQuery.setFields(fieldName)
+    statsQuery.setSort(fieldName, SolrQuery.ORDER.desc)
+    val qr: QueryResponse = solrClient.query(collection, statsQuery, SolrRequest.METHOD.POST)
+    if (qr.getResults.getNumFound != 0) {
+      val maxO = qr.getResults.get(0).getFirstValue(fieldName)
+      val max = java.lang.Long.parseLong(maxO.toString)
+      return Some(max)
+    }
+    None
+  }
 }

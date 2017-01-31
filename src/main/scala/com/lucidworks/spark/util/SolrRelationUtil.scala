@@ -33,20 +33,38 @@ object SolrRelationUtil extends LazyLogging {
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued)
+      flattenMultivalued: Boolean,
+      skipNonDocValueFields: Boolean): StructType =
+    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields)
 
   def getBaseSchema(
       fields: Set[String],
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean): StructType = {
+      flattenMultivalued: Boolean,
+      skipNonDocValueFields: Boolean): StructType = {
+    // If the collection is empty (no documents), return an empty schema
+    if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
+      return new StructType()
+
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
-    val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
+    val solrUrl = solrBaseUrl + collection + "/"
+    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl)
+    logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
+    if (fieldsFromLuke.isEmpty)
+      return new StructType()
+
+    val fieldTypeMap =
+      if (fields.isEmpty)
+        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl)
+      else
+        SolrQuerySupport.getFieldTypes(fields, solrUrl)
+    logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
-    fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
+    // Retain the keys that are present in the Luke handler
+    fieldTypeMap.filterKeys(f => fieldsFromLuke.contains(f)).foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
         if (fieldMeta.fieldTypeClass.isDefined) {
@@ -87,7 +105,15 @@ object SolrRelationUtil extends LazyLogging {
 
       val name = if (escapeFields) fieldName.replaceAll("\\.", "_") else fieldName
 
-      structFields.add(DataTypes.createStructField(name, dataType, !fieldMeta.isRequired.getOrElse(false), metadata.build()))
+      val structField = DataTypes.createStructField(name, dataType, !fieldMeta.isRequired.getOrElse(false), metadata.build())
+      if (skipNonDocValueFields) {
+        if (structField.metadata.contains("docValues") && structField.metadata.getBoolean("docValues")) {
+          structFields.add(structField)
+        }
+      } else {
+        structFields.add(structField)
+      }
+
    }
 
     DataTypes.createStructType(structFields.toList)

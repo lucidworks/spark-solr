@@ -38,7 +38,8 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
     <spark.version>2.0.1</spark.version>
-    <solr.version>6.2.1</solr.version>
+    <solr.version>6.3.0</solr.version>
+    <fasterxml.version>2.4.0</fasterxml.version>
     <scala.version>2.11.8</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
@@ -256,7 +257,7 @@
                   <exclude>org.apache.spark:spark-core_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-streaming_${scala.binary.version}</exclude>
                   <exclude>org.apache.spark:spark-hive_${scala.binary.version}</exclude>
-                  <exclude>org.apache.derby</exclude>
+                  <exclude>org.apache.derby:*</exclude>
                   <exclude>org.apache.hadoop:*</exclude>
                   <exclude>com.google.protobuf_spark:*</exclude>
                   <exclude>com.twitter:chill_${scala.binary.version}</exclude>

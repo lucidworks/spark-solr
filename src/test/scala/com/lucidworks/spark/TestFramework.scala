@@ -99,6 +99,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
   override def beforeAll(): Unit = {
     super.beforeAll()
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, numShards, cloudClient, sc)
+    EventsimUtil.defineTextFields(cloudClient, collectionName)
     EventsimUtil.loadEventSimDataSet(zkHost, collectionName, sparkSession)
   }
 
