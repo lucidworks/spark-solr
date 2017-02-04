@@ -18,7 +18,6 @@ import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.solr.SolrSparkSession
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
@@ -52,7 +51,7 @@ class SolrRelation(
   var collection = conf.getCollection.getOrElse({
     var coll = Option.empty[String]
     if (conf.getSqlStmt.isDefined) {
-      val collectionFromSql = SolrSparkSession.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+      val collectionFromSql = SolrRelation.findSolrCollectionNameInSql(conf.getSqlStmt.get)
       if (collectionFromSql.isDefined) {
         coll = collectionFromSql
       }
@@ -405,13 +404,7 @@ class SolrRelation(
   override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
-
-    sparkSession match {
-      case solrSparkSession: SolrSparkSession =>
-        solrSparkSession.checkReadAccess(collection, "solr")
-      case _ =>
-    }
-
+    
     logger.info("buildScan: push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
 
     val query = initialQuery.getCopy
@@ -729,6 +722,18 @@ class SolrRelation(
 }
 
 object SolrRelation extends LazyLogging {
+
+  val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
+
+  def findSolrCollectionNameInSql(sqlText: String): Option[String] = {
+    val collectionIdMatcher = solrCollectionInSqlPattern.matcher(sqlText)
+    if (!collectionIdMatcher.find()) {
+      logger.warn(s"No push-down to Solr! Cannot determine collection name from Solr SQL query: ${sqlText}")
+      return None
+    }
+    Some(collectionIdMatcher.group(1))
+  }
+
   def checkUnknownParams(keySet: Set[String]): Set[String] = {
     var knownParams = Set.empty[String]
     var unknownParams = Set.empty[String]
