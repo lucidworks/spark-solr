@@ -12,6 +12,7 @@
   <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
   <field name="rating_timestamp" indexed="true" stored="true" type="tdate" docValues="true"/>
   <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
+  <field name="title_text" indexed="true" stored="true" type="text_general"/>
 
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_01" type="string" indexed="true" stored="true" docValues="true" />
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_02" type="string" indexed="true" stored="true" docValues="true" />
@@ -267,8 +268,8 @@
   <dynamicField indexed="true" name="*_tdts" stored="true" type="tdate" multiValued="true"/>
   <dynamicField indexed="true" name="*_ss" stored="true" type="string" multiValued="true"/>
   <dynamicField indexed="true" name="*_ii" stored="true" type="int" multiValued="true"/>
-  <dynamicField indexed="true" name="*_txt" stored="true" type="string" multiValued="true"/>
-  <dynamicField indexed="true" name="*_txt_en" stored="true" type="string" multiValued="true"/>
+  <dynamicField indexed="true" name="*_txt" stored="true" type="text_general" multiValued="true"/>
+  <dynamicField indexed="true" name="*_txt_en" stored="true" type="text_general" multiValued="true"/>
   <dynamicField indexed="true" name="*_ls" stored="true" type="long" multiValued="true"/>
   <dynamicField name="random_*" type="random"/>
   <uniqueKey>id</uniqueKey>
@@ -285,4 +286,14 @@
   <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0" docValues="true"/>
   <fieldType name="binary" class="solr.BinaryField"/>
   <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
+  <fieldType name="text_general" class="solr.TextField" positionIncrementGap="100" multiValued="true">
+    <analyzer type="index">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+    </analyzer>
+    <analyzer type="query">
+      <tokenizer class="solr.StandardTokenizerFactory"/>
+      <filter class="solr.LowerCaseFilterFactory"/>
+    </analyzer>
+  </fieldType>
 </schema>

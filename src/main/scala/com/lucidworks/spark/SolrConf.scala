@@ -65,6 +65,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def skipNonDocValueFields: Option[Boolean] = {
+    if (config.contains(SKIP_NON_DOCVALUE_FIELDS) && config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) {
+      return Some(config.get(SKIP_NON_DOCVALUE_FIELDS).get.toBoolean)
+    }
+    None
+  }
+
   def docValues: Option[Boolean] = {
     if (config.contains(SOLR_DOC_VALUES) && config.get(SOLR_DOC_VALUES).isDefined) {
       return Some(config.get(SOLR_DOC_VALUES).get.toBoolean)

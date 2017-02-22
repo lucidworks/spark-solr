@@ -33,15 +33,17 @@ object SolrRelationUtil extends LazyLogging {
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued)
+      flattenMultivalued: Boolean,
+      skipNonDocValueFields: Boolean): StructType =
+    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields)
 
   def getBaseSchema(
       fields: Set[String],
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean): StructType = {
+      flattenMultivalued: Boolean,
+      skipNonDocValueFields: Boolean): StructType = {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val fieldTypeMap = SolrQuerySupport.getFieldTypes(fields, solrBaseUrl, collection)
     val structFields = new ListBuffer[StructField]
@@ -87,7 +89,14 @@ object SolrRelationUtil extends LazyLogging {
 
       val name = if (escapeFields) fieldName.replaceAll("\\.", "_") else fieldName
 
-      structFields.add(DataTypes.createStructField(name, dataType, !fieldMeta.isRequired.getOrElse(false), metadata.build()))
+      val structField = DataTypes.createStructField(name, dataType, !fieldMeta.isRequired.getOrElse(false), metadata.build())
+      if (skipNonDocValueFields) {
+        if (structField.metadata.contains("docValues") && structField.metadata.getBoolean("docValues")) {
+          structFields.add(structField)
+        }
+      } else {
+        structFields.add(structField)
+      }
    }
 
     DataTypes.createStructType(structFields.toList)
