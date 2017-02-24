@@ -1,16 +1,15 @@
 package com.lucidworks.spark
 
-import java.util.{Collections, Locale}
+import java.security.AccessControlException
+import java.util.Locale
 import java.util.regex.{Matcher, Pattern}
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.sql.{SQLContext, DataFrame}
 import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.{Logging, SparkContext}
-
-import java.security.AccessControlException
 
 import scala.collection.JavaConversions.mapAsScalaMap
 
@@ -127,7 +126,7 @@ class SolrSQLHiveContext(sparkContext: SparkContext,
     }
 
     // Determine if the columns in the query are compatible with Solr SQL
-    val cols = SolrSQLHiveContext.parseColumns(sqlText).getOrElse(return sqlText)
+    val cols = SolrSQLHiveContext.parseColumns(solrQueryStmt).getOrElse(return sqlText)
     logDebug("Parsed columns: " + cols)
     logInfo(s"Attempting to push-down sub-query into Solr: ${solrQueryStmt}")
 

@@ -170,45 +170,56 @@ class SolrRelation(
         exprSchema
       } else if (initialQuery.getRequestHandler == QT_SQL) {
         val sqlStmt = initialQuery.get(SOLR_SQL_STMT)
+        val fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
         logInfo(s"Determining schema for Solr SQL: ${sqlStmt}")
+        if (conf.getSolrSQLSchema.isDefined) {
+          val solrSQLSchema = conf.getSolrSQLSchema.get
+          log.info(s"Using '$solrSQLSchema' from config property '$SOLR_SQL_SCHEMA' to compute the SQL schema")
+          solrSQLSchema.split(',').foreach(f => {
+            val pair : Array[String] = f.split(':')
+            fieldSet.add(new StructField(pair.apply(0), DataType.fromJson("\""+pair.apply(1)+"\"")))
+          })
+        } else {
+          val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
+          baseSchema = Some(allFieldsSchema)
+          val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
+          logInfo(s"Parsed SQL fields: ${sqlColumns}")
+          if (sqlColumns.isEmpty)
+            throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
 
-        val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
-        baseSchema = Some(allFieldsSchema)
+          sqlColumns.foreach((kvp) => {
+            var lower = kvp._1.toLowerCase
+            var col = kvp._2
+            if (lower.startsWith("count(")) {
+              fieldSet.add(new StructField(kvp._2, LongType))
+            } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
+              fieldSet.add(new StructField(kvp._2, DoubleType))
 
-        var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
-
-        val sqlColumns = SolrSQLSupport.parseColumns(sqlStmt).asScala
-        logInfo(s"Parsed SQL fields: ${sqlColumns}")
-        if (sqlColumns.isEmpty)
-          throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
-
-        sqlColumns.foreach((kvp) => {
-          var lower = kvp._1.toLowerCase
-          var col = kvp._2
-          if (lower.startsWith("count(")) {
-            fieldSet.add(new StructField(kvp._2, LongType))
-          } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
-            fieldSet.add(new StructField(kvp._2, DoubleType))
-
-            // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
-            // based on the aggregation mode used to execute the SQL statement
-            var promoteFields = initialQuery.get("promote_to_double")
-            if (promoteFields == null) {
-              promoteFields = kvp._2
-              initialQuery.set("promote_to_double", promoteFields)
+              // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
+              // based on the aggregation mode used to execute the SQL statement
+              var promoteFields = initialQuery.get("promote_to_double")
+              if (promoteFields == null) {
+                promoteFields = kvp._2
+                initialQuery.set("promote_to_double", promoteFields)
+              } else {
+                initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
+              }
+            }  else if (col.equals("score")) {
+              fieldSet.add(new StructField(col, DoubleType))
             } else {
-              initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
+              if (allFieldsSchema.fieldNames.contains(kvp._2)) {
+                val existing = allFieldsSchema.fields(allFieldsSchema.fieldIndex(kvp._2))
+                fieldSet.add(existing)
+                logDebug(s"Found existing field ${kvp._2}: ${existing}")
+              } else {
+                fieldSet.add(new StructField(kvp._2, StringType))
+              }
             }
-          } else {
-            if (allFieldsSchema.fieldNames.contains(kvp._2)) {
-              val existing = allFieldsSchema.fields(allFieldsSchema.fieldIndex(kvp._2))
-              fieldSet.add(existing)
-              logDebug(s"Found existing field ${kvp._2}: ${existing}")
-            } else {
-              fieldSet.add(new StructField(kvp._2, StringType))
-            }
-          }
-        })
+          })
+        }
+        if (fieldSet.isEmpty) {
+          throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + sqlStmt)
+        }
         val sqlSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
         logInfo(s"Created schema ${sqlSchema} for SQL: ${sqlStmt}")
         sqlSchema
