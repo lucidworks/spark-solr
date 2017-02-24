@@ -234,6 +234,11 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def getSolrSQLSchema: Option[String] = {
+    if (config.contains(SOLR_SQL_SCHEMA) && config.get(SOLR_SQL_SCHEMA).isDefined) return config.get(SOLR_SQL_SCHEMA)
+    None
+  }
+
   def getExcludeFields: Option[String] = {
     if (config.contains(EXCLUDE_FIELDS) && config.get(EXCLUDE_FIELDS).isDefined) return config.get(EXCLUDE_FIELDS)
     None
