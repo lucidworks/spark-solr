@@ -6,11 +6,17 @@ import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;
+import org.apache.solr.client.solrj.request.schema.SchemaRequest;
+import org.apache.solr.client.solrj.response.schema.SchemaResponse;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
 
 import java.sql.Timestamp;
 import java.util.HashMap;
+import java.util.Collections;
+import java.util.Map;
 
 public class EventsimUtil {
   static final Logger log = Logger.getLogger(EventsimUtil.class);
@@ -28,7 +34,6 @@ public class EventsimUtil {
 
     df.registerTempTable("jdbcDF");
     sparkSession.udf().register("ts2iso", new UDF1<Long, Timestamp>() {
-
       public Timestamp call(Long ts) {
         return asDate(ts);
       }
@@ -44,7 +49,7 @@ public class EventsimUtil {
     options.put("collection", collectionName);
     options.put(ConfigurationConstants.GENERATE_UNIQUE_KEY(), "true");
 
-    log.info("Indexing eventsim documents from file " + datasetPath);
+    newDF = newDF.withColumn("artist_txt", df.col("artist"));
     newDF.write().format("solr").options(options).mode(org.apache.spark.sql.SaveMode.Overwrite).save();
 
     CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
@@ -54,6 +59,26 @@ public class EventsimUtil {
     if (!(docsInSolr == 1000)) {
       throw new Exception("All eventsim documents did not get indexed. Expected '1000'. Actual docs in Solr '" + docsInSolr + "'");
     }
+  }
+
+  public static void defineTextFields(CloudSolrClient solrCloud, String collection) throws Exception {
+    Map<String, Object> fieldParams = new HashMap<>();
+    fieldParams.put("name", "artist_txt");
+    fieldParams.put("indexed", "true");
+    fieldParams.put("stored", "true");
+    fieldParams.put("multiValued", "false");
+    fieldParams.put("type", "text_en");
+    ModifiableSolrParams solrParams = new ModifiableSolrParams();
+    solrParams.add("updateTimeoutSecs", "30");
+    SchemaRequest.AddField addField = new SchemaRequest.AddField(fieldParams);
+    SchemaRequest.MultiUpdate addFieldsMultiUpdate = new SchemaRequest.MultiUpdate(Collections.singletonList(addField), solrParams);
+
+    // Add the fields using SolrClient
+    SchemaResponse.UpdateResponse response = addFieldsMultiUpdate.process(solrCloud, collection);
+    if (response.getStatus() > 400) {
+      throw new SolrException(SolrException.ErrorCode.getErrorCode(response.getStatus()), "Error indexing fields to the Schema");
+    }
+    log.info("Added new field 'artist_txt' to Solr schema for collection" + collection);
   }
 
   private static Timestamp asDate(Object tsObj) {

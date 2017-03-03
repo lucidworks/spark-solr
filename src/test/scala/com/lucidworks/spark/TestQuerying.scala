@@ -2,22 +2,18 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.spark.sql.SaveMode.Overwrite
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
 
 class TestQuerying extends TestSuiteBuilder {
 
   test("vary queried columns") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
-    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName)
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
@@ -27,38 +23,24 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
-      // Test to make sure sort param is being applied to the query
-      {
-        val solrDF1 = sparkSession.read.format("solr").options(solrOpts).option(ConfigurationConstants.ARBITRARY_PARAMS_STRING, "sort=id asc").load()
-        val rows = solrDF1.collect()
-        val idFieldIndex = solrDF1.schema.fieldIndex("id")
-        rows.zipWithIndex.foreach{ case(row,i) => {
-          assert(row.get(idFieldIndex).equals(Integer.toString(i+1)))
-        }}
-      }
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
 
+
   test("vary queried columns with fields option") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "solr.params" -> "fl=id,one_txt,two_txt")
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
@@ -89,13 +71,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 2, cloudClient, sc)
     SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 2, cloudClient, sc)
     try {
-      val csvFileLocation = "src/test/resources/test-data/simple.csv"
-      val csvDF = sparkSession.read.format("com.databricks.spark.csv")
-        .option("header", "true")
-        .option("inferSchema", "true")
-        .load(csvFileLocation)
-      assert(csvDF.count == 3)
-
+      val csvDF = buildTestData()
       val solrOpts_writing1 = Map("zkhost" -> zkHost, "collection" -> collection1Name)
       val solrOpts_writing2 = Map("zkhost" -> zkHost, "collection" -> collection2Name)
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> s"$collection1Name,$collection2Name")
@@ -111,11 +87,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 6)
-      assert(solrDF.schema.fields.length === 6) // id one_txt two_txt three_s _version_ _indexed_at_tdt
+      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 6)
+      assert(firstRow.size === 4)
       firstRow.foreach(col => assert(col != null))            // no missing values
     } finally {
       SolrCloudUtil.deleteCollection(collection1Name, cluster)
@@ -124,5 +100,21 @@ class TestQuerying extends TestSuiteBuilder {
   }
 
 
+  def buildTestData() : DataFrame = {
+    val testDataSchema : StructType = StructType(
+      StructField("id", IntegerType, true) ::
+        StructField("one_txt", StringType, false) ::
+        StructField("two_txt", StringType, false) ::
+        StructField("three_s", StringType, false) :: Nil)
 
+    val rows = Seq(
+      Row(1, "A", "B", "C"),
+      Row(2, "C", "D", "E"),
+      Row(3, "F", "G", "H")
+    )
+
+    val csvDF : DataFrame = sparkSession.createDataFrame(sparkSession.sparkContext.makeRDD(rows, 1), testDataSchema)
+    assert(csvDF.count == 3)
+    return csvDF
+  }
 }

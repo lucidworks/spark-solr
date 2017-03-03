@@ -9,10 +9,7 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
 
@@ -54,15 +51,15 @@ public class SolrSqlTest extends RDDProcessorTestBase{
         assert records.count() == 1000;
 
         String[] fieldNames = schema.fieldNames();
-        // list of fields that are present in src/test/resources/eventsim/fields_schema.json
-        assert fieldNames.length == 19 + 1 + 1; // extra fields are id and _version_
+        // list of fields that are indexed from {@code EventsimUtil#loadEventSimDataSet}
+        assert fieldNames.length == 20; // 18 fields from the file + 1 extra artist_txt field  + 1 for the id field
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
         Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert ((Row) rows.get(0)).length() == 21;
+        assert ((Row) rows.get(0)).length() == 20;
       }
 
       // Filter using SQL syntax and escape field names
@@ -87,8 +84,6 @@ public class SolrSqlTest extends RDDProcessorTestBase{
     } finally {
       deleteCollection(testCollectionName);
     }
-
-
   }
 
   @Test(expected=IllegalArgumentException.class)

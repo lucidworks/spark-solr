@@ -207,6 +207,11 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def getSort: Option[String] = {
+    if (config.contains(SORT_PARAM) && config.get(SORT_PARAM).isDefined) return config.get(SORT_PARAM)
+    None
+  }
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
@@ -223,4 +228,27 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     solrParams
   }
+
+  def getStreamingExpressionSchema: Option[String] = {
+    if (config.contains(STREAMING_EXPR_SCHEMA) && config.get(STREAMING_EXPR_SCHEMA).isDefined) return config.get(STREAMING_EXPR_SCHEMA)
+    None
+  }
+
+  def getSolrSQLSchema: Option[String] = {
+    if (config.contains(SOLR_SQL_SCHEMA) && config.get(SOLR_SQL_SCHEMA).isDefined) return config.get(SOLR_SQL_SCHEMA)
+    None
+  }
+
+  def getExcludeFields: Option[String] = {
+    if (config.contains(EXCLUDE_FIELDS) && config.get(EXCLUDE_FIELDS).isDefined) return config.get(EXCLUDE_FIELDS)
+    None
+  }
+
+  def skipNonDocValueFields: Option[Boolean] = {
+    if (config.contains(SKIP_NON_DOCVALUE_FIELDS) && config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) {
+      return Some(config.get(SKIP_NON_DOCVALUE_FIELDS).get.toBoolean)
+    }
+    None
+  }
+
 }

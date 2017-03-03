@@ -12,7 +12,7 @@ import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.lucidworks.spark.filter.DocFilterContext
-import com.lucidworks.spark.query.{ShardSplit, StringFieldShardSplitStrategy, NumberFieldShardSplitStrategy, ShardSplitStrategy}
+import com.lucidworks.spark.query._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
@@ -22,7 +22,6 @@ import org.apache.solr.client.solrj.impl._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{DataTypes, DataType}
 import org.apache.spark.streaming.dstream.DStream
 
 import scala.collection.mutable
@@ -30,7 +29,6 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import scala.collection.JavaConversions._
 import util.control.Breaks._
-
 
 object CacheSolrClient {
   private val loader = new CacheLoader[String, CloudSolrClient]() {
@@ -59,16 +57,11 @@ object CacheSolrClient {
 object SolrSupport extends LazyLogging {
 
   def setupKerberosIfNeeded(): Unit = synchronized {
-   val solrJaasAuthConfig: Option[String] = Some(System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP))
-   if (solrJaasAuthConfig.isDefined) {
-     val configurer: Option[HttpClientConfigurer] = Some(HttpClientUtil.getConfigurer)
-     if (configurer.isDefined) {
-       if (!configurer.get.isInstanceOf[Krb5HttpClientConfigurer]) {
-         HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer)
-         logger.info("Installed the Krb5HttpClientConfigurer for Solr security using config: " + solrJaasAuthConfig)
-       }
-     }
-   }
+    val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
+    if (loginProp != null && !loginProp.isEmpty) {
+      HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
+      logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+    }
   }
 
   def getHttpSolrClient(shardUrl: String): HttpSolrClient = {
@@ -164,11 +157,9 @@ object SolrSupport extends LazyLogging {
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
       val batch = new ArrayBuffer[SolrInputDocument]()
-      val indexedAt: Date = new Date()
       var numDocs = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
-        doc.setField("_indexed_at_tdt", indexedAt)
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
@@ -507,47 +498,8 @@ object SolrSupport extends LazyLogging {
       splitFieldName: String,
       splitsPerShard: Int): List[ShardSplit[_]] = {
 
-    var fieldDataType: Option[DataType] = None
-    if ("_version_".equals(splitFieldName)) {
-      fieldDataType = Some(DataTypes.LongType)
-    } else {
-      // Get the field type of split field
-      val fieldMetaMap = SolrQuerySupport.getFieldTypes(Set(splitFieldName), SolrRDD.randomReplicaLocation(solrShard))
-      val solrFieldMeta = fieldMetaMap.get(splitFieldName)
-      if (solrFieldMeta.isDefined) {
-        val fieldTypeClass  = solrFieldMeta.get.fieldTypeClass
-        if (fieldTypeClass.isDefined) {
-          fieldDataType = SolrQuerySupport.SOLR_DATA_TYPES.get(fieldTypeClass.get)
-        } else
-          fieldDataType = Some(DataTypes.StringType)
-      } else {
-        logger.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
-        fieldDataType = Some(DataTypes.StringType)
-      }
-    }
-    if (fieldDataType.isEmpty) {
-      throw new IllegalArgumentException("Cannot determine DataType for split field " + splitFieldName)
-    }
-
-    getSplits(fieldDataType.get, splitFieldName, splitsPerShard, query, solrShard)
+    val hashSplitStrategy = new HashQParserShardSplitStrategy(solrShard)
+    logger.debug(s"Creating $splitsPerShard splits using field $splitFieldName for $solrShard")
+    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
   }
-
-  def getSplits(fd: DataType, sF: String, sPS: Int, query: SolrQuery, shard: SolrShard): List[ShardSplit[_]]= {
-    var splitStrategy: Option[ShardSplitStrategy] = None
-
-    if (fd.equals(DataTypes.LongType) || fd.equals(DataTypes.IntegerType)) {
-      splitStrategy = Some(new NumberFieldShardSplitStrategy)
-    } else if (fd.equals(DataTypes.StringType)) {
-      splitStrategy = Some(new StringFieldShardSplitStrategy)
-    } else {
-      throw new IllegalArgumentException("Can only split shards on fields of type: long, int or String!")
-    }
-
-    if (splitStrategy.isDefined) {
-      splitStrategy.get.getSplits(SolrRDD.randomReplicaLocation(shard), query, sF, sPS).toList
-    } else {
-      throw new IllegalArgumentException("No split strategy found for DataType '" + fd + "'")
-    }
-  }
-
 }

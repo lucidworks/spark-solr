@@ -87,7 +87,7 @@ class EventsimIndexer extends RDDProcessor {
           if (obj != null) {
             var colValue = obj
             val fieldName = next.schema.fieldNames(c)
-            if ("ts" == fieldName) {
+            if ("ts" == fieldName || "registration" == fieldName) {
               ts = obj.asInstanceOf[Long]
               val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
               cal.setTimeInMillis(ts)
