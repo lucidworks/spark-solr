@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <config>
-  <luceneMatchVersion>6.3.0</luceneMatchVersion>
+  <luceneMatchVersion>6.4.2</luceneMatchVersion>
   <dataDir>${solr.data.dir:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.NRTCachingDirectoryFactory}"/>
   <codecFactory class="solr.SchemaCodecFactory"/>
@@ -65,23 +65,6 @@
      <lst name="defaults">
        <int name="rows">10</int>
      </lst>
-  </requestHandler>
-
-  <!--
-   The export request handler is used to export full sorted result sets.
-   Do not change these defaults.
-  -->
-
-  <requestHandler name="/export" class="solr.SearchHandler">
-    <lst name="invariants">
-      <str name="rq">{!xport}</str>
-      <str name="wt">xsort</str>
-      <str name="distrib">false</str>
-    </lst>
-
-    <arr name="components">
-      <str>query</str>
-    </arr>
   </requestHandler>
 
   <requestHandler name="/query" class="solr.SearchHandler">
