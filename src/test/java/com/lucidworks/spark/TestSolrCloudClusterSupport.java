@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
@@ -91,7 +92,7 @@ public class TestSolrCloudClusterSupport {
     cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
             testWorkingDir.toPath(), solrXmlContents, extraServlets, null);
 
-    cloudSolrServer = new CloudSolrClient(cluster.getZkServer().getZkAddress(), true);
+    cloudSolrServer = new CloudSolrClient.Builder().withZkHost(cluster.getZkServer().getZkAddress()).sendUpdatesOnlyToShardLeaders().build();
     cloudSolrServer.connect();
 
     assertTrue(!cloudSolrServer.getZkStateReader().getClusterState().getLiveNodes().isEmpty());
@@ -123,7 +124,7 @@ public class TestSolrCloudClusterSupport {
 
   protected static void deleteCollection(String collectionName) {
     try {
-      cluster.deleteCollection(collectionName);
+      CollectionAdminRequest.deleteCollection(collectionName);
     } catch (Exception exc) {
       log.error("Failed to delete collection '"+collectionName+"' due to: "+exc);
     }

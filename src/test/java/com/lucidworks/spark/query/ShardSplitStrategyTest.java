@@ -98,7 +98,7 @@ public class ShardSplitStrategyTest extends RDDProcessorTestBase {
 
   @Test
   public void testSplitStrategyEmptyCollection() throws Exception {
-    String collection = "testStringSplit";
+    String collection = "testStringSplit2";
     try {
       String zkHost = cluster.getZkServer().getZkAddress();
       SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
