@@ -1,10 +1,8 @@
 package com.lucidworks.spark.query;
 
-import org.apache.solr.common.SolrDocument;
-
 import java.util.Iterator;
 
-public abstract class ResultsIterator implements Iterator<SolrDocument>, Iterable<SolrDocument> {
+public abstract class ResultsIterator<E> implements Iterator<E>, Iterable<E> {
 
   public abstract long getNumDocs();
 

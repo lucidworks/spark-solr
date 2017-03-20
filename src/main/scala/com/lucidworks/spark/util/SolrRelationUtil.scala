@@ -5,6 +5,7 @@ import java.util.Date
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.io.Tuple
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
@@ -298,8 +299,17 @@ object SolrRelationUtil extends LazyLogging {
     solrQuery.setFields(fieldList.toList:_*)
   }
 
-  //TODO: Full on testing with schemaless, multi-valued arrays etc...
-  def toRows(schema: StructType, docs: RDD[SolrDocument]): RDD[Row] = {
+  def toRows(schema: StructType, docs:RDD[_]): RDD[Row] = {
+    docs match {
+      case streamingRDD: RDD[Tuple] =>  tupleToRows(schema, streamingRDD)
+      case selectRDD: RDD[SolrDocument] => solrDocToRows(schema, selectRDD)
+      case _ => throw new Exception("Unknown SolrRDD type")
+    }
+  }
+
+  def tupleToRows(schema: StructType, docs: RDD[Tuple]): RDD[Row] = ???
+
+  def solrDocToRows(schema: StructType, docs: RDD[SolrDocument]): RDD[Row] = {
     val fields = schema.fields
 
     val rows = docs.map(solrDocument => {

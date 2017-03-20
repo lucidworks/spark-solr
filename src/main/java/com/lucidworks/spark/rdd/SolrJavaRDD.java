@@ -6,47 +6,46 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 
-//TODO: Add all other methods from SolrRDD here
 public class SolrJavaRDD extends JavaRDD<SolrDocument> {
 
-  private final SolrRDD solrRDD;
+  private final SelectSolrRDD solrRDD;
 
-  public SolrJavaRDD(SolrRDD solrRDD) {
+  public SolrJavaRDD(SelectSolrRDD solrRDD) {
     super(solrRDD, JavaApiHelper.getClassTag(SolrDocument.class));
     this.solrRDD = solrRDD;
   }
 
-  protected SolrJavaRDD wrap(SolrRDD rdd) {
+  protected SolrJavaRDD wrap(SelectSolrRDD rdd) {
     return new SolrJavaRDD(rdd);
   }
 
   public JavaRDD<SolrDocument> query(String query) {
-    return wrap(rdd().query(query));
+    return wrap((SelectSolrRDD) rdd().query(query));
   }
 
   public JavaRDD<SolrDocument> queryShards(String query) {
-    return wrap(rdd().query(query));
+    return wrap((SelectSolrRDD) rdd().query(query));
   }
 
   public JavaRDD<SolrDocument> queryShards(SolrQuery solrQuery) {
-    return wrap(rdd().query(solrQuery));
+    return wrap((SelectSolrRDD) rdd().query(solrQuery));
   }
 
   public JavaRDD<SolrDocument> queryShards(SolrQuery solrQuery, String splitFieldName, int splitsPerShard) {
-    return wrap(rdd().query(solrQuery).splitField(splitFieldName).splitsPerShard(splitsPerShard));
+    return wrap((SelectSolrRDD) ((SelectSolrRDD)((SelectSolrRDD) rdd().query(solrQuery)).splitField(splitFieldName)).splitsPerShard(splitsPerShard));
   }
 
   public JavaRDD<SolrDocument> queryNoSplits(String query) {
-    return wrap(rdd().query(query).splitsPerShard(1));
+    return wrap((SelectSolrRDD) ((SelectSolrRDD) rdd().query(query)).splitsPerShard(1));
   }
 
   @Override
-  public SolrRDD rdd() {
+  public SelectSolrRDD rdd() {
     return solrRDD;
   }
 
   public static SolrJavaRDD get(String zkHost, String collection, SparkContext sc) {
-    SolrRDD solrRDD = SolrRDD$.MODULE$.apply(zkHost, collection, sc);
+    SelectSolrRDD solrRDD = SelectSolrRDD$.MODULE$.apply(zkHost, collection, sc);
     return new SolrJavaRDD(solrRDD);
   }
 

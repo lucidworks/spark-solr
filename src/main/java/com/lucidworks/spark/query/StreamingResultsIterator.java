@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * An iterator over a stream of query results from Solr.
  */
-public class StreamingResultsIterator extends ResultsIterator {
+public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
 
   private static Logger log = Logger.getLogger(StreamingResultsIterator.class);
 

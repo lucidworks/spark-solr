@@ -16,7 +16,7 @@ import java.util.NoSuchElementException;
  * This iterator is not thread safe. It is intended to be used within the
  * context of a single thread.
  */
-public abstract class TupleStreamIterator extends ResultsIterator {
+public abstract class TupleStreamIterator extends ResultsIterator<Tuple> {
 
   private static final Logger log = Logger.getLogger(TupleStreamIterator.class);
 
@@ -100,8 +100,8 @@ public abstract class TupleStreamIterator extends ResultsIterator {
     return tempCurrentTuple;
   }
 
-  public synchronized SolrDocument next() {
-    return tuple2doc(nextTuple());
+  public synchronized Tuple next() {
+    return nextTuple();
   }
 
   protected SolrDocument tuple2doc(Tuple tuple) {
@@ -116,7 +116,7 @@ public abstract class TupleStreamIterator extends ResultsIterator {
     throw new UnsupportedOperationException("remove is not supported");
   }
 
-  public Iterator<SolrDocument> iterator() {
+  public Iterator<Tuple> iterator() {
     return this;
   }
 
