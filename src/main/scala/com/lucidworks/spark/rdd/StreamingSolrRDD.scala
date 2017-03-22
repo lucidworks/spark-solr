@@ -6,7 +6,6 @@ import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark.{CloudStreamPartition, SolrPartitioner, SolrRDDPartition}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.client.solrj.io.Tuple
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
@@ -24,7 +23,7 @@ class StreamingSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends SolrRDD[Tuple](zkHost, collection, sc)
+  extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc)
   with LazyLogging {
 
   protected def copy(
@@ -70,7 +69,7 @@ class StreamingSolrRDD(
 
 
   @DeveloperApi
-  override def compute(split: Partition, context: TaskContext): Iterator[Tuple] = {
+  override def compute(split: Partition, context: TaskContext): Iterator[java.util.Map[_, _]] = {
     split match {
       case partition: CloudStreamPartition =>
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")

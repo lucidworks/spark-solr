@@ -11,7 +11,7 @@ public class SolrJavaRDD extends JavaRDD<SolrDocument> {
   private final SelectSolrRDD solrRDD;
 
   public SolrJavaRDD(SelectSolrRDD solrRDD) {
-    super(solrRDD, JavaApiHelper.getClassTag(SolrDocument.class));
+    super(solrRDD, solrRDD.elementClassTag());
     this.solrRDD = solrRDD;
   }
 

@@ -7,7 +7,6 @@ import java.util.Date
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.client.solrj.io.Tuple
 import org.apache.solr.common.SolrDocument
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
@@ -303,7 +302,7 @@ object SolrRelationUtil extends LazyLogging {
 
   def toRows(schema: StructType, docs:RDD[_]): RDD[Row] = {
     docs match {
-      case streamingRDD: StreamingSolrRDD =>  solrDocToRows[Tuple](schema, streamingRDD)
+      case streamingRDD: StreamingSolrRDD => solrDocToRows[util.Map[_,_]](schema, streamingRDD)
       case selectRDD: SelectSolrRDD => solrDocToRows[SolrDocument](schema, selectRDD)
       case _ => throw new Exception("Unknown SolrRDD type")
     }
@@ -398,9 +397,9 @@ object SolrRelationUtil extends LazyLogging {
             case solrDocument: SolrDocument =>
               val fieldValues = solrDocument.getFieldValues(field.name)
               values.add(processMultipleFieldValues(fieldValues, fieldType))
-            case tuple: Tuple =>
-              val tupleValue = tuple.get(field.name)
-              val newValue = processFieldValue(tupleValue, fieldType, multiValued = true)
+            case map: util.Map[_,_] =>
+              val obj = map.get(field.name).asInstanceOf[Object]
+              val newValue = processFieldValue(obj, fieldType, multiValued = true)
               newValue match {
                 case arr: Array[_] => values.add(arr)
                 case any => values.add(Array(any))
@@ -411,9 +410,9 @@ object SolrRelationUtil extends LazyLogging {
             case solrDocument: SolrDocument =>
               val fieldValue = solrDocument.getFieldValue(field.name)
               values.add(processFieldValue(fieldValue, fieldType, multiValued = false))
-            case tuple: Tuple =>
-              val tupleValue = tuple.get(field.name)
-              values.add(processFieldValue(tupleValue, fieldType, multiValued = false))
+            case map: util.Map[_,_] =>
+              val obj = map.get(field.name).asInstanceOf[Object]
+              values.add(processFieldValue(obj, fieldType, multiValued = false))
           }
         }
       }

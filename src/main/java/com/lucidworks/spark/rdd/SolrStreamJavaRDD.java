@@ -2,16 +2,17 @@ package com.lucidworks.spark.rdd;
 
 import com.lucidworks.spark.util.JavaApiHelper;
 import org.apache.solr.client.solrj.SolrQuery;
-import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 
-public class SolrStreamJavaRDD extends JavaRDD<Tuple> {
+import java.util.Map;
+
+public class SolrStreamJavaRDD extends JavaRDD<Map<?,?>> {
 
   private final StreamingSolrRDD solrRDD;
 
   public SolrStreamJavaRDD(StreamingSolrRDD solrRDD) {
-    super(solrRDD, JavaApiHelper.getClassTag(Tuple.class));
+    super(solrRDD, solrRDD.elementClassTag());
     this.solrRDD = solrRDD;
   }
 
@@ -19,24 +20,24 @@ public class SolrStreamJavaRDD extends JavaRDD<Tuple> {
     return new SolrStreamJavaRDD(rdd);
   }
 
-  public JavaRDD<Tuple> query(String query) {
-    return wrap((StreamingSolrRDD) rdd().query(query));
+  public JavaRDD<Map<?,?>> query(String query) {
+    return wrap(rdd().query(query));
   }
 
-  public JavaRDD<Tuple> queryShards(String query) {
-    return wrap((StreamingSolrRDD) rdd().query(query));
+  public JavaRDD<Map<?,?>> queryShards(String query) {
+    return wrap(rdd().query(query));
   }
 
-  public JavaRDD<Tuple> queryShards(SolrQuery solrQuery) {
-    return wrap((StreamingSolrRDD) rdd().query(solrQuery));
+  public JavaRDD<Map<?,?>> queryShards(SolrQuery solrQuery) {
+    return wrap(rdd().query(solrQuery));
   }
 
-  public JavaRDD<Tuple> queryShards(SolrQuery solrQuery, String splitFieldName, int splitsPerShard) {
-    return wrap((StreamingSolrRDD) ((StreamingSolrRDD)((StreamingSolrRDD) rdd().query(solrQuery)).splitField(splitFieldName)).splitsPerShard(splitsPerShard));
+  public JavaRDD<Map<?,?>> queryShards(SolrQuery solrQuery, String splitFieldName, int splitsPerShard) {
+    return wrap(rdd().query(solrQuery).splitField(splitFieldName).splitsPerShard(splitsPerShard));
   }
 
-  public JavaRDD<Tuple> queryNoSplits(String query) {
-    return wrap((StreamingSolrRDD) ((StreamingSolrRDD) rdd().query(query)).splitsPerShard(1));
+  public JavaRDD<Map<?,?>> queryNoSplits(String query) {
+    return wrap(rdd().query(query).splitsPerShard(1));
   }
 
   @Override
