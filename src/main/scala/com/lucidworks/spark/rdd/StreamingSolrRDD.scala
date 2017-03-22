@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import com.lucidworks.spark.query.{SolrStreamIterator, StreamingExpressionResultIterator}
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.SolrSupport
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark.{CloudStreamPartition, SolrPartitioner, SolrRDDPartition}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
@@ -27,8 +27,6 @@ class StreamingSolrRDD(
   extends SolrRDD[Tuple](zkHost, collection, sc)
   with LazyLogging {
 
-  override type Self = StreamingSolrRDD
-
   protected def copy(
     requestHandler: Option[String] = requestHandler,
     query: Option[String] = query,
@@ -36,7 +34,7 @@ class StreamingSolrRDD(
     rows: Option[Int] = rows,
     splitField: Option[String] = splitField,
     splitsPerShard: Option[Int] = splitsPerShard,
-    solrQuery: Option[SolrQuery] = solrQuery): Self = {
+    solrQuery: Option[SolrQuery] = solrQuery): StreamingSolrRDD = {
     new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
   }
 
@@ -118,6 +116,38 @@ class StreamingSolrRDD(
     }
     partitions
   }
+
+  override def query(q: String): StreamingSolrRDD = copy(query = Some(q))
+
+  override def query(solrQuery: SolrQuery): StreamingSolrRDD = copy(solrQuery = Some(solrQuery))
+
+  override def select(fl: String): StreamingSolrRDD = copy(fields = Some(fl.split(",")))
+
+  override def select(fl: Array[String]): StreamingSolrRDD = copy(fields = Some(fl))
+
+  override def rows(rows: Int): StreamingSolrRDD = copy(rows = Some(rows))
+
+  override def doSplits(): StreamingSolrRDD = copy(splitField = Some(DEFAULT_SPLIT_FIELD))
+
+  override def splitField(field: String): StreamingSolrRDD = copy(splitField = Some(field))
+
+  override def splitsPerShard(splitsPerShard: Int): StreamingSolrRDD = copy(splitsPerShard = Some(splitsPerShard))
+
+  override def requestHandler(requestHandler: String): StreamingSolrRDD = copy(requestHandler = Some(requestHandler))
+
+  override def buildQuery: SolrQuery = {
+    var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
+    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
+      solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
+    }
+    if (!solrQuery.getRows.eq(null)) {
+      solrQuery = solrQuery.setRows(rows.get)
+    }
+
+    solrQuery.set("collection", collection)
+    solrQuery
+  }
+
 }
 
 object StreamingSolrRDD {

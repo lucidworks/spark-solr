@@ -20,23 +20,23 @@ public class SolrJavaRDD extends JavaRDD<SolrDocument> {
   }
 
   public JavaRDD<SolrDocument> query(String query) {
-    return wrap((SelectSolrRDD) rdd().query(query));
+    return wrap(rdd().query(query));
   }
 
   public JavaRDD<SolrDocument> queryShards(String query) {
-    return wrap((SelectSolrRDD) rdd().query(query));
+    return wrap(rdd().query(query));
   }
 
   public JavaRDD<SolrDocument> queryShards(SolrQuery solrQuery) {
-    return wrap((SelectSolrRDD) rdd().query(solrQuery));
+    return wrap(rdd().query(solrQuery));
   }
 
   public JavaRDD<SolrDocument> queryShards(SolrQuery solrQuery, String splitFieldName, int splitsPerShard) {
-    return wrap((SelectSolrRDD) ((SelectSolrRDD)((SelectSolrRDD) rdd().query(solrQuery)).splitField(splitFieldName)).splitsPerShard(splitsPerShard));
+    return wrap(rdd().query(solrQuery).splitField(splitFieldName).splitsPerShard(splitsPerShard));
   }
 
   public JavaRDD<SolrDocument> queryNoSplits(String query) {
-    return wrap((SelectSolrRDD) ((SelectSolrRDD) rdd().query(query)).splitsPerShard(1));
+    return wrap(rdd().query(query).splitsPerShard(1));
   }
 
   @Override

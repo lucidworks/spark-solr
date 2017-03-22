@@ -121,13 +121,6 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def requestHandler: Option[String] = {
 
-    if (!config.contains(REQUEST_HANDLER) && config.contains(USE_EXPORT_HANDLER) && config.get(USE_EXPORT_HANDLER).isDefined) {
-      logger.warn(s"The ${USE_EXPORT_HANDLER} option is no longer supported, please switch to using the ${REQUEST_HANDLER} -> ${QT_EXPORT} option!")
-      if (config.get(USE_EXPORT_HANDLER).get.toBoolean) {
-        return Some(QT_EXPORT)
-      }
-    }
-
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
       logger.debug(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")

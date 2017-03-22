@@ -27,8 +27,6 @@ class SelectSolrRDD(
   extends SolrRDD[SolrDocument](zkHost, collection, sc)
   with LazyLogging {
 
-  override type Self = SelectSolrRDD
-
   protected def copy(
     requestHandler: Option[String] = requestHandler,
     query: Option[String] = query,
@@ -36,7 +34,7 @@ class SelectSolrRDD(
     rows: Option[Int] = rows,
     splitField: Option[String] = splitField,
     splitsPerShard: Option[Int] = splitsPerShard,
-    solrQuery: Option[SolrQuery] = solrQuery): Self = {
+    solrQuery: Option[SolrQuery] = solrQuery): SelectSolrRDD = {
       new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
   }
 
@@ -96,6 +94,38 @@ class SelectSolrRDD(
     }
     partitions
   }
+
+  override def query(q: String): SelectSolrRDD = copy(query = Some(q))
+
+  override def query(solrQuery: SolrQuery): SelectSolrRDD = copy(solrQuery = Some(solrQuery))
+
+  override def select(fl: String): SelectSolrRDD = copy(fields = Some(fl.split(",")))
+
+  override def select(fl: Array[String]): SelectSolrRDD = copy(fields = Some(fl))
+
+  override def rows(rows: Int): SelectSolrRDD = copy(rows = Some(rows))
+
+  override def doSplits(): SelectSolrRDD = copy(splitField = Some(DEFAULT_SPLIT_FIELD))
+
+  override def splitField(field: String): SelectSolrRDD = copy(splitField = Some(field))
+
+  override def splitsPerShard(splitsPerShard: Int): SelectSolrRDD = copy(splitsPerShard = Some(splitsPerShard))
+
+  override def requestHandler(requestHandler: String): SelectSolrRDD = copy(requestHandler = Some(requestHandler))
+
+  override def buildQuery: SolrQuery = {
+    var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
+    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
+      solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
+    }
+    if (!solrQuery.getRows.eq(null)) {
+      solrQuery = solrQuery.setRows(rows.get)
+    }
+
+    solrQuery.set("collection", collection)
+    solrQuery
+  }
+
 }
 
 object SelectSolrRDD {

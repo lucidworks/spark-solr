@@ -11,14 +11,14 @@ import org.apache.spark.rdd.RDD
 import scala.reflect.ClassTag
 import scala.util.Random
 
-abstract class SolrRDD[T](
+abstract class SolrRDD[T: ClassTag](
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
-    val requestHandler: Option[String] = None,
-    query : Option[String] = Option(DEFAULT_QUERY),
+    requestHandler: Option[String] = None,
+    query : Option[String] = None,
     fields: Option[Array[String]] = None,
-    rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
+    rows: Option[Int] = None,
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
@@ -27,15 +27,6 @@ abstract class SolrRDD[T](
   with LazyLogging {
 
   val uniqueKey: String = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
-
-  protected def copy(
-      requestHandler: Option[String] = requestHandler,
-      query: Option[String] = query,
-      fields: Option[Array[String]] = fields,
-      rows: Option[Int] = rows,
-      splitField: Option[String] = splitField,
-      splitsPerShard: Option[Int] = splitsPerShard,
-      solrQuery: Option[SolrQuery] = solrQuery)
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     val urls: Seq[String] = Seq.empty
@@ -47,41 +38,27 @@ abstract class SolrRDD[T](
     urls
   }
 
-  def query(q: String)
+  def buildQuery: SolrQuery
 
-  def query(solrQuery: SolrQuery): this
+  def query(q: String): SolrRDD[T]
 
-  def select(fl: String): Self = copy(fields = Some(fl.split(",")))
+  def query(solrQuery: SolrQuery): SolrRDD[T]
 
-  def select(fl: Array[String]): Self = copy(fields = Some(fl))
+  def select(fl: String): SolrRDD[T]
 
-  def rows(rows: Int): Self = copy(rows = Some(rows))
+  def select(fl: Array[String]): SolrRDD[T]
 
-  def doSplits(): Self = copy(splitField = Some(DEFAULT_SPLIT_FIELD))
+  def rows(rows: Int): SolrRDD[T]
 
-  def splitField(field: String): Self = copy(splitField = Some(field))
+  def doSplits(): SolrRDD[T]
 
-  def splitsPerShard(splitsPerShard: Int): Self = copy(splitsPerShard = Some(splitsPerShard))
+  def splitField(field: String): SolrRDD[T]
 
-  def useExportHandler: Self = copy(requestHandler = Some(QT_EXPORT))
+  def splitsPerShard(splitsPerShard: Int): SolrRDD[T]
 
-  def requestHandler(requestHandler: String): Self = copy(requestHandler = Some(requestHandler))
+  def requestHandler(requestHandler: String): SolrRDD[T]
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
-
-  protected def buildQuery: SolrQuery = {
-    var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
-      solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
-    }
-    if (!solrQuery.getRows.eq(null)) {
-      solrQuery = solrQuery.setRows(rows.get)
-    }
-
-    solrQuery.set("collection", collection)
-    solrQuery
-  }
-
 }
 
 object SolrRDD {

@@ -427,7 +427,7 @@ class SolrRelation(
         sqlContext.sparkContext,
         Some(qt),
         uKey = Some(uniqueKey)
-      ))
+      ).query(query))
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
@@ -703,7 +703,7 @@ class SolrRelation(
     }
     
     val sortParams = conf.getArbitrarySolrParams.remove("sort")
-    if (sortParams != null && sortParams.length > 0) {
+    if (sortParams != null && sortParams.nonEmpty) {
       for (p <- sortParams) {
         val sortClauses = SolrRelation.parseSortParamFromString(p)
         for (sortClause <- sortClauses) {
@@ -811,7 +811,6 @@ object SolrRelation extends LazyLogging {
     })
   }
 
-  // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
       if (structField.dataType == BooleanType)
