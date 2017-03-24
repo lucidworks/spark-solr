@@ -145,16 +145,11 @@ class SolrRelation(
               val metricName = m.alias.getOrElse(m.name)
               // crazy hack here but Solr might return a long which we registered as a double in the schema
               if (!m.name.startsWith("count(")) {
-                var promoteFields = initialQuery.get("promote_to_double")
-                if (promoteFields == null) {
-                  initialQuery.set("promote_to_double", metricName)
-                } else {
-                  initialQuery.set("promote_to_double", promoteFields+","+metricName)
-                }
-                logger.info(s"Set promote_to_double="+initialQuery.get("promote_to_double"))
-                fieldSet.add(new StructField(metricName, DoubleType))
+                val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
+                logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for metric " + metricName)
+                fieldSet.add(StructField(metricName, DoubleType, metadata = metadata))
               } else {
-                fieldSet.add(new StructField(metricName, m.dataType))
+                fieldSet.add(StructField(metricName, m.dataType))
               }
             })
           }
@@ -191,17 +186,12 @@ class SolrRelation(
             if (lower.startsWith("count(")) {
               fieldSet.add(new StructField(kvp._2, LongType))
             } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
-              fieldSet.add(new StructField(kvp._2, DoubleType))
-
+              val column = kvp._2
               // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
               // based on the aggregation mode used to execute the SQL statement
-              var promoteFields = initialQuery.get("promote_to_double")
-              if (promoteFields == null) {
-                promoteFields = kvp._2
-                initialQuery.set("promote_to_double", promoteFields)
-              } else {
-                initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
-              }
+              val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
+              logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for col: " + column)
+              fieldSet.add(new StructField(column, DoubleType, metadata = metadata))
             }  else if (col.equals("score")) {
               fieldSet.add(new StructField(col, DoubleType))
             } else {
@@ -496,13 +486,13 @@ class SolrRelation(
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
-          if (isFDV && !hasUnsupportedExportTypes) {
-            SolrRelation.addSortField(querySchema, query)
-            logger.info("Added sort field '" + query.getSortField + "' to the query")
-            true
-          }
-          else
-            false
+            if (isFDV && !hasUnsupportedExportTypes) {
+              SolrRelation.addSortField(querySchema, query)
+              logger.info("Added sort field '" + query.getSortField + "' to the query")
+              true
+            }
+            else
+              false
 
         if (isFDV && isSDV && !hasUnsupportedExportTypes) {
           qt = QT_EXPORT

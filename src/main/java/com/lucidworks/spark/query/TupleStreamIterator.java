@@ -105,14 +105,6 @@ public abstract class TupleStreamIterator extends ResultsIterator<Map> {
     return nextTuple();
   }
 
-  protected SolrDocument tuple2doc(Tuple tuple) {
-    final SolrDocument doc = new SolrDocument();
-    for (Object key : tuple.fields.keySet()) {
-      doc.setField((String) key, tuple.get(key));
-    }
-    return doc;
-  }
-
   public void remove() {
     throw new UnsupportedOperationException("remove is not supported");
   }

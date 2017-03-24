@@ -409,10 +409,26 @@ object SolrRelationUtil extends LazyLogging {
           doc match {
             case solrDocument: SolrDocument =>
               val fieldValue = solrDocument.getFieldValue(field.name)
-              values.add(processFieldValue(fieldValue, fieldType, multiValued = false))
+              val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
+              if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
+                newValue match {
+                  case n: java.lang.Number => values.add(n.doubleValue())
+                  case a => values.add(a)
+                }
+              } else {
+                values.add(newValue)
+              }
             case map: util.Map[_,_] =>
               val obj = map.get(field.name).asInstanceOf[Object]
-              values.add(processFieldValue(obj, fieldType, multiValued = false))
+              val newValue = processFieldValue(obj, fieldType, multiValued = false)
+              if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
+                newValue match {
+                  case n: java.lang.Number => values.add(n.doubleValue())
+                  case a => values.add(a)
+                }
+              } else {
+                values.add(newValue)
+              }
           }
         }
       }
