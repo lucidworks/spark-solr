@@ -1,158 +1,32 @@
 package com.lucidworks.spark.rdd
 
-import java.net.InetAddress
-
 import com.lucidworks.spark._
-import com.lucidworks.spark.query.{ResultsIterator, SolrStreamIterator, StreamingExpressionResultIterator, StreamingResultsIterator}
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.SolrQuerySupport
+import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.common.SolrDocument
 import org.apache.spark._
-import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.RDD
 
-import com.typesafe.scalalogging.LazyLogging
-
-import scala.collection.JavaConverters
+import scala.reflect.ClassTag
 import scala.util.Random
 
-class SolrRDD(
+abstract class SolrRDD[T: ClassTag](
     val zkHost: String,
     val collection: String,
     @transient sc: SparkContext,
-    val requestHandler: Option[String] = None,
-    query : Option[String] = Option(DEFAULT_QUERY),
+    requestHandler: Option[String] = None,
+    query : Option[String] = None,
     fields: Option[Array[String]] = None,
-    rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
+    rows: Option[Int] = None,
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends RDD[SolrDocument](sc, Seq.empty)
+  extends RDD[T](sc, Seq.empty)
   with LazyLogging {
 
-  val uniqueKey = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
-
-  protected def copy(
-      requestHandler: Option[String] = requestHandler,
-      query: Option[String] = query,
-      fields: Option[Array[String]] = fields,
-      rows: Option[Int] = rows,
-      splitField: Option[String] = splitField,
-      splitsPerShard: Option[Int] = splitsPerShard,
-      solrQuery: Option[SolrQuery] = solrQuery): SolrRDD = {
-    new SolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery)
-  }
-
-  /*
-  * Get an Iterator that uses the export handler in Solr
-  */
-  @throws(classOf[Exception])
-  private def getExportHandlerBasedIterator(shardUrl : String, query : SolrQuery) = {
-
-    // Direct the queries to each shard, so we don't want distributed
-    query.set("distrib", false)
-
-    val sorts = query.getSorts
-    val sortParam = query.get("sort")
-    if ((sorts == null || sorts.isEmpty) && (sortParam == null || sortParam.isEmpty)) {
-      val fields = query.getFields
-      if (fields != null) {
-        if (fields.contains("id")) {
-          query.addSort("id", SolrQuery.ORDER.asc)
-        } else {
-          val firstField = fields.split(",")(0)
-          query.addSort(firstField, SolrQuery.ORDER.asc)
-        }
-      } else {
-        query.addSort("id", SolrQuery.ORDER.asc)
-      }
-      logWarning(s"Added required sort clause: "+query.getSorts+
-        "; this is probably incorrect so you should provide your own sort criteria.")
-    }
-
-    new SolrStreamIterator(shardUrl, SolrSupport.getHttpSolrClient(shardUrl), query)
-  }
-
-  @DeveloperApi
-  override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
-    split match {
-      case partition: CloudStreamPartition =>
-        logInfo(s"Using StreamingExpressionResultIterator to process streaming expression for ${partition}")
-        val resultsIterator = new StreamingExpressionResultIterator(partition.zkhost, partition.collection, partition.params)
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
-      case partition: SolrRDDPartition =>
-
-        //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
-        val url = partition.preferredReplica.replicaUrl
-        val query = partition.query
-        logger.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
-        val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-        query.setRequestHandler(solrRequestHandler)
-        val resultsIterator: ResultsIterator =
-          if (solrRequestHandler == "/export") {
-            logger.info("Using export handler to fetch documents from "+partition.preferredReplica+" for query: "+partition.query)
-            getExportHandlerBasedIterator(url, query)
-          } else {
-            logger.info("Using cursorMarks to fetch documents from "+partition.preferredReplica+" for query: "+partition.query)
-            new StreamingResultsIterator(
-              SolrSupport.getHttpSolrClient(url),
-              partition.query,
-              partition.cursorMark)
-          }
-        context.addTaskCompletionListener { (context) =>
-          logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
-        }
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
-
-      case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
-    }
-  }
-
-  override protected def getPartitions: Array[Partition] = {
-    val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
-    val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
-    if (rq == QT_STREAM || rq == QT_SQL) {
-      logInfo(s"Using SolrCloud stream partitioning scheme to process request to ${rq} for collection ${collection}")
-      return Array(new CloudStreamPartition(0, zkHost, collection, query))
-    }
-
-    val shards = SolrSupport.buildShardList(zkHost, collection)
-    // Add defaults for shards. TODO: Move this for different implementations (Streaming)
-
-    if (rq != QT_EXPORT) {
-      logInfo(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
-      SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
-      // Freeze the index by adding a filter query on _version_ field
-      val max = SolrQuerySupport.getMaxVersion(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
-      if (max.isDefined) {
-        val rangeFilter = DEFAULT_SPLIT_FIELD + ":[* TO " + max.get + "]"
-        logInfo("Range filter added to the query: " + rangeFilter)
-        query.addFilterQuery(rangeFilter)
-      }
-    }
-
-    val numReplicas = shards.apply(0).replicas.length
-    val numSplits = splitsPerShard.getOrElse(2 * numReplicas)
-    logger.info(s"Using splitField=${splitField}, splitsPerShard=${splitsPerShard}, and numReplicas=${numReplicas} for computing partitions.")
-
-    val partitions : Array[Partition] = if (rq != QT_EXPORT && numSplits > 1) {
-      val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
-      logger.info(s"Applied ${numSplits} intra-shard splits on the ${splitFieldName} field for ${collection} to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
-      SolrPartitioner.getSplitPartitions(shards, query, splitFieldName, numSplits)
-    } else {
-      // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
-      SolrPartitioner.getShardPartitions(shards, query)
-    }
-
-    if (log.isDebugEnabled) {
-      logger.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
-    } else {
-      logger.info(s"Found ${partitions.length} partitions.")
-    }
-    partitions
-  }
+  val uniqueKey: String = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     val urls: Seq[String] = Seq.empty
@@ -164,50 +38,27 @@ class SolrRDD(
     urls
   }
 
-  private def getAllAddresses(hostName: String): Array[InetAddress] = {
-    try {
-      return InetAddress.getAllByName(hostName)
-    } catch {
-      case e: Exception => logger.info("Exception while resolving IP address for host name '" + hostName + "' with exception " + e)
-    }
-    Array.empty[InetAddress]
-  }
+  def buildQuery: SolrQuery
 
-  def query(q: String): SolrRDD = copy(query = Option(q))
+  def query(q: String): SolrRDD[T]
 
-  def query(solrQuery: SolrQuery): SolrRDD = copy(solrQuery = Option(solrQuery))
+  def query(solrQuery: SolrQuery): SolrRDD[T]
 
-  def select(fl: String): SolrRDD = copy(fields = Some(fl.split(",")))
+  def select(fl: String): SolrRDD[T]
 
-  def select(fl: Array[String]): SolrRDD = copy(fields = Some(fl))
+  def select(fl: Array[String]): SolrRDD[T]
 
-  def rows(rows: Int): SolrRDD = copy(rows = Some(rows))
+  def rows(rows: Int): SolrRDD[T]
 
-  def doSplits(): SolrRDD = copy(splitField = Some(DEFAULT_SPLIT_FIELD))
+  def doSplits(): SolrRDD[T]
 
-  def splitField(field: String): SolrRDD = copy(splitField = Some(field))
+  def splitField(field: String): SolrRDD[T]
 
-  def splitsPerShard(splitsPerShard: Int): SolrRDD = copy(splitsPerShard = Some(splitsPerShard))
+  def splitsPerShard(splitsPerShard: Int): SolrRDD[T]
 
-  def useExportHandler: SolrRDD = copy(requestHandler = Some(QT_EXPORT))
-
-  def requestHandler(requestHandler: String): SolrRDD = copy(requestHandler = Some(requestHandler))
+  def requestHandler(requestHandler: String): SolrRDD[T]
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
-
-  def buildQuery: SolrQuery = {
-    var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
-      solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
-    }
-    if (!solrQuery.getRows.eq(null)) {
-      solrQuery = solrQuery.setRows(rows.get)
-    }
-
-    solrQuery.set("collection", collection)
-    solrQuery
-  }
-
 }
 
 object SolrRDD {
@@ -220,8 +71,32 @@ object SolrRDD {
     solrShard.replicas(Random.nextInt(solrShard.replicas.size))
   }
 
-  def apply(zkHost: String, collection: String, sc: SparkContext) =
-    new SolrRDD(zkHost, collection, sc)
+  def apply(
+      zkHost: String,
+      collection: String,
+      @transient sc: SparkContext,
+      requestHandler: Option[String] = None,
+      query : Option[String] = Option(DEFAULT_QUERY),
+      fields: Option[Array[String]] = None,
+      rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
+      splitField: Option[String] = None,
+      splitsPerShard: Option[Int] = None,
+      solrQuery: Option[SolrQuery] = None,
+      uKey: Option[String] = None): SolrRDD[_] = {
+    if (requestHandler.isDefined) {
+      if (requiresStreamingRDD(requestHandler.get)) {
+        new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+      } else {
+        new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+      }
+    } else {
+      new SelectSolrRDD(zkHost, collection, sc, Some(DEFAULT_REQUEST_HANDLER), query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+    }
+  }
+
+  def requiresStreamingRDD(rq: String): Boolean = {
+    rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
+  }
 
 }
 

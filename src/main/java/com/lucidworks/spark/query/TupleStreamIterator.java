@@ -8,6 +8,7 @@ import org.apache.solr.common.params.SolrParams;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 /**
@@ -16,7 +17,7 @@ import java.util.NoSuchElementException;
  * This iterator is not thread safe. It is intended to be used within the
  * context of a single thread.
  */
-public abstract class TupleStreamIterator extends ResultsIterator {
+public abstract class TupleStreamIterator extends ResultsIterator<Map> {
 
   private static final Logger log = Logger.getLogger(TupleStreamIterator.class);
 
@@ -87,7 +88,7 @@ public abstract class TupleStreamIterator extends ResultsIterator {
 
   protected abstract TupleStream openStream();
 
-  public synchronized Tuple nextTuple() {
+  public synchronized Map nextTuple() {
     if (isClosed)
       throw new NoSuchElementException("already closed");
 
@@ -97,26 +98,18 @@ public abstract class TupleStreamIterator extends ResultsIterator {
     final Tuple tempCurrentTuple = currentTuple;
     currentTuple = null;
     ++numDocs;
-    return tempCurrentTuple;
+    return tempCurrentTuple.getMap();
   }
 
-  public synchronized SolrDocument next() {
-    return tuple2doc(nextTuple());
-  }
-
-  protected SolrDocument tuple2doc(Tuple tuple) {
-    final SolrDocument doc = new SolrDocument();
-    for (Object key : tuple.fields.keySet()) {
-      doc.setField((String) key, tuple.get(key));
-    }
-    return doc;
+  public synchronized Map next() {
+    return nextTuple();
   }
 
   public void remove() {
     throw new UnsupportedOperationException("remove is not supported");
   }
 
-  public Iterator<SolrDocument> iterator() {
+  public Iterator<Map> iterator() {
     return this;
   }
 

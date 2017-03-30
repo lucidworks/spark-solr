@@ -16,8 +16,6 @@ object ConfigurationConstants {
   val SKIP_NON_DOCVALUE_FIELDS: String = "skip_non_dv"
   val SOLR_DOC_VALUES: String = "dv"
   val FLATTEN_MULTIVALUED: String = "flatten_multivalued"
-  @deprecated
-  val USE_EXPORT_HANDLER: String = "use_export_handler"
   val REQUEST_HANDLER: String = "request_handler"
   val USE_CURSOR_MARKS: String = "use_cursor_marks"
   val SOLR_STREAMING_EXPR: String = "expr"

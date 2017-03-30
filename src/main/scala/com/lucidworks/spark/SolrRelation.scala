@@ -4,7 +4,7 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 import com.lucidworks.spark.query.sql.SolrSQLSupport
-import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.rdd.{SolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
@@ -145,16 +145,11 @@ class SolrRelation(
               val metricName = m.alias.getOrElse(m.name)
               // crazy hack here but Solr might return a long which we registered as a double in the schema
               if (!m.name.startsWith("count(")) {
-                var promoteFields = initialQuery.get("promote_to_double")
-                if (promoteFields == null) {
-                  initialQuery.set("promote_to_double", metricName)
-                } else {
-                  initialQuery.set("promote_to_double", promoteFields+","+metricName)
-                }
-                logger.info(s"Set promote_to_double="+initialQuery.get("promote_to_double"))
-                fieldSet.add(new StructField(metricName, DoubleType))
+                val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
+                logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for metric " + metricName)
+                fieldSet.add(StructField(metricName, DoubleType, metadata = metadata))
               } else {
-                fieldSet.add(new StructField(metricName, m.dataType))
+                fieldSet.add(StructField(metricName, m.dataType))
               }
             })
           }
@@ -191,17 +186,12 @@ class SolrRelation(
             if (lower.startsWith("count(")) {
               fieldSet.add(new StructField(kvp._2, LongType))
             } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
-              fieldSet.add(new StructField(kvp._2, DoubleType))
-
+              val column = kvp._2
               // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
               // based on the aggregation mode used to execute the SQL statement
-              var promoteFields = initialQuery.get("promote_to_double")
-              if (promoteFields == null) {
-                promoteFields = kvp._2
-                initialQuery.set("promote_to_double", promoteFields)
-              } else {
-                initialQuery.set("promote_to_double", promoteFields+","+kvp._2)
-              }
+              val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
+              logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for col: " + column)
+              fieldSet.add(new StructField(column, DoubleType, metadata = metadata))
             }  else if (col.equals("score")) {
               fieldSet.add(new StructField(col, DoubleType))
             } else {
@@ -415,52 +405,19 @@ class SolrRelation(
   override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
-    
     logger.info("buildScan: push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
-
     val query = initialQuery.getCopy
     var qt = query.getRequestHandler
 
-    val solrRDD = {
-      var rdd = new SolrRDD(
+    // ignore any fields / filters when processing a streaming expression
+    if (qt == QT_STREAM || qt == QT_SQL)
+      return SolrRelationUtil.toRows(querySchema, new StreamingSolrRDD(
         conf.getZkHost.get,
         collection,
         sqlContext.sparkContext,
         Some(qt),
-        uKey = Some(uniqueKey))
-
-      if (conf.getSplitsPerShard.isDefined) {
-        // always apply this whether we're doing splits or not so that the user
-        // can pass splits_per_shard=1 to disable splitting when there are multiple replicas
-        // as we now will do splitting using the HashQParser when there are multiple active replicas
-        rdd = rdd.splitsPerShard(conf.getSplitsPerShard.get)
-      }
-
-      if (conf.splits.isDefined) {
-        rdd = rdd.doSplits()
-
-        if (!conf.getSplitsPerShard.isDefined) {
-          // user wants splits, but didn't specify how many per shard
-          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-        }
-      }
-
-      if (conf.getSplitField.isDefined) {
-        rdd = rdd.splitField(conf.getSplitField.get)
-
-        if (!conf.getSplitsPerShard.isDefined) {
-          // user wants splits, but didn't specify how many per shard
-          rdd = rdd.splitsPerShard(DEFAULT_SPLITS_PER_SHARD)
-        }
-      }
-
-      rdd
-    }
-
-    if (qt == QT_STREAM || qt == QT_SQL) {
-      // ignore any fields / filters when processing a streaming expression
-      return SolrRelationUtil.toRows(querySchema, solrRDD.requestHandler(qt).query(query))
-    }
+        uKey = Some(uniqueKey)
+      ).query(query))
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point
@@ -488,8 +445,8 @@ class SolrRelation(
         throw new IllegalStateException("Cannot do sampling if intra-shard splitting feature is enabled!");
       }
 
-      query.addSort(SolrQuery.SortClause.asc("random_"+conf.sampleSeed.get))
-      query.addSort(SolrQuery.SortClause.asc(solrRDD.uniqueKey))
+      query.addSort(SolrQuery.SortClause.asc("random_" + conf.sampleSeed.get))
+      query.addSort(SolrQuery.SortClause.asc(uniqueKey))
       query.add(ConfigurationConstants.SAMPLE_PCT, conf.samplePct.getOrElse(0.1f).toString)
     }
 
@@ -500,7 +457,11 @@ class SolrRelation(
         throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
       }
 
-      if (conf.requestHandler.isEmpty && !requiresExportHandler(qt) && !conf.useCursorMarks.getOrElse(false) && !conf.splits.getOrElse(false)) {
+      // Determine the request handler to use if not explicitly set by the user
+      if (conf.requestHandler.isEmpty &&
+          !requiresStreamingRDD(qt) &&
+          !conf.useCursorMarks.getOrElse(false) &&
+          !conf.splits.getOrElse(false)) {
         logger.info(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)
@@ -540,16 +501,28 @@ class SolrRelation(
         } else {
           logger.debug(s"Using requestHandler: $qt isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
         }
-        // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
-        if (qt == QT_EXPORT) {
-          if (query.getFields == null)
-            query.setFields(solrRDD.uniqueKey)
-          if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
-            query.setSort(solrRDD.uniqueKey, SolrQuery.ORDER.asc)
-        }
+      }
+
+      // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
+      if (qt == QT_EXPORT) {
+        if (query.getFields == null)
+          query.setFields(uniqueKey)
+        if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
+          query.setSort(uniqueKey, SolrQuery.ORDER.asc)
       }
       logger.info(s"Sending ${query} to SolrRDD using ${qt}")
-      val docs = solrRDD.requestHandler(qt).query(query)
+
+      // Construct the SolrRDD based on the request handler
+      val solrRDD: SolrRDD[_] = SolrRDD.apply(
+        conf.getZkHost.get,
+        collection,
+        sqlContext.sparkContext,
+        Some(qt),
+        splitsPerShard = conf.getSplitsPerShard,
+        splitField = getSplitField(conf),
+        uKey = Some(uniqueKey))
+
+      val docs = solrRDD.query(query)
       val rows = SolrRelationUtil.toRows(querySchema, docs)
       rows
     } catch {
@@ -557,7 +530,13 @@ class SolrRelation(
     }
   }
 
-  def requiresExportHandler(rq: String): Boolean = {
+  def getSplitField(conf: SolrConf): Option[String] = {
+    if (conf.getSplitField.isDefined) conf.getSplitField
+    else if (conf.splits.getOrElse(false)) Some(DEFAULT_SPLIT_FIELD)
+    else None
+  }
+
+  def requiresStreamingRDD(rq: String): Boolean = {
     return rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
   }
 
@@ -714,7 +693,7 @@ class SolrRelation(
     }
     
     val sortParams = conf.getArbitrarySolrParams.remove("sort")
-    if (sortParams != null && sortParams.length > 0) {
+    if (sortParams != null && sortParams.nonEmpty) {
       for (p <- sortParams) {
         val sortClauses = SolrRelation.parseSortParamFromString(p)
         for (sortClause <- sortClauses) {
@@ -822,7 +801,6 @@ object SolrRelation extends LazyLogging {
     })
   }
 
-  // TODO: remove this check when https://issues.apache.org/jira/browse/SOLR-9187 is fixed
   def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
     for (structField <- querySchema.fields) {
       if (structField.dataType == BooleanType)
