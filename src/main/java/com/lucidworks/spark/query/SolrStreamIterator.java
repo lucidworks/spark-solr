@@ -35,9 +35,9 @@ public class SolrStreamIterator extends TupleStreamIterator {
 
     this.shardUrl = shardUrl;
     this.solrServer = solrServer;
+    this.solrQuery = mergeFq(solrQuery);
     this.numWorkers = numWorkers;
     this.workerId = workerId;
-    this.solrQuery = mergeFq(solrQuery);
 
     if (solrQuery.getRequestHandler() == null) {
       solrQuery = solrQuery.setRequestHandler("/export");
@@ -47,11 +47,16 @@ public class SolrStreamIterator extends TupleStreamIterator {
     //SolrQuerySupport.validateExportHandlerQuery(solrServer, solrQuery);
   }
 
+  public SolrStreamIterator(String shardUrl, SolrClient solrServer, SolrQuery solrQuery) {
+    this(shardUrl, solrServer, solrQuery, 0, 0);
+  }
+
   protected TupleStream openStream() {
     SolrStream stream;
     try {
       stream = new SolrStream(shardUrl, solrQuery);
-      stream.setStreamContext(getStreamContext());
+      if (numWorkers > 0)
+        stream.setStreamContext(getStreamContext());
       stream.open();
     } catch (IOException e1) {
       throw new RuntimeException(e1);

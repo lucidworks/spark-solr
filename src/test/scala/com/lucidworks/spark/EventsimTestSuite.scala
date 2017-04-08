@@ -86,6 +86,20 @@ class EventsimTestSuite extends EventsimBuilder {
     val rows = df.collectAsList()
   }
 
+  test("SQL query splits with export handler and no splits") {
+    val options = Map(
+      "zkHost" -> zkHost,
+      "collection" -> collectionName,
+      SOLR_DO_SPLITS -> "true",
+      SOLR_FIELD_PARAM -> "artist, auth, firstName, gender, id",
+      SOLR_SPLITS_PER_SHARD_PARAM -> "1"
+    )
+    val df: DataFrame = sparkSession.read.format("solr").options(options).load()
+    assert(df.rdd.getNumPartitions == numShards)
+    assert(df.rdd.getNumPartitions == 2)
+    val rows = df.collectAsList()
+  }
+
   test("SQL query no params should produce IllegalArgumentException") {
     intercept[IllegalArgumentException] {
       sparkSession.read.format("solr").load()

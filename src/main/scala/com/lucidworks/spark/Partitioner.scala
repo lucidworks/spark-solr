@@ -16,7 +16,7 @@ object SolrPartitioner {
   def getShardPartitions(shards: List[SolrShard], query: SolrQuery) : Array[Partition] = {
     shards.zipWithIndex.map{ case (shard, i) =>
       // Chose any of the replicas as the active shard to query
-      new ShardRDDPartition(i, "*", shard, query, SolrRDD.randomReplica(shard))}.toArray
+      ShardRDDPartition(i, "*", shard, query, SolrRDD.randomReplica(shard))}.toArray
   }
 
   def getSplitPartitions(
@@ -39,6 +39,14 @@ object SolrPartitioner {
       })
     })
     splitPartitions.toArray
+  }
+
+  def getExportHandlerPartitions(
+      shards: List[SolrShard],
+      query: SolrQuery): Array[Partition] = {
+    shards.zipWithIndex.map{ case (shard, i) =>
+      // Chose any of the replicas as the active shard to query
+      HashQPartition(i, shard, query, SolrRDD.randomReplica(shard), 0, 0)}.toArray
   }
 
   def getHashPartitions(

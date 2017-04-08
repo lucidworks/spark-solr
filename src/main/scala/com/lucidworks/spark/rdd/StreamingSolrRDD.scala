@@ -114,7 +114,7 @@ class StreamingSolrRDD(
       SolrPartitioner.getHashPartitions(shards, query, splitFieldName, numSplits)
     } else {
       // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
-      SolrPartitioner.getShardPartitions(shards, query)
+      SolrPartitioner.getExportHandlerPartitions(shards, query)
     }
 
     if (logger.underlying.isDebugEnabled) {

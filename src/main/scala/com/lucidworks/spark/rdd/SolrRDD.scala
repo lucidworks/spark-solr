@@ -29,13 +29,12 @@ abstract class SolrRDD[T: ClassTag](
   val uniqueKey: String = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
-    val urls: Seq[String] = Seq.empty
     split match {
-      case partition: CloudStreamPartition => Seq.empty
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: AnyRef => logger.warn("Unknown partition type '" + partition.getClass + "'")
+      case partition: HashQPartition => Array(partition.preferredReplica.replicaHostName)
+      case partition: SplitRDDPartition => Array(partition.preferredReplica.replicaHostName)
+      case _: AnyRef => Seq.empty
     }
-    urls
   }
 
   def buildQuery: SolrQuery
