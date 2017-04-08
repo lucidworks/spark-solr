@@ -8,7 +8,6 @@ import com.lucidworks.spark.util.SolrSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.Partition
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 // Is there a need to override {@code Partitioner.scala} and define our own partition id's
@@ -41,6 +40,25 @@ object SolrPartitioner {
     })
     splitPartitions.toArray
   }
+
+  def getHashPartitions(
+      shards: List[SolrShard],
+      query: SolrQuery,
+      splitFieldName: String,
+      splitsPerShard: Int): Array[Partition] = {
+    val splitPartitions = ArrayBuffer.empty[HashQPartition]
+    var counter = 0
+    shards.foreach(shard => {
+      // Form a continuous iterator list so that we can pick different replicas for different partitions in round-robin mode
+      val splits = SolrSupport.getHashSplits(query, shard, splitFieldName, splitsPerShard)
+      splits.foreach(split => {
+        splitPartitions += HashQPartition(counter, shard, split.query, split.replica, split.numWorkers, split.workerId)
+        counter = counter+1
+      })
+    })
+    splitPartitions.toArray
+  }
+
 }
 
 case class SolrShard(shardName: String, replicas: List[SolrReplica])

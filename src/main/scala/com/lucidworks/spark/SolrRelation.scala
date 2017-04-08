@@ -460,8 +460,7 @@ class SolrRelation(
       // Determine the request handler to use if not explicitly set by the user
       if (conf.requestHandler.isEmpty &&
           !requiresStreamingRDD(qt) &&
-          !conf.useCursorMarks.getOrElse(false) &&
-          !conf.splits.getOrElse(false)) {
+          !conf.useCursorMarks.getOrElse(false)) {
         logger.info(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(querySchema)

@@ -502,4 +502,27 @@ object SolrSupport extends LazyLogging {
     logger.debug(s"Creating $splitsPerShard splits using field $splitFieldName for $solrShard")
     return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
   }
+
+  def getHashSplits(
+      query: SolrQuery,
+      solrShard: SolrShard,
+      splitFieldName: String,
+      splitsPerShard: Int): List[HashQSplit] = {
+    val splits = ListBuffer.empty[HashQSplit]
+    val replicas = solrShard.replicas
+    val sortedReplicas = replicas.sortBy(r => r.replicaName)
+    val numReplicas = replicas.size
+
+    for (i <- 0 until splitsPerShard) {
+      val replica =
+        if (numReplicas >1)
+          if (i < numReplicas) sortedReplicas.get(1) else sortedReplicas.get(i % numReplicas)
+        else
+          sortedReplicas.get(0)
+      splits += HashQSplit(query, replica, splitsPerShard, i)
+    }
+    splits.toList
+  }
+
+  case class HashQSplit(query: SolrQuery, replica: SolrReplica, numWorkers: Int, workerId: Int)
 }

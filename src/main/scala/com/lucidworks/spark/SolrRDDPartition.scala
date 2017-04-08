@@ -33,3 +33,12 @@ case class SplitRDDPartition(
     query: SolrQuery,
     preferredReplica: SolrReplica)
   extends SolrRDDPartition
+
+case class HashQPartition(
+    index: Int,
+    solrShard: SolrShard,
+    query: SolrQuery,
+    preferredReplica: SolrReplica,
+    numWorkers: Int,
+    workerId: Int)
+  extends Partition
