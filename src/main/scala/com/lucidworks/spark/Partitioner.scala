@@ -2,7 +2,6 @@ package com.lucidworks.spark
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.HashQParserShardSplitStrategy.WorkerShardSplit
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import org.apache.solr.client.solrj.SolrQuery
@@ -27,14 +26,9 @@ object SolrPartitioner {
     var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
     var counter = 0
     shards.foreach(shard => {
-      // Form a continuous iterator list so that we can pick different replicas for different partitions in round-robin mode
-      val replicaContinuousIterator: Iterator[SolrReplica] = Iterator.continually(shard.replicas).flatten
-      val splits = SolrSupport.splitShards(query, shard, splitFieldName, splitsPerShard)
+      val splits = SolrSupport.getShardSplits(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        split match {
-          case wss: WorkerShardSplit => splitPartitions += SplitRDDPartition(counter, "*", shard, wss.getSplitQuery, wss.getReplica)
-          case _ => splitPartitions += SplitRDDPartition(counter, "*", shard, split.getSplitQuery, replicaContinuousIterator.next())
-        }
+        splitPartitions += SplitRDDPartition(counter, "*", shard, split.query, split.replica)
         counter = counter + 1
       })
     })
@@ -46,21 +40,21 @@ object SolrPartitioner {
       query: SolrQuery): Array[Partition] = {
     shards.zipWithIndex.map{ case (shard, i) =>
       // Chose any of the replicas as the active shard to query
-      HashQPartition(i, shard, query, SolrRDD.randomReplica(shard), 0, 0)}.toArray
+      ExportHandlerPartition(i, shard, query, SolrRDD.randomReplica(shard), 0, 0)}.toArray
   }
 
-  def getHashPartitions(
+  def getExportHandlerPartitions(
       shards: List[SolrShard],
       query: SolrQuery,
       splitFieldName: String,
       splitsPerShard: Int): Array[Partition] = {
-    val splitPartitions = ArrayBuffer.empty[HashQPartition]
+    val splitPartitions = ArrayBuffer.empty[ExportHandlerPartition]
     var counter = 0
     shards.foreach(shard => {
       // Form a continuous iterator list so that we can pick different replicas for different partitions in round-robin mode
       val splits = SolrSupport.getHashSplits(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        splitPartitions += HashQPartition(counter, shard, split.query, split.replica, split.numWorkers, split.workerId)
+        splitPartitions += ExportHandlerPartition(counter, shard, split.query, split.replica, split.numWorkers, split.workerId)
         counter = counter+1
       })
     })

@@ -34,7 +34,7 @@ case class SplitRDDPartition(
     preferredReplica: SolrReplica)
   extends SolrRDDPartition
 
-case class HashQPartition(
+case class ExportHandlerPartition(
     index: Int,
     solrShard: SolrShard,
     query: SolrQuery,

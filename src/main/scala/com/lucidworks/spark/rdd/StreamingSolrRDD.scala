@@ -3,7 +3,7 @@ package com.lucidworks.spark.rdd
 import com.lucidworks.spark.query.{SolrStreamIterator, StreamingExpressionResultIterator}
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
-import com.lucidworks.spark.{CloudStreamPartition, HashQPartition, SolrPartitioner}
+import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.annotation.DeveloperApi
@@ -76,7 +76,7 @@ class StreamingSolrRDD(
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")
         val resultsIterator = new StreamingExpressionResultIterator(partition.zkhost, partition.collection, partition.params)
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
-      case partition: HashQPartition =>
+      case partition: ExportHandlerPartition =>
 
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
@@ -111,7 +111,7 @@ class StreamingSolrRDD(
       val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
       logger.info(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
       query.set("partitionKeys", splitFieldName)
-      SolrPartitioner.getHashPartitions(shards, query, splitFieldName, numSplits)
+      SolrPartitioner.getExportHandlerPartitions(shards, query, splitFieldName, numSplits)
     } else {
       // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
       SolrPartitioner.getExportHandlerPartitions(shards, query)
