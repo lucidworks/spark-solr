@@ -111,6 +111,7 @@ class StreamingSolrRDD(
       val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
       logger.info(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
       query.set("partitionKeys", splitFieldName)
+      // Workaround for SOLR-10490. TODO: Replace with SolrPartitioner#getSplitPartitions once SOLR-10490 is resolved
       SolrPartitioner.getExportHandlerPartitions(shards, query, splitFieldName, numSplits)
     } else {
       // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed

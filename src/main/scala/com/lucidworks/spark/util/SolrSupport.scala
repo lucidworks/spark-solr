@@ -518,7 +518,9 @@ object SolrSupport extends LazyLogging {
     splits.toList
   }
 
-  def getHashSplits(
+
+  // Workaround for SOLR-10490. TODO: Remove once fixed
+  def getExportHandlerSplits(
       query: SolrQuery,
       solrShard: SolrShard,
       splitFieldName: String,
