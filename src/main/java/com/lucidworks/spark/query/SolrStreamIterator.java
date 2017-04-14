@@ -29,7 +29,10 @@ public class SolrStreamIterator extends TupleStreamIterator {
   protected String shardUrl;
   protected int numWorkers;
   protected int workerId;
+  protected SolrClientCache solrClientCache;
 
+  // Remove the whole code around StreamContext, numWorkers, workerId once SOLR-10490 is fixed.
+  // It should just work if an 'fq' passed in the params with HashQ filter
   public SolrStreamIterator(String shardUrl, SolrClient solrServer, SolrQuery solrQuery, int numWorkers, int workerId) {
     super(solrQuery);
 
@@ -64,9 +67,11 @@ public class SolrStreamIterator extends TupleStreamIterator {
     return stream;
   }
 
+  // TODO: Remove once SOLR-10490 is fixed
   protected StreamContext getStreamContext() {
     StreamContext context = new StreamContext();
-    context.setSolrClientCache(new SolrClientCache());
+    solrClientCache = new SolrClientCache();
+    context.setSolrClientCache(solrClientCache);
     context.numWorkers = numWorkers;
     context.workerID = workerId;
     return context;
@@ -75,6 +80,9 @@ public class SolrStreamIterator extends TupleStreamIterator {
   protected void afterStreamClosed() throws Exception {
     if (!(solrServer instanceof CloudSolrClient)) {
       IOUtils.closeQuietly(solrServer);
+    }
+    if (solrClientCache != null) {
+      solrClientCache.close();
     }
   }
 
