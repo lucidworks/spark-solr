@@ -2,7 +2,7 @@ package com.lucidworks.spark.util
 
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
 import java.lang.reflect.Modifier
-import java.net.{SocketException, ConnectException, URL, InetAddress}
+import java.net.{ConnectException, InetAddress, SocketException, URL}
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,16 +17,17 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
+import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
+import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import scala.collection.JavaConversions._
 import util.control.Breaks._
 
@@ -163,16 +164,34 @@ object SolrSupport extends LazyLogging {
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
-          sendBatchToSolr(solrClient, collection, batch, commitWithin)
+          sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
           batch.clear
         }
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
-        sendBatchToSolr(solrClient, collection, batch, commitWithin)
+        sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
         batch.clear
       }
     })
+  }
+
+  def sendBatchToSolrWithRetry(
+      zkHost: String,
+      solrClient: SolrClient,
+      collection: String,
+      batch: Iterable[SolrInputDocument],
+      commitWithin: Option[Int]): Unit = {
+    try {
+      sendBatchToSolr(solrClient, collection, batch, commitWithin)
+    } catch {
+      // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
+      case e @ (_: SessionExpiredException | _:OperationTimeoutException) =>
+        logger.info("Got an exception with message '" + e.getMessage +  "'.  Resetting the cached solrClient")
+        CacheSolrClient.cache.invalidate(zkHost)
+        val newClient = SolrSupport.getCachedCloudClient(zkHost)
+        sendBatchToSolr(newClient, collection, batch, commitWithin)
+    }
   }
 
   def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit =
