@@ -508,7 +508,7 @@ object SolrSupport extends LazyLogging {
       // with hash, we can hit all replicas in the shard in parallel
       val replica =
         if (numReplicas >1)
-          if (i < numReplicas) sortedReplicas.get(1) else sortedReplicas.get(i % numReplicas)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
         else
           sortedReplicas.get(0)
       val splitQuery = query.getCopy
@@ -533,7 +533,7 @@ object SolrSupport extends LazyLogging {
     for (i <- 0 until splitsPerShard) {
       val replica =
         if (numReplicas >1)
-          if (i < numReplicas) sortedReplicas.get(1) else sortedReplicas.get(i % numReplicas)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
         else
           sortedReplicas.get(0)
       splits += ExportHandlerSplit(query, replica, splitsPerShard, i)
