@@ -225,8 +225,8 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(isSortFieldDocValue)
 
     solrRelation.initialQuery.setSorts(Collections.emptyList())
-    SolrRelation.addSortField(querySchema, solrRelation.initialQuery)
-    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause("userId", SolrQuery.ORDER.asc)))
+    SolrRelation.addSortField(solrRelation.baseSchema.get, querySchema, solrRelation.initialQuery, solrRelation.uniqueKey)
+    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause(solrRelation.uniqueKey, SolrQuery.ORDER.asc)))
   }
 
   test("Multiple queries with same Dataframe to test request handler switch") {

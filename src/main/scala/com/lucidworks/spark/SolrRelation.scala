@@ -98,7 +98,8 @@ class SolrRelation(
       dataFrame.get.schema
     } else {
       if (initialQuery.getFields != null) {
-        baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
+        // Get the schema for uniqueKey in the schema. This will later be used for adding sort fields for export handler
+        baseSchema = Some(getBaseSchemaFromConfig(collection, if (solrFields.isEmpty) solrFields else solrFields ++ Array(uniqueKey)))
         SolrRelationUtil.deriveQuerySchema(initialQuery.getFields.split(","), baseSchema.get)
       } else if (initialQuery.getRequestHandler == QT_STREAM) {
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
@@ -213,7 +214,7 @@ class SolrRelation(
         sqlSchema
       } else {
         // don't return the _version_ field unless specifically asked for by the user
-        baseSchema = Some(getBaseSchemaFromConfig(collection, solrFields))
+        baseSchema = Some(getBaseSchemaFromConfig(collection, if (solrFields.isEmpty) solrFields else solrFields ++ Array(uniqueKey)))
         if (solrFields.contains("_version_")) {
           // user specifically requested _version_, so keep it
           var tmp = applyExcludeFieldsToSchema(baseSchema.get)
@@ -487,7 +488,7 @@ class SolrRelation(
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
             if (isFDV && !hasUnsupportedExportTypes) {
-              SolrRelation.addSortField(querySchema, query)
+              SolrRelation.addSortField(baseSchema.get, querySchema, query, uniqueKey)
               logger.info("Added sort field '" + query.getSortField + "' to the query")
               true
             }
@@ -783,21 +784,27 @@ object SolrRelation extends LazyLogging {
    }
   }
 
-  def addSortField(querySchema: StructType, query: SolrQuery): Unit = {
-    // if doc values enabled for the id field, then sort by that
-    if (querySchema.fieldNames.contains("id")) {
-      query.addSort("id", SolrQuery.ORDER.asc)
-      return
+  def addSortField(baseSchema: StructType, querySchema: StructType, query: SolrQuery, uniqueKey: String): Unit = {
+    // if doc values enabled for the uniqueKey field, use that for sorting
+    if (baseSchema.fieldNames.contains(uniqueKey)) {
+      if (baseSchema(uniqueKey).metadata.getBoolean("docValues")) {
+        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
+        return
+      }
     }
+
     querySchema.fields.foreach(field => {
+      // The field only contains 'multiValued' in the schema if 'flattenMultivalued' is false (it is true by default)
+      // Hence, this is not always reliable. It is possible a multiValued field ends up being a sort field
       if (field.metadata.contains("multiValued")) {
         if (!field.metadata.getBoolean("multiValued")) {
           query.addSort(field.name, SolrQuery.ORDER.asc)
           return
         }
+      } else {
+        query.addSort(field.name, SolrQuery.ORDER.asc)
+        return
       }
-      query.addSort(field.name, SolrQuery.ORDER.asc)
-      return
     })
   }
 
