@@ -271,6 +271,13 @@ Usage: `option("sample_pct", "0.05")`
 
 Default: 0.1
 
+==== skip_non_dv
+
+The `skip_non_dv` option instructs the `solr` datasource to skip all fields that are not docValues.
+
+Usage: `option("skip_non_dv", "true")`
+
+Default: false
 
 === solr.params
 
