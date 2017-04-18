@@ -15,7 +15,6 @@ import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.util.NamedList
 import org.apache.solr.common.{SolrDocument, SolrException}
-import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
@@ -546,67 +545,6 @@ object SolrQuerySupport extends LazyLogging {
     }
 
     fieldTypeToClassMap.toMap
-  }
-
-  def splitShard(
-      sc: SparkContext,
-      query: SolrQuery,
-      shards: List[String],
-      splitFieldName: String,
-      splitsPerShard: Int,
-      collection: String): RDD[ShardSplit[_]] = {
-
-    // get field type of split field
-    var fieldDataType: Option[DataType] = None
-    if ("_version_".equals(splitFieldName)) {
-      fieldDataType = Some(DataTypes.LongType)
-    } else {
-      val fieldMetaMap = getFieldTypes(Set(splitFieldName), shards.get(0))
-      if (fieldMetaMap.contains(splitFieldName)) {
-        if (fieldMetaMap.get(splitFieldName).isDefined) {
-          val solrFieldMeta = fieldMetaMap.get(splitFieldName).get
-          if (solrFieldMeta.fieldTypeClass.isDefined) {
-            if (SOLR_DATA_TYPES.contains(solrFieldMeta.fieldTypeClass.get)) {
-              fieldDataType = Some(SOLR_DATA_TYPES.get(solrFieldMeta.fieldTypeClass.get).get)
-            } else {
-              logger.warn("Cannot find spark type for solr field class '" + solrFieldMeta.fieldTypeClass.get + "'. " +
-                "Assuming it is a String!. The types dict is " + SOLR_DATA_TYPES)
-              fieldDataType = Some(DataTypes.StringType)
-            }
-          } else {
-            logger.warn("No field type class found for " + splitFieldName + ", assuming it is a String!")
-            fieldDataType = Some(DataTypes.StringType)
-          }
-        } else {
-          logger.warn("No field metadata found for " + splitFieldName + ", assuming it is a String!")
-          fieldDataType = Some(DataTypes.StringType)
-        }
-      } else {
-        throw new IllegalArgumentException("Cannot find split field '" + splitFieldName + "' in the solr field meta")
-      }
-    }
-
-    // For each shard, get the list of splits and flat map the list of lists
-    sc.parallelize(shards, shards.size).flatMap(shardUrl => {
-      var splitStrategy: Option[ShardSplitStrategy] = None
-      if (fieldDataType.isEmpty) {
-        throw new Exception("data type for field '" + splitFieldName + "' not defined")
-      }
-      if (fieldDataType.get == DataTypes.LongType || fieldDataType.get == DataTypes.IntegerType) {
-        splitStrategy = Some(new NumberFieldShardSplitStrategy)
-      } else if (fieldDataType.get == DataTypes.StringType) {
-        splitStrategy == Some(new StringFieldShardSplitStrategy)
-      }
-
-      if (splitStrategy.isEmpty) {
-        throw new IllegalArgumentException("Can only split shards on fields of type: long, int, or string!. The field '" + splitFieldName + "' has field type '" + fieldDataType)
-      }
-
-      val splits = splitStrategy.get.getSplits(shardUrl, query, splitFieldName, splitsPerShard)
-      logger.info("Found " + splits.size + " splits for " + splitFieldName + ": " + splits)
-
-      splits.toList
-    })
   }
 
   def getPivotFieldRange(schema: StructType, pivotPrefix: String): Array[Int] = {

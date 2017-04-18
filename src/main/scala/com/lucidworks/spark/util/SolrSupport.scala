@@ -491,10 +491,10 @@ object SolrSupport extends LazyLogging {
             if (liveNodes.contains(replicaCoreProps.getNodeName)) {
               try {
                 val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
-                replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
+                replicas += SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
               } catch {
                 case e : Exception => logger.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
-                  replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
+                  replicas += SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
               }
 
             }
@@ -505,20 +505,61 @@ object SolrSupport extends LazyLogging {
         if (numReplicas == 0) {
           throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
         }
-        shards += new SolrShard(slice.getName, replicas.toList)
+        shards += SolrShard(slice.getName, replicas.toList)
       }
     }
     shards.toList
   }
 
-  def splitShards(
+  def getShardSplits(
       query: SolrQuery,
       solrShard: SolrShard,
       splitFieldName: String,
-      splitsPerShard: Int): List[ShardSplit[_]] = {
+      splitsPerShard: Int): List[WorkerShardSplit] = {
+    query.set("partitionKeys", splitFieldName)
+    val splits = ListBuffer.empty[WorkerShardSplit]
+    val replicas = solrShard.replicas
+    val sortedReplicas = replicas.sortBy(r => r.replicaName)
+    val numReplicas = replicas.size
 
-    val hashSplitStrategy = new HashQParserShardSplitStrategy(solrShard)
-    logger.debug(s"Creating $splitsPerShard splits using field $splitFieldName for $solrShard")
-    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
+    for (i <- 0 until splitsPerShard) {
+      val fq = s"{!hash workers=$splitsPerShard worker=$i}"
+      // with hash, we can hit all replicas in the shard in parallel
+      val replica =
+        if (numReplicas >1)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
+        else
+          sortedReplicas.get(0)
+      val splitQuery = query.getCopy
+      splitQuery.addFilterQuery(fq)
+      splits += WorkerShardSplit(splitQuery, replica)
+    }
+    splits.toList
   }
+
+
+  // Workaround for SOLR-10490. TODO: Remove once fixed
+  def getExportHandlerSplits(
+      query: SolrQuery,
+      solrShard: SolrShard,
+      splitFieldName: String,
+      splitsPerShard: Int): List[ExportHandlerSplit] = {
+    val splits = ListBuffer.empty[ExportHandlerSplit]
+    val replicas = solrShard.replicas
+    val sortedReplicas = replicas.sortBy(r => r.replicaName)
+    val numReplicas = replicas.size
+
+    for (i <- 0 until splitsPerShard) {
+      val replica =
+        if (numReplicas >1)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
+        else
+          sortedReplicas.get(0)
+      splits += ExportHandlerSplit(query, replica, splitsPerShard, i)
+    }
+    splits.toList
+  }
+
+  case class WorkerShardSplit(query: SolrQuery, replica: SolrReplica)
+  case class ExportHandlerSplit(query: SolrQuery, replica: SolrReplica, numWorkers: Int, workerId: Int)
 }
