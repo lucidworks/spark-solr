@@ -1,8 +1,8 @@
 package com.lucidworks.spark.example
 
-import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.SparkApp
+import com.lucidworks.spark.rdd.SelectSolrRDD
+import com.lucidworks.spark.util.SolrSupport
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
@@ -29,7 +29,7 @@ class RDDExample extends SparkApp.RDDProcessor with LazyLogging {
     cloudSolrClient.request(req)
 
     val sc = new SparkContext(conf)
-    val rdd = new SolrRDD(zkHost, collection, sc)
+    val rdd = new SelectSolrRDD(zkHost, collection, sc)
     val count = rdd.query(queryStr).count()
 
     logger.info("Count is " + count)

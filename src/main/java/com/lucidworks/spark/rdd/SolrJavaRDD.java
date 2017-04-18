@@ -6,17 +6,16 @@ import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 
-//TODO: Add all other methods from SolrRDD here
 public class SolrJavaRDD extends JavaRDD<SolrDocument> {
 
-  private final SolrRDD solrRDD;
+  private final SelectSolrRDD solrRDD;
 
-  public SolrJavaRDD(SolrRDD solrRDD) {
-    super(solrRDD, JavaApiHelper.getClassTag(SolrDocument.class));
+  public SolrJavaRDD(SelectSolrRDD solrRDD) {
+    super(solrRDD, solrRDD.elementClassTag());
     this.solrRDD = solrRDD;
   }
 
-  protected SolrJavaRDD wrap(SolrRDD rdd) {
+  protected SolrJavaRDD wrap(SelectSolrRDD rdd) {
     return new SolrJavaRDD(rdd);
   }
 
@@ -41,12 +40,12 @@ public class SolrJavaRDD extends JavaRDD<SolrDocument> {
   }
 
   @Override
-  public SolrRDD rdd() {
+  public SelectSolrRDD rdd() {
     return solrRDD;
   }
 
   public static SolrJavaRDD get(String zkHost, String collection, SparkContext sc) {
-    SolrRDD solrRDD = SolrRDD$.MODULE$.apply(zkHost, collection, sc);
+    SelectSolrRDD solrRDD = SelectSolrRDD$.MODULE$.apply(zkHost, collection, sc);
     return new SolrJavaRDD(solrRDD);
   }
 

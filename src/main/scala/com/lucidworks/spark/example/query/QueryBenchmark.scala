@@ -1,13 +1,12 @@
 package com.lucidworks.spark.example.query
 
-import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.SparkApp
-import org.apache.commons.cli.{Option, CommandLine}
+import com.lucidworks.spark.rdd.SelectSolrRDD
+import com.lucidworks.spark.util.SolrSupport
+import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
-import org.apache.spark.SparkConf
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 
 class QueryBenchmark extends SparkApp.RDDProcessor {
   def getName: String = "query-solr-benchmark"
@@ -42,7 +41,7 @@ class QueryBenchmark extends SparkApp.RDDProcessor {
     solrQuery.addSort(new SolrQuery.SortClause("id", "asc"))
     solrQuery.setRows(rows)
 
-    val solrRDD: SolrRDD = new SolrRDD(zkHost, collection, sc)
+    val solrRDD: SelectSolrRDD = new SelectSolrRDD(zkHost, collection, sc)
 
     var startMs: Long = System.currentTimeMillis
 

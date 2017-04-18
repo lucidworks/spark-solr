@@ -2,7 +2,7 @@ package com.lucidworks.spark.util
 
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
 import java.lang.reflect.Modifier
-import java.net.{SocketException, ConnectException, URL, InetAddress}
+import java.net.{ConnectException, InetAddress, SocketException, URL}
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,16 +17,17 @@ import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrServerException, SolrClient, SolrQuery}
+import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
+import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import scala.collection.JavaConversions._
 import util.control.Breaks._
 
@@ -163,16 +164,34 @@ object SolrSupport extends LazyLogging {
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
-          sendBatchToSolr(solrClient, collection, batch, commitWithin)
+          sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
           batch.clear
         }
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
-        sendBatchToSolr(solrClient, collection, batch, commitWithin)
+        sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
         batch.clear
       }
     })
+  }
+
+  def sendBatchToSolrWithRetry(
+      zkHost: String,
+      solrClient: SolrClient,
+      collection: String,
+      batch: Iterable[SolrInputDocument],
+      commitWithin: Option[Int]): Unit = {
+    try {
+      sendBatchToSolr(solrClient, collection, batch, commitWithin)
+    } catch {
+      // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
+      case e @ (_: SessionExpiredException | _:OperationTimeoutException) =>
+        logger.info("Got an exception with message '" + e.getMessage +  "'.  Resetting the cached solrClient")
+        CacheSolrClient.cache.invalidate(zkHost)
+        val newClient = SolrSupport.getCachedCloudClient(zkHost)
+        sendBatchToSolr(newClient, collection, batch, commitWithin)
+    }
   }
 
   def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit =
@@ -472,10 +491,10 @@ object SolrSupport extends LazyLogging {
             if (liveNodes.contains(replicaCoreProps.getNodeName)) {
               try {
                 val addresses = InetAddress.getAllByName(new URL(replicaCoreProps.getBaseUrl).getHost)
-                replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
+                replicas += SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, addresses)
               } catch {
                 case e : Exception => logger.warn("Error resolving ip address " + replicaCoreProps.getNodeName + " . Exception " + e)
-                  replicas += new SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
+                  replicas += SolrReplica(0, replicaCoreProps.getCoreName, replicaCoreProps.getCoreUrl, replicaCoreProps.getNodeName, Array.empty[InetAddress])
               }
 
             }
@@ -486,20 +505,61 @@ object SolrSupport extends LazyLogging {
         if (numReplicas == 0) {
           throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
         }
-        shards += new SolrShard(slice.getName, replicas.toList)
+        shards += SolrShard(slice.getName, replicas.toList)
       }
     }
     shards.toList
   }
 
-  def splitShards(
+  def getShardSplits(
       query: SolrQuery,
       solrShard: SolrShard,
       splitFieldName: String,
-      splitsPerShard: Int): List[ShardSplit[_]] = {
+      splitsPerShard: Int): List[WorkerShardSplit] = {
+    query.set("partitionKeys", splitFieldName)
+    val splits = ListBuffer.empty[WorkerShardSplit]
+    val replicas = solrShard.replicas
+    val sortedReplicas = replicas.sortBy(r => r.replicaName)
+    val numReplicas = replicas.size
 
-    val hashSplitStrategy = new HashQParserShardSplitStrategy(solrShard)
-    logger.debug(s"Creating $splitsPerShard splits using field $splitFieldName for $solrShard")
-    return hashSplitStrategy.getSplits(SolrRDD.randomReplicaLocation(solrShard), query, splitFieldName, splitsPerShard).toList
+    for (i <- 0 until splitsPerShard) {
+      val fq = s"{!hash workers=$splitsPerShard worker=$i}"
+      // with hash, we can hit all replicas in the shard in parallel
+      val replica =
+        if (numReplicas >1)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
+        else
+          sortedReplicas.get(0)
+      val splitQuery = query.getCopy
+      splitQuery.addFilterQuery(fq)
+      splits += WorkerShardSplit(splitQuery, replica)
+    }
+    splits.toList
   }
+
+
+  // Workaround for SOLR-10490. TODO: Remove once fixed
+  def getExportHandlerSplits(
+      query: SolrQuery,
+      solrShard: SolrShard,
+      splitFieldName: String,
+      splitsPerShard: Int): List[ExportHandlerSplit] = {
+    val splits = ListBuffer.empty[ExportHandlerSplit]
+    val replicas = solrShard.replicas
+    val sortedReplicas = replicas.sortBy(r => r.replicaName)
+    val numReplicas = replicas.size
+
+    for (i <- 0 until splitsPerShard) {
+      val replica =
+        if (numReplicas >1)
+          if (i < numReplicas) sortedReplicas.get(i) else sortedReplicas.get(i % numReplicas)
+        else
+          sortedReplicas.get(0)
+      splits += ExportHandlerSplit(query, replica, splitsPerShard, i)
+    }
+    splits.toList
+  }
+
+  case class WorkerShardSplit(query: SolrQuery, replica: SolrReplica)
+  case class ExportHandlerSplit(query: SolrQuery, replica: SolrReplica, numWorkers: Int, workerId: Int)
 }

@@ -1,8 +1,10 @@
 package com.lucidworks.spark.util
 
 import java.sql.Timestamp
+import java.util
 import java.util.Date
 
+import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
@@ -298,84 +300,135 @@ object SolrRelationUtil extends LazyLogging {
     solrQuery.setFields(fieldList.toList:_*)
   }
 
-  //TODO: Full on testing with schemaless, multi-valued arrays etc...
-  def toRows(schema: StructType, docs: RDD[SolrDocument]): RDD[Row] = {
+  def toRows(schema: StructType, docs:RDD[_]): RDD[Row] = {
+    docs match {
+      case streamingRDD: StreamingSolrRDD => solrDocToRows[util.Map[_,_]](schema, streamingRDD)
+      case selectRDD: SelectSolrRDD => solrDocToRows[SolrDocument](schema, selectRDD)
+      case _ => throw new Exception("Unknown SolrRDD type")
+    }
+  }
+
+  def processFieldValue(fieldValue: Object, fieldType: DataType, multiValued: Boolean): Any = {
+    fieldValue match {
+      case d: Date => new Timestamp(d.getTime)
+      case s: String =>
+        // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
+        if (fieldType.eq(TimestampType)) new Timestamp(DateTime.parse(s).getMillis)
+        else s
+      case i: java.lang.Integer => new java.lang.Long(i.longValue())
+      case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+      case al: java.util.ArrayList[_] =>
+        val jlist = al.iterator.map {
+          case d: Date => new Timestamp(d.getTime)
+          case s: String =>
+            fieldType match {
+              case at: ArrayType => if (at.elementType.eq(TimestampType)) new Timestamp(DateTime.parse(s).getMillis) else s
+              case _: TimestampType => new Timestamp(DateTime.parse(s).getMillis)
+              case _ => s
+            }
+          case i: java.lang.Integer => new java.lang.Long(i.longValue())
+          case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+          case v => v
+        }
+        val jlistArray = jlist.toArray
+        if (multiValued)
+          jlistArray
+        else {
+          if (jlistArray.nonEmpty) jlistArray(0) else null
+        }
+      case it : Iterable[_] =>
+        val iterableValues = it.iterator.map {
+          case d: Date => new Timestamp(d.getTime)
+          case s: String =>
+            fieldType match {
+              case at: ArrayType => if (at.elementType.eq(TimestampType)) new Timestamp(DateTime.parse(s).getMillis) else s
+              case _: TimestampType => new Timestamp(DateTime.parse(s).getMillis)
+              case _ => s
+            }
+          case i: java.lang.Integer => new java.lang.Long(i.longValue())
+          case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+          case v => v
+        }
+        val iterArray = iterableValues.toArray
+        if (multiValued)
+          iterArray
+        else {
+          if (iterArray.nonEmpty) iterArray(0) else null
+        }
+      case a => a
+    }
+  }
+
+  def processMultipleFieldValues(fieldValues: util.Collection[Object], fieldType: DataType): Array[AnyRef] = {
+    if (fieldValues != null) {
+      val iterableValues = fieldValues.iterator().map {
+        case d: Date => new Timestamp(d.getTime)
+        case s: String =>
+          fieldType match {
+            // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
+            case t: ArrayType =>
+              if (t.asInstanceOf[ArrayType].elementType.eq(TimestampType))
+                new Timestamp(DateTime.parse(s).getMillis)
+              else
+                s
+            case _ => s
+          }
+        case i: java.lang.Integer => new java.lang.Long(i.longValue())
+        case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+        case a => a
+      }
+      iterableValues.toArray
+    } else {
+       null
+    }
+  }
+
+  def solrDocToRows[T](schema: StructType, docs: RDD[T]): RDD[Row] = {
     val fields = schema.fields
 
-    val rows = docs.map(solrDocument => {
-      val values = new ListBuffer[AnyRef]
+    val rows = docs.map(doc => {
+      val values = new ListBuffer[Any]
       for (field <- fields) {
         val metadata = field.metadata
         val fieldType = schema.get(schema.indexOf(field)).dataType
         val isMultiValued = if (metadata.contains("multiValued")) metadata.getBoolean("multiValued") else false
         if (isMultiValued) {
-          val fieldValues = solrDocument.getFieldValues(field.name)
-          if (fieldValues != null) {
-            val iterableValues = fieldValues.iterator().map {
-              case d: Date => new Timestamp(d.getTime)
-              case s: String =>
-                fieldType match {
-                  // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
-                  case t: ArrayType =>
-                    if (t.asInstanceOf[ArrayType].elementType.eq(TimestampType))
-                      new Timestamp(DateTime.parse(s).getMillis)
-                    else
-                      s
-                  case _ => s
-                }
-              case i: java.lang.Integer => new java.lang.Long(i.longValue())
-              case f: java.lang.Float => new java.lang.Double(f.doubleValue())
-              case a => a
-            }
-            values.add(iterableValues.toArray)
-          } else {
-            values.add(null)
+           doc match {
+            case solrDocument: SolrDocument =>
+              val fieldValues = solrDocument.getFieldValues(field.name)
+              values.add(processMultipleFieldValues(fieldValues, fieldType))
+            case map: util.Map[_,_] =>
+              val obj = map.get(field.name).asInstanceOf[Object]
+              val newValue = processFieldValue(obj, fieldType, multiValued = true)
+              newValue match {
+                case arr: Array[_] => values.add(arr)
+                case any => values.add(Array(any))
+              }
           }
         } else {
-          val fieldValue = solrDocument.getFieldValue(field.name)
-          fieldValue match {
-            case d: Date => values.add(new Timestamp(d.getTime))
-            case s: String =>
-              // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
-              if (fieldType.eq(TimestampType))
-                values.add(new Timestamp(DateTime.parse(s).getMillis))
-              else
-                values.add(s)
-            case i: java.lang.Integer => values.add(new java.lang.Long(i.longValue()))
-            case f: java.lang.Float => values.add(new java.lang.Double(f.doubleValue()))
-            case al: java.util.ArrayList[_] =>
-              val jlist = al.iterator.map {
-                case d: Date => new Timestamp(d.getTime)
-                case s: String =>
-                  if (fieldType.eq(TimestampType))
-                    new Timestamp(DateTime.parse(s).getMillis)
-                  else
-                    s
-                case i: java.lang.Integer => new java.lang.Long(i.longValue())
-                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
-                case v: Any => v
+          doc match {
+            case solrDocument: SolrDocument =>
+              val fieldValue = solrDocument.getFieldValue(field.name)
+              val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
+              if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
+                newValue match {
+                  case n: java.lang.Number => values.add(n.doubleValue())
+                  case a => values.add(a)
+                }
+              } else {
+                values.add(newValue)
               }
-              val arr = jlist.toArray
-              if (arr.length >= 1) {
-                values.add(arr(0).asInstanceOf[AnyRef])
+            case map: util.Map[_,_] =>
+              val obj = map.get(field.name).asInstanceOf[Object]
+              val newValue = processFieldValue(obj, fieldType, multiValued = false)
+              if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
+                newValue match {
+                  case n: java.lang.Number => values.add(n.doubleValue())
+                  case a => values.add(a)
+                }
+              } else {
+                values.add(newValue)
               }
-            case it : Iterable[_] =>
-              val iterableValues = it.iterator.map {
-                case d: Date => new Timestamp(d.getTime)
-                case s: String =>
-                  if (fieldType.eq(TimestampType))
-                    new Timestamp(DateTime.parse(s).getMillis)
-                  else
-                    s
-                case i: java.lang.Integer => new java.lang.Long(i.longValue())
-                case f: java.lang.Float => new java.lang.Double(f.doubleValue())
-                case v: Any => v
-              }
-              val arr = iterableValues.toArray
-              if (!arr.isEmpty) {
-                values.add(arr(0).asInstanceOf[AnyRef])
-              }
-            case a => values.add(a)
           }
         }
       }

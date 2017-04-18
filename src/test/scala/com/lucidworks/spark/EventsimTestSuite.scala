@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import java.util.Collections
 
-import com.lucidworks.spark.rdd.SolrRDD
+import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrRelationUtil
 import org.apache.solr.client.solrj.SolrQuery
@@ -14,7 +14,7 @@ import scala.collection.JavaConverters._
 class EventsimTestSuite extends EventsimBuilder {
 
   test("Simple Query using RDD") {
-    val solrRDD = new SolrRDD(zkHost, collectionName, sc)
+    val solrRDD = new SelectSolrRDD(zkHost, collectionName, sc)
       .query("*:*")
       .rows(10)
       .select(Array("id"))
@@ -23,12 +23,12 @@ class EventsimTestSuite extends EventsimBuilder {
   }
 
   test("Split partitions default") {
-    val solrRDD = new SolrRDD(zkHost, collectionName, sc).doSplits()
+    val solrRDD = new SelectSolrRDD(zkHost, collectionName, sc).doSplits()
     testCommons(solrRDD)
   }
 
   test("Split partitions by field name") {
-    val solrRDD = new SolrRDD(zkHost, collectionName, sc).splitField("id").splitsPerShard(2)
+    val solrRDD = new SelectSolrRDD(zkHost, collectionName, sc).splitField("id").splitsPerShard(2)
     testCommons(solrRDD)
   }
 
@@ -69,6 +69,35 @@ class EventsimTestSuite extends EventsimBuilder {
     )
     val df: DataFrame = sparkSession.read.format("solr").options(options).load()
     assert(df.rdd.getNumPartitions > numShards)
+    assert(df.rdd.getNumPartitions == 4)
+  }
+
+  test("SQL query splits with export handler") {
+    val options = Map(
+      "zkHost" -> zkHost,
+      "collection" -> collectionName,
+      SOLR_DO_SPLITS -> "true",
+      SOLR_FIELD_PARAM -> "artist, auth, firstName, gender, id",
+      SOLR_SPLITS_PER_SHARD_PARAM -> "5"
+    )
+    val df: DataFrame = sparkSession.read.format("solr").options(options).load()
+    assert(df.rdd.getNumPartitions > numShards)
+    assert(df.rdd.getNumPartitions == 10)
+    val rows = df.collectAsList()
+  }
+
+  test("SQL query splits with export handler and no splits") {
+    val options = Map(
+      "zkHost" -> zkHost,
+      "collection" -> collectionName,
+      SOLR_DO_SPLITS -> "true",
+      SOLR_FIELD_PARAM -> "artist, auth, firstName, gender, id",
+      SOLR_SPLITS_PER_SHARD_PARAM -> "1"
+    )
+    val df: DataFrame = sparkSession.read.format("solr").options(options).load()
+    assert(df.rdd.getNumPartitions == numShards)
+    assert(df.rdd.getNumPartitions == 2)
+    val rows = df.collectAsList()
   }
 
   test("SQL query no params should produce IllegalArgumentException") {
@@ -214,6 +243,7 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_COLLECTION_PARAM -> collectionName
     )
     val solrRelation = new SolrRelation(options, None, sparkSession)
+    solrRelation.querySchema // Invoking querySchema builds the baseSchema
     val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema.get)
     val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
     assert(areFieldsDocValues)
@@ -224,8 +254,8 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(isSortFieldDocValue)
 
     solrRelation.initialQuery.setSorts(Collections.emptyList())
-    SolrRelation.addSortField(querySchema, solrRelation.initialQuery)
-    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause("userId", SolrQuery.ORDER.asc)))
+    SolrRelation.addSortField(solrRelation.baseSchema.get, querySchema, solrRelation.initialQuery, solrRelation.uniqueKey)
+    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause(solrRelation.uniqueKey, SolrQuery.ORDER.asc)))
   }
 
   test("Multiple queries with same Dataframe to test request handler switch") {
@@ -239,7 +269,7 @@ class EventsimTestSuite extends EventsimBuilder {
     df.select("artist").take(1) // This should use '/export' handler because we are only requesting the field 'artist'
   }
 
-  def testCommons(solrRDD: SolrRDD): Unit = {
+  def testCommons(solrRDD: SelectSolrRDD): Unit = {
     val sparkCount = solrRDD.count()
 
     // assert counts

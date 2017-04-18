@@ -1,7 +1,8 @@
 package com.lucidworks.spark
 
 import java.util.UUID
-import com.lucidworks.spark.rdd.SolrRDD
+
+import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
@@ -14,7 +15,8 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 3, 2, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc)
+      val newRDD = new SelectSolrRDD(zkHost, collectionName, sc)
+      val docs = newRDD.collect()
       assert(newRDD.count() === 3)
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
@@ -25,7 +27,7 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     val collectionName = "testRDDPartitions" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 2, 4, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc)
+      val newRDD = new SelectSolrRDD(zkHost, collectionName, sc)
       val partitions = newRDD.partitions
       assert(partitions.length == 8)
     } finally {
@@ -37,7 +39,7 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     val collectionName = "testSimpleQuery" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 3999, 2, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).useExportHandler
+      val newRDD = new StreamingSolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).requestHandler(QT_EXPORT)
       val cnt = newRDD.count()
       print("\n********************** RDD COUNT IS = " + cnt + "\n\n")
       assert(cnt === 3999)
@@ -50,7 +52,7 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     val collectionName = "testRDDPartitions" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, 1002, 14, cloudClient, sc)
     try {
-      val newRDD = new SolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).useExportHandler
+      val newRDD = new StreamingSolrRDD(zkHost, collectionName, sc, rows=Option(Integer.MAX_VALUE)).requestHandler(QT_EXPORT)
       val partitions = newRDD.partitions
       assert(partitions.length === 14)
     } finally {
@@ -74,8 +76,7 @@ class RDDTestSuite extends TestSuiteBuilder with LazyLogging {
     try {
       val solrQuery = new SolrQuery()
       solrQuery.set(SOLR_STREAMING_EXPR, expr)
-      val streamExprRDD = new SolrRDD(zkHost, collectionName, sc, Some(QT_STREAM))
-      assert(streamExprRDD.requestHandler.get == QT_STREAM)
+      val streamExprRDD = new StreamingSolrRDD(zkHost, collectionName, sc, Some(QT_STREAM))
       val results = streamExprRDD.query(solrQuery).collect()
       assert(results.size == numDocs)
     } finally {

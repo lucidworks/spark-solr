@@ -1,5 +1,6 @@
 package com.lucidworks.spark;
 
+import com.lucidworks.spark.util.ConfigurationConstants;
 import com.lucidworks.spark.util.Constants;
 import com.lucidworks.spark.util.SolrRelationUtil;
 import com.lucidworks.spark.util.SolrSupport;
@@ -80,6 +81,12 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       assertTrue(row.length() > 5);
       assertTrue(fromSolr.count() == 100);
 
+      {
+        Dataset df = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).option(ConfigurationConstants.SOLR_FIELD_PARAM(), "out_clicks_ss").load();
+        assertTrue(df.schema().size() == 1);
+        assertTrue(df.schema().apply("out_clicks_ss") != null);
+        df.count();
+      }
     } finally {
       deleteCollection(testCollection);
     }

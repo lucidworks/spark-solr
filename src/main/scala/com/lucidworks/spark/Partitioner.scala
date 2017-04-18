@@ -2,13 +2,11 @@ package com.lucidworks.spark
 
 import java.net.InetAddress
 
-import com.lucidworks.spark.query.HashQParserShardSplitStrategy.WorkerShardSplit
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.Partition
 
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 // Is there a need to override {@code Partitioner.scala} and define our own partition id's
@@ -17,7 +15,7 @@ object SolrPartitioner {
   def getShardPartitions(shards: List[SolrShard], query: SolrQuery) : Array[Partition] = {
     shards.zipWithIndex.map{ case (shard, i) =>
       // Chose any of the replicas as the active shard to query
-      new ShardRDDPartition(i, "*", shard, query, SolrRDD.randomReplica(shard))}.toArray
+      ShardRDDPartition(i, "*", shard, query, SolrRDD.randomReplica(shard))}.toArray
   }
 
   def getSplitPartitions(
@@ -28,19 +26,43 @@ object SolrPartitioner {
     var splitPartitions = ArrayBuffer.empty[SplitRDDPartition]
     var counter = 0
     shards.foreach(shard => {
-      // Form a continuous iterator list so that we can pick different replicas for different partitions in round-robin mode
-      val replicaContinuousIterator: Iterator[SolrReplica] = Iterator.continually(shard.replicas).flatten
-      val splits = SolrSupport.splitShards(query, shard, splitFieldName, splitsPerShard)
+      val splits = SolrSupport.getShardSplits(query, shard, splitFieldName, splitsPerShard)
       splits.foreach(split => {
-        split match {
-          case wss: WorkerShardSplit => splitPartitions += SplitRDDPartition(counter, "*", shard, wss.getSplitQuery, wss.getReplica)
-          case _ => splitPartitions += SplitRDDPartition(counter, "*", shard, split.getSplitQuery, replicaContinuousIterator.next())
-        }
+        splitPartitions += SplitRDDPartition(counter, "*", shard, split.query, split.replica)
         counter = counter + 1
       })
     })
     splitPartitions.toArray
   }
+
+  // Workaround for SOLR-10490. TODO: Remove once fixed
+  def getExportHandlerPartitions(
+      shards: List[SolrShard],
+      query: SolrQuery): Array[Partition] = {
+    shards.zipWithIndex.map{ case (shard, i) =>
+      // Chose any of the replicas as the active shard to query
+      ExportHandlerPartition(i, shard, query, SolrRDD.randomReplica(shard), 0, 0)}.toArray
+  }
+
+  // Workaround for SOLR-10490. TODO: Remove once fixed
+  def getExportHandlerPartitions(
+      shards: List[SolrShard],
+      query: SolrQuery,
+      splitFieldName: String,
+      splitsPerShard: Int): Array[Partition] = {
+    val splitPartitions = ArrayBuffer.empty[ExportHandlerPartition]
+    var counter = 0
+    shards.foreach(shard => {
+      // Form a continuous iterator list so that we can pick different replicas for different partitions in round-robin mode
+      val splits = SolrSupport.getExportHandlerSplits(query, shard, splitFieldName, splitsPerShard)
+      splits.foreach(split => {
+        splitPartitions += ExportHandlerPartition(counter, shard, split.query, split.replica, split.numWorkers, split.workerId)
+        counter = counter+1
+      })
+    })
+    splitPartitions.toArray
+  }
+
 }
 
 case class SolrShard(shardName: String, replicas: List[SolrReplica])
