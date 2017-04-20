@@ -98,7 +98,7 @@ class StreamingSolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
     if (rq == QT_STREAM || rq == QT_SQL) {
-      logger.info(s"Using SolrCloud stream partitioning scheme to process request to $rq for collection $collection")
+      logger.info(s"Using SolrCloud stream partitioning scheme to process request to $rq for collection $collection using query: $query")
       return Array(CloudStreamPartition(0, zkHost, collection, query))
     }
 
