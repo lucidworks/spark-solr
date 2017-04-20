@@ -345,8 +345,10 @@ public class FusionPipelineClient {
       // ensure last request within the session timeout period, else reset the session
       long currTime = System.nanoTime();
       if (fusionSession == null || (currTime - fusionSession.sessionEstablishedAt) > maxNanosOfInactivity) {
-        log.info("Fusion session is likely expired (or soon will be) for " + url + ", " +
-                "pre-emptively re-setting this session before processing request " + requestId);
+        if (log.isDebugEnabled()) {
+          log.debug("Fusion session is likely expired (or soon will be) for " + url + ", " +
+              "pre-emptively re-setting this session before processing request " + requestId);
+        }
         fusionSession = resetSession(sessionKey);
         if (fusionSession == null)
           throw new IllegalStateException("Failed to re-connect to " + url +
