@@ -406,19 +406,22 @@ class SolrRelation(
   override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
-    logger.info("buildScan: push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
+    logger.info("buildScan: uniqueKey: "+uniqueKey+", querySchema: ["+querySchema+"], push-down fields: [" + fields.mkString(",") + "], filters: ["+filters.mkString(",")+"]")
     val query = initialQuery.getCopy
     var qt = query.getRequestHandler
 
-    // ignore any fields / filters when processing a streaming expression
-    if (qt == QT_STREAM || qt == QT_SQL)
-      return SolrRelationUtil.toRows(querySchema, new StreamingSolrRDD(
+    // ignore any filters when processing a streaming expression
+    if (qt == QT_STREAM || qt == QT_SQL) {
+      // we still have to adapt the querySchema to the requested projected fields if avaiable
+      val projectedQuerySchema = if (fields != null && fields.length > 0) StructType(fields.map(f => querySchema.apply(f))) else querySchema
+      return SolrRelationUtil.toRows(projectedQuerySchema, new StreamingSolrRDD(
         conf.getZkHost.get,
         collection,
         sqlContext.sparkContext,
         Some(qt),
         uKey = Some(uniqueKey)
       ).query(query))
+    }
 
     // this check is probably unnecessary, but I'm putting it here so that it's clear to other devs
     // that the baseSchema must be defined if we get to this point

@@ -404,6 +404,21 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     selectExprResults = selectExprDF.collectAsList()
     assert(selectExprResults.size() == 4)
 
+    // now, verify that projections from SQL that don't match the streaming expression schema
+    selectExprDF.createOrReplaceTempView("ratings_expr")
+    val projectFieldsOnExprDf = sparkSession.sql("select the_count, the_avg, rating from ratings_expr")
+    projectFieldsOnExprDf.printSchema()
+    schema = projectFieldsOnExprDf.schema
+    assert(schema.fields.length == 3)
+    assert(schema.fields(0).name == "the_count")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "rating")
+    assert(schema.fields(2).dataType == StringType)
+    selectExprResults = projectFieldsOnExprDf.collectAsList()
+    assert(selectExprResults.size() == 4)
+
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
