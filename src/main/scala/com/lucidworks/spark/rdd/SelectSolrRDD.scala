@@ -118,7 +118,7 @@ class SelectSolrRDD(
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     }
-    if (!solrQuery.getRows.eq(null)) {
+    if (!solrQuery.getRows.eq(null) && rows.isDefined) {
       solrQuery = solrQuery.setRows(rows.get)
     }
 
