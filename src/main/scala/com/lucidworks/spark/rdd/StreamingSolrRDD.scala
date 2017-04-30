@@ -14,7 +14,7 @@ import scala.collection.JavaConverters
 class StreamingSolrRDD(
     zkHost: String,
     collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,

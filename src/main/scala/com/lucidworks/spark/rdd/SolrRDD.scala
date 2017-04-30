@@ -14,7 +14,7 @@ import scala.util.Random
 abstract class SolrRDD[T: ClassTag](
     val zkHost: String,
     val collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = None,
     fields: Option[Array[String]] = None,
@@ -32,7 +32,6 @@ abstract class SolrRDD[T: ClassTag](
     split match {
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case partition: ExportHandlerPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: SplitRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case _: AnyRef => Seq.empty
     }
   }
