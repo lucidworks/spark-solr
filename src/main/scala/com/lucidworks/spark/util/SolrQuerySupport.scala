@@ -76,6 +76,7 @@ object SolrQuerySupport extends LazyLogging {
   )
 
   def getUniqueKey(zkHost: String, collection: String): String = {
+    logger.debug("Looking up uniquekey for collection: {}", collection)
     try {
       val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
       // Hit Solr Schema API to get base information

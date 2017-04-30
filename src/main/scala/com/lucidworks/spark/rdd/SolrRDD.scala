@@ -14,7 +14,7 @@ import scala.util.Random
 abstract class SolrRDD[T: ClassTag](
     val zkHost: String,
     val collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = None,
     fields: Option[Array[String]] = None,

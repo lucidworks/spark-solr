@@ -15,7 +15,7 @@ import scala.collection.JavaConverters
 class SelectSolrRDD(
     zkHost: String,
     collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
@@ -24,7 +24,7 @@ class SelectSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends SolrRDD[SolrDocument](zkHost, collection, sc)
+  extends SolrRDD[SolrDocument](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
   protected def copy(
@@ -118,7 +118,7 @@ class SelectSolrRDD(
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     }
-    if (!solrQuery.getRows.eq(null)) {
+    if (!solrQuery.getRows.eq(null) && rows.isDefined) {
       solrQuery = solrQuery.setRows(rows.get)
     }
 
