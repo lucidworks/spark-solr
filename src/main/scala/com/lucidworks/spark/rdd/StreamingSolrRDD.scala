@@ -23,7 +23,7 @@ class StreamingSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc)
+  extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
   protected def copy(

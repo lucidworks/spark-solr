@@ -24,7 +24,7 @@ class SelectSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends SolrRDD[SolrDocument](zkHost, collection, sc)
+  extends SolrRDD[SolrDocument](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
   protected def copy(
