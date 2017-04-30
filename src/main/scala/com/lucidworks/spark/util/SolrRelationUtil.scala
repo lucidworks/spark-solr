@@ -19,6 +19,12 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+case class QueryField(name:String, alias: Option[String] = None, funcReturnType: Option[DataType] = None) {
+  def fl() : String = {
+    if (alias.isDefined) s"${alias.get}:${name}" else name
+  }
+}
+
 object SolrRelationUtil extends LazyLogging {
 
   val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
@@ -121,23 +127,34 @@ object SolrRelationUtil extends LazyLogging {
     DataTypes.createStructType(structFields.toList)
   }
 
-  def deriveQuerySchema(fields: Array[String], schema: StructType): StructType = {
+  def deriveQuerySchema(fields: Array[QueryField], schema: StructType): StructType = {
     val fieldMap = new mutable.HashMap[String, StructField]()
     for (structField <- schema.fields) fieldMap.put(structField.name, structField)
 
     val listOfFields = new ListBuffer[StructField]
     for (field <- fields) {
-      if (fieldMap.contains(field)) {
-        if (fieldMap.get(field).isDefined) {
-          listOfFields.add(fieldMap.get(field).get)
-        } else {
-          logger.info("No structField definition found for field '" + field + "'")
-        }
+      if (field.funcReturnType.isDefined) {
+        listOfFields.add(DataTypes.createStructField(field.alias.get, field.funcReturnType.get, false, Metadata.empty))
       } else {
-        if (field.equals("score")) {
-          listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+        val fieldName = field.name
+        if (fieldMap.contains(fieldName)) {
+          if (fieldMap.get(fieldName).isDefined) {
+            val structField = fieldMap.get(fieldName).get
+            if (field.alias.isDefined) {
+              // have to use the alias here!!
+              listOfFields.add(DataTypes.createStructField(field.alias.get, structField.dataType, structField.nullable, structField.metadata))
+            } else {
+              listOfFields.add(structField)
+            }
+          } else {
+            logger.info("No structField definition found for field '" + fieldName + "'")
+          }
         } else {
-          logger.info("Base schema does not contain field '" + field + "'")
+          if (fieldName == "score") {
+            listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+          } else {
+            logger.info("Base schema does not contain field '" + field + "'")
+          }
         }
       }
     }

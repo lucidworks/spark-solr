@@ -45,4 +45,5 @@ object ConfigurationConstants {
   val STREAMING_EXPR_SCHEMA: String = "expr_schema"
   val SOLR_SQL_SCHEMA: String = "sql_schema"
   val EXCLUDE_FIELDS: String = "exclude_fields"
+  val UNIQUE_KEY_FIELD: String = "unique_key"
 }
