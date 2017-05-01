@@ -77,30 +77,18 @@ class SolrRelation(
   }
 
   val arbitraryParams = conf.getArbitrarySolrParams
-  val solrFields: Array[String] = {
-    if (arbitraryParams.getParameterNames.contains(CommonParams.FL)) {
-      arbitraryParams.getParams(CommonParams.FL).flatMap(f => f.split(",")).map(field => field.trim)
-    } else {
-      conf.getFields
-    }
-  }
 
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
-  // get the uniqueKey field name from the user or look it up from Solr lazily when needed
-  // note: we don't attempt to validate the user provided the correct value
-  lazy val uniqueKey: String = if (conf.getUniqueKeyFieldName.isDefined) {
-    conf.getUniqueKeyFieldName.get
-  } else {
-    SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
-  }
-
+  // loaded lazily to avoid going to Solr until it's necessary, mainly to assist with mocking this class for unit tests
+  lazy val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
   lazy val initialQuery: SolrQuery = buildQuery
 
   // to handle field aliases and function queries, we need to parse the fields option
   // from the user into QueryField objects
-  lazy val userRequestedFields : Option[Array[QueryField]] = if (!solrFields.isEmpty) {
+  lazy val userRequestedFields : Option[Array[QueryField]] = if (!conf.getFields.isEmpty) {
+    val solrFields = conf.getFields
     logger.debug(s"Building userRequestedFields from solrFields: ${solrFields.mkString(", ")}")
     var hasFuncQuery = false
     val qf = solrFields.map(f => {
@@ -264,6 +252,7 @@ class SolrRelation(
         sqlSchema
       } else {
         // don't return the _version_ field unless specifically asked for by the user
+        val solrFields = conf.getFields
         baseSchema = Some(getBaseSchemaFromConfig(collection, if (solrFields.isEmpty) solrFields else solrFields ++ Array(uniqueKey)))
         if (solrFields.contains("_version_")) {
           // user specifically requested _version_, so keep it
@@ -801,8 +790,8 @@ class SolrRelation(
       query.setRequestHandler(DEFAULT_REQUEST_HANDLER)
     }
 
-    if (solrFields.nonEmpty) {
-      query.setFields(solrFields:_*)
+    if (conf.getFields.nonEmpty) {
+      query.setFields(conf.getFields:_*)
     }
 
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))

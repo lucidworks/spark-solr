@@ -122,7 +122,8 @@ class EventsimTestSuite extends EventsimBuilder {
     val options = Map(
       SOLR_ZK_HOST_PARAM -> zkHost,
       SOLR_COLLECTION_PARAM -> collectionName,
-      ARBITRARY_PARAMS_STRING -> "fl=id,registration&fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id"
+      SOLR_FIELD_PARAM -> "id,registration",
+      ARBITRARY_PARAMS_STRING -> "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id"
     )
     val df = sparkSession.read.format("solr").options(options).load()
     val count = df.count()
