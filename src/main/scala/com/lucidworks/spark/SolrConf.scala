@@ -251,5 +251,113 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
-  override def toString = s"SolrConf(getZkHost=$getZkHost, getCollection=$getCollection, getQuery=$getQuery, getStreamingExpr=$getStreamingExpr, getSqlStmt=$getSqlStmt, getStreamingExpressionSchema=$getStreamingExpressionSchema, getSolrSQLSchema=$getSolrSQLSchema, getFields=${getFields.mkString(",")}, getRows=$getRows, splits=$splits, docValues=$docValues, getSplitField=$getSplitField, getSplitsPerShard=$getSplitsPerShard, escapeFieldNames=$escapeFieldNames, flattenMultivalued=$flattenMultivalued, softAutoCommitSecs=$softAutoCommitSecs, commitWithin=$commitWithin, batchSize=$batchSize, requestHandler=$requestHandler, useCursorMarks=$useCursorMarks, genUniqKey=$genUniqKey, sampleSeed=$sampleSeed, samplePct=$samplePct, partition_by=$partition_by, getTimeStampFieldName=$getTimeStampFieldName, getTimePeriod=$getTimePeriod, getDateTimePattern=$getDateTimePattern, getTimeZoneId=$getTimeZoneId, getMaxActivePartitions=$getMaxActivePartitions, getSort=$getSort, getArbitrarySolrParams=$getArbitrarySolrParams, getExcludeFields=$getExcludeFields, skipNonDocValueFields=$skipNonDocValueFields)"
+  override def toString = {
+    val sb = new StringBuilder
+    sb ++= "SolrConf("
+    sb ++= s"${SOLR_ZK_HOST_PARAM}=${getZkHost}"
+    sb ++= s", ${SOLR_COLLECTION_PARAM}=${getCollection}"
+    if (getQuery.isDefined) {
+      sb ++= s", ${SOLR_QUERY_PARAM}=${getQuery.get}"
+    }
+    if (!getFields.isEmpty) {
+      sb ++= s", ${SOLR_FIELD_PARAM}=${getFields.mkString(",")}"
+    }
+    if (getRows.isDefined) {
+      sb ++= s", ${SOLR_ROWS_PARAM}=${getRows.get}"
+    }
+    if (maxRows.isDefined) {
+      sb ++= s", ${MAX_ROWS}=${maxRows.get}"
+    }
+    if (splits.isDefined) {
+      sb ++= s", ${SOLR_DO_SPLITS}=${splits.get}"
+    }
+    if (docValues.isDefined) {
+      sb ++= s", ${SOLR_DOC_VALUES}=${docValues.get}"
+    }
+    if (getSplitField.isDefined) {
+      sb ++= s", ${SOLR_SPLIT_FIELD_PARAM}=${getSplitField.get}"
+    }
+    if (getSplitsPerShard.isDefined) {
+      sb ++= s", ${SOLR_SPLITS_PER_SHARD_PARAM}=${getSplitsPerShard.get}"
+    }
+    if (escapeFieldNames.isDefined) {
+      sb ++= s", ${ESCAPE_FIELDNAMES_PARAM}=${escapeFieldNames.get}"
+    }
+    if (flattenMultivalued.isDefined) {
+      sb ++= s", ${FLATTEN_MULTIVALUED}=${flattenMultivalued.get}"
+    }
+    if (requestHandler.isDefined) {
+      sb ++= s", ${REQUEST_HANDLER}=${requestHandler.get}"
+    }
+    if (useCursorMarks.isDefined) {
+      sb ++= s", ${USE_CURSOR_MARKS}=${useCursorMarks.get}"
+    }
+    if (sampleSeed.isDefined) {
+      sb ++= s", ${SAMPLE_SEED}=${sampleSeed.get}"
+    }
+    if (samplePct.isDefined) {
+      sb ++= s", ${SAMPLE_PCT}=${samplePct.get}"
+    }
+    if (getSort.isDefined) {
+      sb ++= s", ${SORT_PARAM}=${getSort.get}"
+    }
+    if (getArbitrarySolrParams != null && getArbitrarySolrParams.size() > 0) {
+      sb ++= s", ${ARBITRARY_PARAMS_STRING}=${getArbitrarySolrParams}"
+    }
+    if (getExcludeFields.isDefined) {
+      sb ++= s", ${EXCLUDE_FIELDS}=${getExcludeFields.get}"
+    }
+    if (skipNonDocValueFields.isDefined) {
+      sb ++= s", ${SKIP_NON_DOCVALUE_FIELDS}=${skipNonDocValueFields.get}"
+    }
+    if (getStreamingExpr.isDefined) {
+      sb ++= s", ${SOLR_STREAMING_EXPR}=${getStreamingExpr.get}"
+    }
+    if (getStreamingExpressionSchema.isDefined) {
+      sb ++= s", ${STREAMING_EXPR_SCHEMA}=${getStreamingExpressionSchema.get}"
+    }
+    if (getSqlStmt.isDefined) {
+      sb ++= s", ${SOLR_SQL_STMT}=${getSqlStmt.get}"
+    }
+    if (getSolrSQLSchema.isDefined) {
+      sb ++= s", ${SOLR_SQL_SCHEMA}=${getSolrSQLSchema.get}"
+    }
+
+    // time-based partitioning options
+    if (partition_by.isDefined) {
+      sb ++= s", ${PARTITION_BY}=${partition_by.get}"
+    }
+    if (getTimeStampFieldName.isDefined) {
+      sb ++= s", ${TIME_STAMP_FIELD_NAME}=${getTimeStampFieldName.get}"
+    }
+    if (getTimePeriod.isDefined) {
+      sb ++= s", ${TIME_PERIOD}=${getTimePeriod.get}"
+    }
+    if (getDateTimePattern.isDefined) {
+      sb ++= s", ${DATETIME_PATTERN}=${getDateTimePattern.get}"
+    }
+    if (getTimeZoneId.isDefined) {
+      sb ++= s", ${TIMEZONE_ID}=${getTimeZoneId.get}"
+    }
+    if (getMaxActivePartitions.isDefined) {
+      sb ++= s", ${MAX_ACTIVE_PARTITIONS}=${getMaxActivePartitions.get}"
+    }
+
+    // indexing options
+    if (genUniqKey.isDefined) {
+      sb ++= s", ${GENERATE_UNIQUE_KEY}=${genUniqKey.get}"
+    }
+    if (softAutoCommitSecs.isDefined) {
+      sb ++= s", ${SOFT_AUTO_COMMIT_SECS}=${softAutoCommitSecs.get}"
+    }
+    if (commitWithin.isDefined) {
+      sb ++= s", ${COMMIT_WITHIN_MILLI_SECS}=${commitWithin.get}"
+    }
+    if (batchSize.isDefined) {
+      sb ++= s", ${BATCH_SIZE}=${batchSize.get}"
+    }
+
+    sb ++= ")"
+    sb.toString
+  }
 }
