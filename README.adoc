@@ -158,11 +158,16 @@ You can use the `fields` option to specify a subset of fields to retrieve for ea
 
 Usage: `option("fields","id,author_s,favorited_b,...")`
 
-By default, all fields for each document are pulled back from Solr.
+By default, all stored fields for each document are pulled back from Solr.
+
+You can also specify an alias for a field using Solr's field alias syntax, e.g. `author:author_s`. If you want to invoke a function query, such as rord(), then you'll need to provide an alias, e.g. `ord_user:ord(user_id)`. If the return type of the function query is something other than `int` or `long`, then you'll need to specify the return type after the function query, such as:
+`foo:div(sum(x,100),max(y,1)):double`
+
+TIP: If you request Solr function queries, then the library must use the `/select` handler to make the request as exporting function queries through `/export` is not supported by Solr.
 
 ==== rows
 
-You can use the `rows` option to specify the number of rows to retrieve from Solr per request. Behind the scenes, the implementation uses either deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows.
+You can use the `rows` option to specify the number of rows to retrieve from Solr per request; do not confuse this with `max_rows` (see below). Behind the scenes, the implementation uses either deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows.
 
 To be clear, this is not the maximum number of rows to read from Solr. All matching rows on the backend are read. The `rows` parameter is the page size.
 
@@ -170,6 +175,13 @@ By default, the implementation uses 1000 rows but if your documents are smaller,
 
 Usage: `option("rows","10000")`
 Default: 1000
+
+==== max_rows
+
+Limits the result set to a maximum number of rows; only applies when using the `/select` handler. The library will issue the query from a single task and let Solr do the distributed query processing. In addition, no paging is performed, i.e. the `rows` param is set to `max_rows` when querying. Consequently, this option should not be used for large `max_rows` values, rather you should just retrieve all rows using multiple Spark tasks and then re-sort with Spark if needed.
+
+Usage: `option("max_rows", "100")`
+Defalut: None
 
 ==== request_handler
 
@@ -229,32 +241,6 @@ Usage: `option("dv", "true")`
 
 Default: false
 
-=== Index parameters
-
-==== soft_commit_secs
-
-If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
-
-Usage: `option("soft_commit_secs", "10")`
-
-Default: None
-
-==== batch_size
-
-The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
-
-Usage: `option("batch_size", "10000")`
-
-Default: 500
-
-==== gen_uniq_key
-
-If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
-
-Usage: `option("gen_uniq_key", "true")`
-
-Default: false
-
 ==== sample_seed
 
 The `sample_seed` option allows you to read a random sample of documents from Solr using the specified seed. This option can be useful if you just need to explore the data before performing operations on the full result set. By default, if this option is provided, a 10% sample size is read from Solr, but you can use the `sample_pct` option to control the sample size.
@@ -283,7 +269,9 @@ Default: false
 
 The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
 
-Usage: `option("solr.params", "fq=userId:[10 TO 1000]&sort=userId desc")`
+TIP: Don't use this to pass parameters that are covered by other options, such as `fl` (use the `fields` option) or `sort`. This option is strictly intended for parameters that are *NOT* covered by other options.
+
+Usage: `option("solr.params", "fq=userId:[10 TO 1000]")`
 
 === Querying Time Series Data
 
@@ -334,6 +322,32 @@ This option is used to specify the maximum number of partitions that must be all
 Usage: `option("max_active_partitions", "100")`
 
 Default: null
+
+=== Index parameters
+
+==== soft_commit_secs
+
+If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
+
+Usage: `option("soft_commit_secs", "10")`
+
+Default: None
+
+==== batch_size
+
+The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
+
+Usage: `option("batch_size", "10000")`
+
+Default: 500
+
+==== gen_uniq_key
+
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
+
+Usage: `option("gen_uniq_key", "true")`
+
+Default: false
 
 //end::tuning[]
 

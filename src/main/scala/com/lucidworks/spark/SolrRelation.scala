@@ -76,8 +76,6 @@ class SolrRelation(
     collection = allCollections mkString ","
   }
 
-  val arbitraryParams = conf.getArbitrarySolrParams
-
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
@@ -90,33 +88,9 @@ class SolrRelation(
   lazy val userRequestedFields : Option[Array[QueryField]] = if (!conf.getFields.isEmpty) {
     val solrFields = conf.getFields
     logger.debug(s"Building userRequestedFields from solrFields: ${solrFields.mkString(", ")}")
-    var hasFuncQuery = false
-    val qf = solrFields.map(f => {
-      val colonAt = f.indexOf(':') // there can be multiple colons, so just split on the first for now
-      if (colonAt != -1) {
-        val alias = f.substring(0,colonAt)
-        var field = f.substring(colonAt+1)
-        var funcReturnType : Option[DataType] = None
-        if (field.indexOf('(') != -1 && field.indexOf(')') != -1) {
-          // this is a Solr function query
-          hasFuncQuery = true
-          val lix = field.lastIndexOf(':')
-          if (lix != -1) {
-            funcReturnType = Some(DataType.fromJson("\""+field.substring(lix+1)+"\""))
-            field = field.substring(0,lix) // strip off the additional type info from the function query
-          } else {
-            funcReturnType = Some(LongType)
-          }
-          logger.debug(s"Found a Solr function query: ${field} with return type: ${funcReturnType}")
-        }
-        QueryField(field, Some(alias), funcReturnType)
-      } else {
-        QueryField(f)
-      }
-    })
-
-    if (hasFuncQuery) {
-      // have to drop the additional type info from any func queries in the field list ...
+    val qf = SolrRelationUtil.parseQueryFields(solrFields)
+    if (!qf.filter(_.funcReturnType.isDefined).isEmpty) {
+      // must drop the additional type info from any func queries in the field list ...
       initialQuery.setFields(qf.map(_.fl):_*)
     }
     logger.info(s"userRequestedFields: ${qf.mkString(", ")}")
@@ -479,28 +453,25 @@ class SolrRelation(
 
       // userRequestedFields is only defined if the user set the "fields" option explicitly
       if (userRequestedFields.isDefined) {
-
         val scanQueryFields = ListBuffer[QueryField]()
         fields.foreach(f => {
           userRequestedFields.get.foreach(qf => {
             // if the field refers to an alias, then we need to add the alias:field to the query
             if (f == qf.name) {
               scanQueryFields += qf
-              logger.debug(s"Added field ${qf.fl} to Solr query.")
             } else if (qf.alias.isDefined && f == qf.alias.get) {
               scanQueryFields += qf
-              logger.debug(s"Added field ${qf.fl} to Solr query.")
             }
           })
         })
         val scanFields = scanQueryFields.toArray
-        query.setFields(scanFields.map(_.fl): _*)
+        query.setFields(scanFields.map(_.fl):_*)
         scanSchema = SolrRelationUtil.deriveQuerySchema(scanFields, collectionBaseSchema)
       } else {
-        query.setFields(fields: _*)
+        query.setFields(fields:_*)
         scanSchema = SolrRelationUtil.deriveQuerySchema(fields.map(QueryField(_)), collectionBaseSchema)
       }
-      logger.info(s"Set query fl=${query.getFields} from fields=${fields.mkString(", ")}")
+      logger.debug(s"Set query fl=${query.getFields} from table scan fields=${fields.mkString(", ")}")
     }
 
     // Clear all existing filters except the original filters set in the config.
@@ -513,10 +484,7 @@ class SolrRelation(
 
     // spark 2.1 started sending in an unnecessary NOT NULL fq, remove those if present
     val fqs = removeSuperfluousNotNullFilterQuery(query)
-    query.remove("fq")
-    if (!fqs.isEmpty) {
-      query.setFilterQueries(fqs.toSeq:_*)
-    }
+    if (!fqs.isEmpty) query.setFilterQueries(fqs.toSeq:_*)
 
     if (conf.sampleSeed.isDefined) {
       // can't support random sampling & intra-shard splitting
@@ -592,8 +560,7 @@ class SolrRelation(
         if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
           query.setSort(uniqueKey, SolrQuery.ORDER.asc)
       }
-      logger.info(s"Sending ${query} to SolrRDD using ${qt}")
-
+      logger.info(s"Sending ${query} to SolrRDD using ${qt} with maxRows: ${conf.maxRows}")
       // Construct the SolrRDD based on the request handler
       val solrRDD: SolrRDD[_] = SolrRDD.apply(
         conf.getZkHost.get,
@@ -602,9 +569,10 @@ class SolrRelation(
         Some(qt),
         splitsPerShard = conf.getSplitsPerShard,
         splitField = getSplitField(conf),
-        uKey = Some(uniqueKey))
-
+        uKey = Some(uniqueKey),
+        maxRows = conf.maxRows)
       val docs = solrRDD.query(query)
+      logger.info(s"Converting SolrRDD of type ${docs.getClass.getName} to rows matching schema: ${scanSchema}")
       val rows = SolrRelationUtil.toRows(scanSchema, docs)
       rows
     } catch {

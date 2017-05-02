@@ -42,3 +42,11 @@ case class ExportHandlerPartition(
     numWorkers: Int,
     workerId: Int)
   extends Partition
+
+case class SolrLimitPartition(
+    index: Int = 0,
+    zkhost:String,
+    collection:String,
+    maxRows: Int,
+    query: SolrQuery)
+  extends Partition

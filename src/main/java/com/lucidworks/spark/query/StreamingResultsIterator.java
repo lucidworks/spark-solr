@@ -67,6 +67,10 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
       solrQuery.setRows(PagedResultsIterator.DEFAULT_PAGE_SIZE); // default page size
   }
 
+  public void setMaxSampleDocs(Integer maxDocs) {
+    this.maxSampleDocs = maxDocs;
+  }
+
   public boolean hasNext() {
     if (totalDocs == 0 || (totalDocs != -1 && numDocs >= totalDocs) || (maxSampleDocs != null && maxSampleDocs >= 0 && numDocs >= maxSampleDocs))
       return false; // done iterating!
@@ -94,7 +98,6 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
         solrServer.close();
       } catch (Exception exc) { exc.printStackTrace(); }
     }
-
     return hasNext;
   }
 
@@ -107,6 +110,7 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
     int start = usingCursors ? 0 : getStartForNextPage();
     currentPageSize = solrQuery.getRows();
     this.cursorMarkOfCurrentPage = nextCursorMark;
+
     Option<QueryResponse> resp = SolrQuerySupport.querySolr(solrServer, solrQuery, start, cursorMarkOfCurrentPage, responseCallback);
 
     if (resp.isDefined()) {
