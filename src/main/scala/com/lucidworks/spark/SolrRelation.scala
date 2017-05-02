@@ -109,9 +109,7 @@ class SolrRelation(
       if (userRequestedFields.isDefined) {
         // filter out any function query invocations from the base schema list
         val baseSchemaFields = userRequestedFields.get.filter(!_.funcReturnType.isDefined).map(_.name) ++ Array(uniqueKey)
-        logger.info(s"baseSchemaFields: ${baseSchemaFields.mkString(", ")}")
         baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
-        logger.info(s"initialQuery.getFields=${initialQuery.getFields}, baseSchema: ${baseSchema}")
         SolrRelationUtil.deriveQuerySchema(userRequestedFields.get, baseSchema.get)
       } else if (initialQuery.getRequestHandler == QT_STREAM) {
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
@@ -452,6 +450,7 @@ class SolrRelation(
       fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
 
       // userRequestedFields is only defined if the user set the "fields" option explicitly
+      // create the schema for the push-down scan results using QueryFields to account for aliases and function queries
       if (userRequestedFields.isDefined) {
         val scanQueryFields = ListBuffer[QueryField]()
         fields.foreach(f => {
