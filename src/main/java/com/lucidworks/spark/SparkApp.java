@@ -18,7 +18,6 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.lucidworks.spark.example.ml.SVMExample;
 import com.lucidworks.spark.port.example.events.EventsimIndexer;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
@@ -258,8 +257,6 @@ public class SparkApp implements Serializable {
       return new KMeansAnomaly();
     else if ("eventsim".equals(streamProcType))
       return new EventsimIndexer();
-    else if ("mllib-svm".equals(streamProcType))
-      return new SVMExample();
 
     // If you add a built-in RDDProcessor to this class, add it here to avoid
     // classpath scanning
@@ -288,7 +285,6 @@ public class SparkApp implements Serializable {
     formatter.printHelp("query-solr-benchmark", getProcessorOptions(new QueryBenchmark()));
     formatter.printHelp("kmeans-anomaly", getProcessorOptions(new KMeansAnomaly()));
     formatter.printHelp("eventsim", getProcessorOptions(new EventsimIndexer()));
-    formatter.printHelp("mllib-svm", getProcessorOptions(new SVMExample()));
 
     List<Class<RDDProcessor>> toolClasses = findProcessorClassesInPackage("com.lucidworks.spark");
     for (Class<RDDProcessor> next : toolClasses) {
