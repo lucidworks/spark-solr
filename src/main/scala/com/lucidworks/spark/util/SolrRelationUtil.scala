@@ -1,6 +1,7 @@
 package com.lucidworks.spark.util
 
 import java.lang.Float
+import java.net.URLDecoder
 import java.sql.Timestamp
 import java.util
 import java.util.Date
@@ -56,7 +57,7 @@ object SolrRelationUtil extends LazyLogging {
           }
           logger.debug(s"Found a Solr function query: ${field} with return type: ${funcReturnType}")
         }
-        QueryField(field, Some(alias), funcReturnType)
+        QueryField(URLDecoder.decode(field, "UTF-8"), Some(alias), funcReturnType)
       } else {
         QueryField(f)
       }

@@ -443,8 +443,10 @@ class SolrRelation(
     val collectionBaseSchema = baseSchema.get
     var scanSchema = schema
 
-    // we need to know this so that we don't try to use the /export handler if the user requested a function query
-    var hasFuncQuery = userRequestedFields.isDefined && userRequestedFields.get.filter(_.funcReturnType.isDefined).size > 0
+    // we need to know this so that we don't try to use the /export handler if the user requested a function query or
+    // is using field aliases
+    var hasFuncQueryOrFieldAlias = userRequestedFields.isDefined &&
+      userRequestedFields.get.filter(qf => qf.alias.isDefined || qf.funcReturnType.isDefined).size > 0
 
     if (fields != null && fields.length > 0) {
       fields.zipWithIndex.foreach({ case (field, i) => fields(i) = field.replaceAll("`", "") })
@@ -501,13 +503,13 @@ class SolrRelation(
     }
 
     // prevent users from trying to export a func query as /export doesn't do that
-    if (hasFuncQuery && qt == "/export") {
+    if (hasFuncQueryOrFieldAlias && qt == "/export") {
       throw new IllegalStateException(s"Can't request function queries using the /export handler!")
     }
 
     try {
       // Determine the request handler to use if not explicitly set by the user
-      if (!hasFuncQuery &&
+      if (!hasFuncQueryOrFieldAlias &&
           conf.requestHandler.isEmpty &&
           !requiresStreamingRDD(qt) &&
           !conf.useCursorMarks.getOrElse(false)) {

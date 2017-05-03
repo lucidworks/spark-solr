@@ -452,13 +452,13 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val numRatings = buildRatingsCollection(ratingsCollection)
     var ratingsDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection,
-        "fields" -> "user:user_id,movie:movie_id,rating,ts:rating_timestamp,rord_movie:rord(movie_id),ord_user:ord(user_id):long,log_rating:log(rating):double,score",
+        "fields" -> "user:user_id,movie:movie_id,rating,ts:rating_timestamp,rord_movie:rord(movie_id),ord_user:ord(user_id):long,log_rating:log(rating):double,score,tsms:ms(NOW%2Crating_timestamp):double",
         "sort" -> "rord(user_id) asc",
         "max_rows" -> "2")).load
     assert(ratingsDF.count == 2)
     ratingsDF.printSchema()
     val schema = ratingsDF.schema
-    assert(schema.fields.length == 8)
+    assert(schema.fields.length == 9)
     assert(schema.fields(0).name == "user")
     assert(schema.fields(0).dataType == StringType)
     assert(schema.fields(1).name == "movie")
@@ -475,6 +475,9 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     assert(schema.fields(6).dataType == DoubleType)
     assert(schema.fields(7).name == "score")
     assert(schema.fields(7).dataType == DoubleType)
+    assert(schema.fields(8).name == "tsms")
+    assert(schema.fields(8).dataType == DoubleType)
+    ratingsDF.collectAsList()
   }
 
   def buildMoviesCollection(moviesCollection: String) : Int = {
