@@ -4,7 +4,7 @@ import java.util.Collections
 
 import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
-import com.lucidworks.spark.util.SolrRelationUtil
+import com.lucidworks.spark.util.{QueryField, SolrRelationUtil}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.spark.sql.DataFrame
@@ -122,7 +122,8 @@ class EventsimTestSuite extends EventsimBuilder {
     val options = Map(
       SOLR_ZK_HOST_PARAM -> zkHost,
       SOLR_COLLECTION_PARAM -> collectionName,
-      ARBITRARY_PARAMS_STRING -> "fl=id,registration&fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id"
+      SOLR_FIELD_PARAM -> "id,registration",
+      ARBITRARY_PARAMS_STRING -> "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id"
     )
     val df = sparkSession.read.format("solr").options(options).load()
     val count = df.count()
@@ -244,7 +245,7 @@ class EventsimTestSuite extends EventsimBuilder {
     )
     val solrRelation = new SolrRelation(options, None, sparkSession)
     solrRelation.querySchema // Invoking querySchema builds the baseSchema
-    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length"), solrRelation.baseSchema.get)
+    val querySchema = SolrRelationUtil.deriveQuerySchema(Array("userId", "status", "artist", "song", "length").map(QueryField(_)), solrRelation.baseSchema.get)
     val areFieldsDocValues = SolrRelation.checkQueryFieldsForDV(querySchema)
     assert(areFieldsDocValues)
 

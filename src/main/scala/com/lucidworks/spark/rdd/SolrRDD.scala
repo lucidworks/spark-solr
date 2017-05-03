@@ -30,6 +30,7 @@ abstract class SolrRDD[T: ClassTag](
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     split match {
+      case partition: SplitRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case partition: ExportHandlerPartition => Array(partition.preferredReplica.replicaHostName)
       case _: AnyRef => Seq.empty
@@ -80,21 +81,22 @@ object SolrRDD {
       splitField: Option[String] = None,
       splitsPerShard: Option[Int] = None,
       solrQuery: Option[SolrQuery] = None,
-      uKey: Option[String] = None): SolrRDD[_] = {
+      uKey: Option[String] = None,
+      maxRows: Option[Int] = None): SolrRDD[_] = {
     if (requestHandler.isDefined) {
       if (requiresStreamingRDD(requestHandler.get)) {
+        // streaming doesn't support maxRows
         new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
       } else {
-        new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+        new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
       }
     } else {
-      new SelectSolrRDD(zkHost, collection, sc, Some(DEFAULT_REQUEST_HANDLER), query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+      new SelectSolrRDD(zkHost, collection, sc, Some(DEFAULT_REQUEST_HANDLER), query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
     }
   }
 
   def requiresStreamingRDD(rq: String): Boolean = {
     rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
   }
-
 }
 
