@@ -14,7 +14,7 @@ import scala.collection.JavaConverters
 class StreamingSolrRDD(
     zkHost: String,
     collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
@@ -23,7 +23,7 @@ class StreamingSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None)
-  extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc)
+  extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
   protected def copy(
@@ -98,7 +98,7 @@ class StreamingSolrRDD(
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
     if (rq == QT_STREAM || rq == QT_SQL) {
-      logger.info(s"Using SolrCloud stream partitioning scheme to process request to $rq for collection $collection")
+      logger.info(s"Using SolrCloud stream partitioning scheme to process request to $rq for collection $collection using query: $query")
       return Array(CloudStreamPartition(0, zkHost, collection, query))
     }
 

@@ -404,6 +404,21 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     selectExprResults = selectExprDF.collectAsList()
     assert(selectExprResults.size() == 4)
 
+    // now, verify that projections from SQL that don't match the streaming expression schema
+    selectExprDF.createOrReplaceTempView("ratings_expr")
+    val projectFieldsOnExprDf = sparkSession.sql("select the_count, the_avg, rating from ratings_expr")
+    projectFieldsOnExprDf.printSchema()
+    schema = projectFieldsOnExprDf.schema
+    assert(schema.fields.length == 3)
+    assert(schema.fields(0).name == "the_count")
+    assert(schema.fields(0).dataType == LongType)
+    assert(schema.fields(1).name == "the_avg")
+    assert(schema.fields(1).dataType == DoubleType)
+    assert(schema.fields(2).name == "rating")
+    assert(schema.fields(2).dataType == StringType)
+    selectExprResults = projectFieldsOnExprDf.collectAsList()
+    assert(selectExprResults.size() == 4)
+
     // clean-up
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
@@ -430,6 +445,39 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     }
 
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
+  }
+
+  test("Field Aliases and Function Queries") {
+    val ratingsCollection = "ratings" + UUID.randomUUID().toString.replace('-','_')
+    val numRatings = buildRatingsCollection(ratingsCollection)
+    var ratingsDF = sparkSession.read.format("solr").options(
+      Map("zkhost" -> zkHost, "collection" -> ratingsCollection,
+        "fields" -> "user:user_id,movie:movie_id,rating,ts:rating_timestamp,rord_movie:rord(movie_id),ord_user:ord(user_id):long,log_rating:log(rating):double,score,tsms:ms(NOW%2Crating_timestamp):double",
+        "sort" -> "rord(user_id) asc",
+        "max_rows" -> "2")).load
+    assert(ratingsDF.count == 2)
+    ratingsDF.printSchema()
+    val schema = ratingsDF.schema
+    assert(schema.fields.length == 9)
+    assert(schema.fields(0).name == "user")
+    assert(schema.fields(0).dataType == StringType)
+    assert(schema.fields(1).name == "movie")
+    assert(schema.fields(1).dataType == StringType)
+    assert(schema.fields(2).name == "rating")
+    assert(schema.fields(2).dataType == LongType)
+    assert(schema.fields(3).name == "ts")
+    assert(schema.fields(3).dataType == TimestampType)
+    assert(schema.fields(4).name == "rord_movie")
+    assert(schema.fields(4).dataType == LongType)
+    assert(schema.fields(5).name == "ord_user")
+    assert(schema.fields(5).dataType == LongType)
+    assert(schema.fields(6).name == "log_rating")
+    assert(schema.fields(6).dataType == DoubleType)
+    assert(schema.fields(7).name == "score")
+    assert(schema.fields(7).dataType == DoubleType)
+    assert(schema.fields(8).name == "tsms")
+    assert(schema.fields(8).dataType == DoubleType)
+    ratingsDF.collectAsList()
   }
 
   def buildMoviesCollection(moviesCollection: String) : Int = {
