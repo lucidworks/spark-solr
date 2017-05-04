@@ -154,6 +154,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def genUniqChildKey: Option[Boolean] = {
+    if (config.contains(GENERATE_UNIQUE_CHILD_KEY) && config.get(GENERATE_UNIQUE_CHILD_KEY).isDefined) {
+      return Some(config.get(GENERATE_UNIQUE_CHILD_KEY).get.toBoolean)
+    }
+    None
+  }
+
   def sampleSeed: Option[Int] = {
     if (config.contains(SAMPLE_SEED) && config.get(SAMPLE_SEED).isDefined) {
       return Some(config.get(SAMPLE_SEED).get.toInt)
