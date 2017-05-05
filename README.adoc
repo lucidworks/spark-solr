@@ -422,7 +422,7 @@ spark-submit --master yarn-server \
 
 == Basic Auth
 
-Basic auth can be configured via System properties `basicauth` or `solr.httpclient.config`
+Basic auth can be configured via System properties `basicauth` or `solr.httpclient.config`. These system properties have to be set on Driver and Executor JVMs
 
 Examples:
 
