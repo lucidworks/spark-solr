@@ -388,9 +388,11 @@ See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` 
 //end::spark-app[]
 
 //tag::spark-auth[]
-== Authenticating with Kerberized Solr
+== Authenticating with Solr
 
 For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security.
+
+=== Kerberos
 
 The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
 
@@ -416,6 +418,30 @@ spark-submit --master yarn-server \
   hdfs-to-solr -zkHost $ZK -collection spark-hdfs \
   -hdfsPath /user/spark/testdata/syn_sample_50k \
   -solrJaasAuthConfig=/path/to/jaas-client.conf
+
+
+== Basic Auth
+
+Basic auth can be configured via System properties `basicauth` or `solr.httpclient.config`. These system properties have to be set on Driver and Executor JVMs
+
+Examples:
+
+Using `basicauth`
+[source]
+ ./bin/spark-shell --master local[*] --jars ~/Git/spark-solr/target/spark-solr-3.0.1-SNAPSHOT-shaded.jar  --conf 'spark.driver.extraJavaOptions=-Dbasicauth=solr:SolrRocks'
+
+
+Using `solr.httpclient.config`
+[source]
+ ./bin/spark-shell --master local[*] --jars ~/Git/spark-solr/target/spark-solr-3.0.1-SNAPSHOT-shaded.jar  --conf 'spark.driver.extraJavaOptions=-Dsolr.httpclient.config=/Users/kiran/spark/spark-2.1.0-bin-hadoop2.7/auth.txt'
+
+
+Contents of config file
+
+[source]
+httpBasicAuthUser=solr
+httpBasicAuthPassword=SolrRocks
+
 
 //end::spark-auth[]
 //end::spark-devdocs[]

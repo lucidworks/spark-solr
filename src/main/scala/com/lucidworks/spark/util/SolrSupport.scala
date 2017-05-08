@@ -65,15 +65,28 @@ object SolrSupport extends LazyLogging {
     }
   }
 
+  def setupBasicAuthIfNeeded(): Unit = synchronized {
+    val credentials = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_BASIC_AUTH_CREDENTIALS)
+    val configFile = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG)
+    if (credentials != null || configFile != null) {
+      HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
+      logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
+    }
+  }
+
   def getHttpSolrClient(shardUrl: String): HttpSolrClient = {
     setupKerberosIfNeeded()
+    setupBasicAuthIfNeeded()
     new HttpSolrClient(shardUrl)
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
     setupKerberosIfNeeded()
-    val solrClient = new CloudSolrClient(zkHost)
+    setupBasicAuthIfNeeded()
+    val solrClient = new CloudSolrClient.Builder()
+      .withZkHost(zkHost)
+      .build()
     solrClient.connect()
     solrClient
   }
