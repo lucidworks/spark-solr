@@ -21,6 +21,7 @@ import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.cloud._
+import org.apache.spark.SparkFiles
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.zookeeper.KeeperException
@@ -57,11 +58,43 @@ object CacheSolrClient {
  */
 object SolrSupport extends LazyLogging {
 
+  val KERBEROS_CONFIG_FILE = "kerberos.config"
+  val BASICAUTH_CONFIG_FILE = "basicauth.config"
+
+  def getKerberosPropertyFromConfig(): Option[String] =  {
+    val configFileProp = System.getProperty(KERBEROS_CONFIG_FILE)
+    if (configFileProp !=null && !configFileProp.isEmpty) {
+      // Get the location of the file by using SparkFiles
+      val configFilePath = SparkFiles.get(configFileProp)
+      logger.info("Found config file {} located at path {}", KERBEROS_CONFIG_FILE, configFilePath)
+      return Some(configFilePath)
+    }
+    None
+  }
+
+  def getBasicAuthConfigFile(): Option[String] = {
+    val configFileProp = System.getProperty(BASICAUTH_CONFIG_FILE)
+    if (configFileProp !=null && !configFileProp.isEmpty) {
+      // Get the location of the file by using SparkFiles
+      val configFilePath = SparkFiles.get(configFileProp)
+      logger.info("Found config file {} located at path {}", BASICAUTH_CONFIG_FILE, configFilePath)
+      return Some(configFilePath)
+    }
+    None
+  }
+
   def setupKerberosIfNeeded(): Unit = synchronized {
     val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
     if (loginProp != null && !loginProp.isEmpty) {
+      logger.debug("Kerberos configured with config file {}", loginProp)
       HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
       logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+    } else {
+      val kerberosConfigFile = getKerberosPropertyFromConfig()
+      if (kerberosConfigFile.isDefined) {
+        System.setProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP, kerberosConfigFile.get)
+        setupKerberosIfNeeded()
+      }
     }
   }
 
@@ -69,15 +102,29 @@ object SolrSupport extends LazyLogging {
     val credentials = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_BASIC_AUTH_CREDENTIALS)
     val configFile = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG)
     if (credentials != null || configFile != null) {
+      if (configFile != null) {
+        logger.debug("Basic auth configured with config file {}", configFile)
+      } else {
+        logger.debug("Basic auth configured with creds {}", credentials)
+      }
       HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
       logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
+    } else {
+      val basicAuthConfigFile = getBasicAuthConfigFile()
+      if (basicAuthConfigFile.isDefined) {
+        System.setProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG, basicAuthConfigFile.get)
+        setupBasicAuthIfNeeded()
+      }
     }
   }
 
-  def getHttpSolrClient(shardUrl: String): HttpSolrClient = {
+  def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
     setupKerberosIfNeeded()
     setupBasicAuthIfNeeded()
-    new HttpSolrClient(shardUrl)
+    new HttpSolrClient.Builder()
+      .withBaseSolrUrl(shardUrl)
+      .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
+        .build()
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead

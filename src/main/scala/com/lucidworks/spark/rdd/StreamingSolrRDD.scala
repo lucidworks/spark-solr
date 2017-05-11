@@ -64,7 +64,7 @@ class StreamingSolrRDD(
         "; this is probably incorrect so you should provide your own sort criteria.")
     }
 
-    new SolrStreamIterator(shardUrl, SolrSupport.getHttpSolrClient(shardUrl), query, numWorkers, workerId)
+    new SolrStreamIterator(shardUrl, SolrSupport.getHttpSolrClient(shardUrl, zkHost), query, numWorkers, workerId)
   }
 
 

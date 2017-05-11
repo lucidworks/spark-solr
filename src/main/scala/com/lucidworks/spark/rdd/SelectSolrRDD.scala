@@ -52,7 +52,7 @@ class SelectSolrRDD(
         val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
         query.setRequestHandler(solrRequestHandler)
         logger.info("Using cursorMarks to fetch documents from " + partition.preferredReplica + " for query: " + partition.query)
-        val resultsIterator = new StreamingResultsIterator(SolrSupport.getHttpSolrClient(url), partition.query, partition.cursorMark)
+        val resultsIterator = new StreamingResultsIterator(SolrSupport.getHttpSolrClient(url, zkHost), partition.query, partition.cursorMark)
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
