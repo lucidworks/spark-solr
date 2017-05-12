@@ -1,21 +1,17 @@
 package com.lucidworks.spark.util
 
-import java.io.{InputStream, InputStreamReader, BufferedReader}
+import java.io.{BufferedReader, InputStreamReader}
 import java.net.URL
 
+import com.lucidworks.spark.util.JsonUtil._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.http.{HttpEntity, HttpResponse}
 import org.apache.http.client.HttpClient
-import org.apache.http.client.methods.{HttpGet, HttpUriRequest, HttpPost}
+import org.apache.http.client.methods.{HttpGet, HttpUriRequest}
+import org.apache.http.{HttpEntity, HttpResponse}
 import org.apache.solr.client.solrj.SolrServerException
-import org.apache.solr.client.solrj.impl.HttpClientUtil
 import org.apache.solr.common.SolrException
-import org.apache.solr.common.params.ModifiableSolrParams
-
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
-
-import com.lucidworks.spark.util.JsonUtil._
 
 object SolrJsonSupport extends LazyLogging {
 
@@ -156,18 +152,6 @@ object SolrJsonSupport extends LazyLogging {
       }
     }
     body.result()
-  }
-
-  def getHttpClient(): HttpClient = {
-    // Make sure to configure Kerberos for HttpClient before first usage
-    SolrSupport.setupKerberosIfNeeded()
-    SolrSupport.setupBasicAuthIfNeeded()
-
-    val params = new ModifiableSolrParams()
-    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 128)
-    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 32)
-    params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
-    HttpClientUtil.createClient(params)
   }
 
 }

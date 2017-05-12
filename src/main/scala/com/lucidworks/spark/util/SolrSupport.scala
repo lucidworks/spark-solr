@@ -3,6 +3,7 @@ package com.lucidworks.spark.util
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
 import java.lang.reflect.Modifier
 import java.net.{ConnectException, InetAddress, SocketException, URL}
+import java.nio.file.{Files, Path, Paths}
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -66,8 +67,12 @@ object SolrSupport extends LazyLogging {
     if (configFileProp !=null && !configFileProp.isEmpty) {
       // Get the location of the file by using SparkFiles
       val configFilePath = SparkFiles.get(configFileProp)
-      logger.info("Found config file {} located at path {}", KERBEROS_CONFIG_FILE, configFilePath)
-      return Some(configFilePath)
+      if (Files.exists(Paths.get(configFilePath))) {
+        logger.info("Found config file {} located at path {}", KERBEROS_CONFIG_FILE, configFilePath)
+        return Some(configFilePath)
+      } else {
+        logger.warn("config file not found at path {}", configFilePath)
+      }
     }
     None
   }
@@ -77,8 +82,12 @@ object SolrSupport extends LazyLogging {
     if (configFileProp !=null && !configFileProp.isEmpty) {
       // Get the location of the file by using SparkFiles
       val configFilePath = SparkFiles.get(configFileProp)
-      logger.info("Found config file {} located at path {}", BASICAUTH_CONFIG_FILE, configFilePath)
-      return Some(configFilePath)
+      if (Files.exists(Paths.get(configFilePath))) {
+        logger.info("Found config file {} located at path {}", BASICAUTH_CONFIG_FILE, configFilePath)
+        return Some(configFilePath)
+      } else {
+        logger.warn("config file not found at path {}", configFilePath)
+      }
     }
     None
   }
@@ -89,6 +98,7 @@ object SolrSupport extends LazyLogging {
       logger.debug("Kerberos configured with config file {}", loginProp)
       HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
       logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+//      readKerberosFile(loginProp)
     } else {
       val kerberosConfigFile = getKerberosPropertyFromConfig()
       if (kerberosConfigFile.isDefined) {
@@ -96,6 +106,10 @@ object SolrSupport extends LazyLogging {
         setupKerberosIfNeeded()
       }
     }
+  }
+
+  def readKerberosFile(path: String): Unit = {
+    logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
   }
 
   def setupBasicAuthIfNeeded(): Unit = synchronized {
@@ -119,12 +133,10 @@ object SolrSupport extends LazyLogging {
   }
 
   def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
-    setupKerberosIfNeeded()
-    setupBasicAuthIfNeeded()
     new HttpSolrClient.Builder()
       .withBaseSolrUrl(shardUrl)
       .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
-        .build()
+      .build()
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
@@ -145,6 +157,10 @@ object SolrSupport extends LazyLogging {
 
   def getCachedCloudClient(zkHost: String): CloudSolrClient = {
     CacheSolrClient.cache.get(zkHost)
+  }
+
+  def getHttpClient(zkHost: String) = {
+    getCachedCloudClient(zkHost).getHttpClient
   }
 
   def getSolrBaseUrl(zkHost: String) = {

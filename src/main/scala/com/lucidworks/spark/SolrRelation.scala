@@ -660,7 +660,7 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId)
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId, SolrSupport.getCachedCloudClient(zkHost).getHttpClient)
 
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = new ListBuffer[Update]()

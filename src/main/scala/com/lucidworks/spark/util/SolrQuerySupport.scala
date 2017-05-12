@@ -7,6 +7,7 @@ import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.JsonUtil._
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.http.client.HttpClient
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
@@ -82,7 +83,7 @@ object SolrQuerySupport extends LazyLogging {
       // Hit Solr Schema API to get base information
       val schemaUrl: String = solrBaseUrl + collection + "/schema"
       try {
-        val schemaMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, schemaUrl, 2)
+        val schemaMeta = SolrJsonSupport.getJson(SolrSupport.getHttpClient(zkHost), schemaUrl, 2)
         if (schemaMeta.has("schema") && (schemaMeta \ "schema").has("uniqueKey")) {
           schemaMeta \ "schema" \ "uniqueKey" match {
             case v: JString => return v.s
@@ -261,14 +262,14 @@ object SolrQuerySupport extends LazyLogging {
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 
-  def getFieldTypes(fields: Set[String], solrBaseUrl: String, collection: String): Map[String, SolrFieldMeta] =
-    getFieldTypes(fields, solrBaseUrl + collection + "/")
+  def getFieldTypes(fields: Set[String], solrBaseUrl: String, collection: String, httpClient: HttpClient): Map[String, SolrFieldMeta] =
+    getFieldTypes(fields, solrBaseUrl + collection + "/", httpClient)
 
-  def getFieldTypes(fields: Set[String], solrUrl: String): Map[String, SolrFieldMeta] = {
+  def getFieldTypes(fields: Set[String], solrUrl: String, httpClient: HttpClient): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
-    val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl)
+    val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl, httpClient)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq)
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, httpClient)
     fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
       case(name, payloadRef) =>
       payloadRef match {
@@ -372,12 +373,13 @@ object SolrQuerySupport extends LazyLogging {
   def getFieldDefinitionsFromSchema(
       solrUrl: String,
       fieldNames: Seq[String],
+      httpClient: HttpClient,
       fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
     logger.debug("Requesting schema for fields: {} ", fieldNames.mkString(","))
 
     if (fieldNames.isEmpty && fieldDefs.isEmpty)
-      return fetchFieldSchemaInfoFromSolr(fieldsUrlBase)
+      return fetchFieldSchemaInfoFromSolr(fieldsUrlBase, httpClient)
 
     if (fieldNames.isEmpty && fieldDefs.nonEmpty)
       return fieldDefs
@@ -394,17 +396,17 @@ object SolrQuerySupport extends LazyLogging {
         if (i < fieldNames.size) sb.append(",")
         flLength = flLength + fieldName.length + 1
       } else {
-        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
-        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), defs ++ fieldDefs)
+        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString(), httpClient)
+        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), httpClient, defs ++ fieldDefs)
       }
     }
-    val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
-    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, defs ++ fieldDefs)
+    val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString(), httpClient)
+    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, httpClient, defs ++ fieldDefs)
   }
 
-  def fetchFieldSchemaInfoFromSolr(fieldsUrl: String) : Map[String, Any] = {
+  def fetchFieldSchemaInfoFromSolr(fieldsUrl: String, httpClient: HttpClient) : Map[String, Any] = {
     try {
-      SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, fieldsUrl, 2).values match {
+      SolrJsonSupport.getJson(httpClient, fieldsUrl, 2).values match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
           val payload = m.asInstanceOf[Map[String, Any]]
           if (payload.contains("fields")) {
@@ -451,10 +453,10 @@ object SolrQuerySupport extends LazyLogging {
     fieldInfoMap.toMap
   }
 
-  def getFieldsFromLuke(solrUrl: String): Set[String] = {
+  def getFieldsFromLuke(solrUrl: String, httpClient: HttpClient): Set[String] = {
     val lukeUrl: String = solrUrl + "admin/luke?numTerms=0"
     try {
-      val adminMeta: JValue = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, lukeUrl, 2)
+      val adminMeta: JValue = SolrJsonSupport.getJson(httpClient, lukeUrl, 2)
       if (!adminMeta.has("fields")) {
         throw new Exception("Cannot find 'fields' payload inside Schema: " + compact(adminMeta))
       }
@@ -495,7 +497,7 @@ object SolrQuerySupport extends LazyLogging {
     cloneQuery.set("distrib", "true")
     cloneQuery.setRows(0)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val response = cloudClient.query(collection, solrQuery)
+    val response = cloudClient.query(collection, cloneQuery)
     response.getResults.getNumFound
   }
 
@@ -505,11 +507,11 @@ object SolrQuerySupport extends LazyLogging {
            "boolean": "solr.BooleanField"
          }
    */
-  def getFieldTypeToClassMap(solrUrl: String) : Map[String, String] = {
+  def getFieldTypeToClassMap(solrUrl: String, httpClient: HttpClient) : Map[String, String] = {
     val fieldTypeToClassMap: mutable.Map[String, String] = new mutable.HashMap[String, String]
     val fieldTypeUrl = solrUrl + "schema/fieldtypes"
     try {
-      val fieldTypeMeta = SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, fieldTypeUrl, 2)
+      val fieldTypeMeta = SolrJsonSupport.getJson(httpClient, fieldTypeUrl, 2)
       if (fieldTypeMeta.has("fieldTypes")) {
         (fieldTypeMeta \ "fieldTypes").values match {
           case types: List[Any] =>

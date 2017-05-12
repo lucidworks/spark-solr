@@ -6,6 +6,8 @@ import org.apache.http.client.HttpClient;
 
 import com.google.common.util.concurrent.RateLimiter;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.net.URLEncoder;
@@ -20,7 +22,7 @@ public class OmdbApi {
   private static HttpClient getHttpClient() {
     synchronized (OmdbApi.class) {
       if (httpClient == null) {
-        httpClient = SolrJsonSupport.getHttpClient();
+        httpClient = HttpClientUtil.createClient(new ModifiableSolrParams());
       }
     }
     return httpClient;

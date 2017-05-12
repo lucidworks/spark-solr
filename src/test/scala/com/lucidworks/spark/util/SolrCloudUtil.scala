@@ -27,15 +27,6 @@ object SolrCloudUtil extends LazyLogging {
     }
   }
 
-  def deleteCollection(collectionName: String, baseUrl: String): Unit = {
-    try {
-      val deleteUrl = baseUrl + "admin/collections?action=DELETE&name=" + collectionName
-      SolrJsonSupport.getJson(SolrJsonSupport.getHttpClient, deleteUrl)
-    } catch {
-      case e: Exception => logger.error("Failed when deleting collection " + collectionName + " due to :" + e)
-    }
-  }
-
   def createCollection(collectionName: String,
                        numShards: Int,
                        replicationFactor: Int,

@@ -1,6 +1,5 @@
 package com.lucidworks.spark.util
 
-import java.lang.Float
 import java.net.URLDecoder
 import java.sql.Timestamp
 import java.util
@@ -85,16 +84,17 @@ object SolrRelationUtil extends LazyLogging {
 
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrUrl = solrBaseUrl + collection + "/"
-    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl)
+    val httpClient = SolrSupport.getCachedCloudClient(zkHost).getHttpClient
+    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl, httpClient)
     logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
     if (fieldsFromLuke.isEmpty)
       return new StructType()
 
     val fieldTypeMap =
       if (fields.isEmpty)
-        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl)
+        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, httpClient)
       else
-        SolrQuerySupport.getFieldTypes(fields, solrUrl)
+        SolrQuerySupport.getFieldTypes(fields, solrUrl, httpClient)
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
