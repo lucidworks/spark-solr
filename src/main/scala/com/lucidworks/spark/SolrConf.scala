@@ -251,5 +251,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def getChildDocFieldName: Option[String] = {
+    if (config.contains(CHILD_DOC_FIELDNAME) && config.get(CHILD_DOC_FIELDNAME).isDefined) return config.get(CHILD_DOC_FIELDNAME)
+    None
+  }
+
   override def toString = s"SolrConf(getZkHost=$getZkHost, getCollection=$getCollection, getQuery=$getQuery, getStreamingExpr=$getStreamingExpr, getSqlStmt=$getSqlStmt, getStreamingExpressionSchema=$getStreamingExpressionSchema, getSolrSQLSchema=$getSolrSQLSchema, getFields=${getFields.mkString(",")}, getRows=$getRows, splits=$splits, docValues=$docValues, getSplitField=$getSplitField, getSplitsPerShard=$getSplitsPerShard, escapeFieldNames=$escapeFieldNames, flattenMultivalued=$flattenMultivalued, softAutoCommitSecs=$softAutoCommitSecs, commitWithin=$commitWithin, batchSize=$batchSize, requestHandler=$requestHandler, useCursorMarks=$useCursorMarks, genUniqKey=$genUniqKey, sampleSeed=$sampleSeed, samplePct=$samplePct, partition_by=$partition_by, getTimeStampFieldName=$getTimeStampFieldName, getTimePeriod=$getTimePeriod, getDateTimePattern=$getDateTimePattern, getTimeZoneId=$getTimeZoneId, getMaxActivePartitions=$getMaxActivePartitions, getSort=$getSort, getArbitrarySolrParams=$getArbitrarySolrParams, getExcludeFields=$getExcludeFields, skipNonDocValueFields=$skipNonDocValueFields)"
 }

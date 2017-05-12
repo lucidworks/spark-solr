@@ -17,4 +17,5 @@ object QueryConstants {
   val DEFAULT_TIME_PERIOD: String = "1DAYS"
   val DEFAULT_TIMEZONE_ID: String = "UTC"
   val DEFAULT_DATETIME_PATTERN: String = "yyyy_MM_dd"
+  val DEFAULT_CHILD_DOC_FIELD_NAME: String = "_childDocuments_"
 }

@@ -583,7 +583,7 @@ class SolrRelation(
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl, collectionId)
-    val fieldNameForChildDocuments = "_childDocuments_"
+    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = new ListBuffer[Update]()

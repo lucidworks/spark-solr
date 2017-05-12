@@ -18,6 +18,7 @@ class TestChildDocuments extends TestSuiteBuilder {
         "collection" -> collectionName,
         "gen_uniq_key" -> "true",
         "gen_uniq_child_key" -> "true",
+        "child_doc_fieldname" -> "tags",
         "flatten_multivalued" -> "false" // for correct reading column "date"
       )
       testDf.write.format("solr").options(solrOpts).mode(Overwrite).save()
