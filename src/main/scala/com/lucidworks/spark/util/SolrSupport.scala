@@ -62,8 +62,9 @@ object SolrSupport extends LazyLogging {
   val KERBEROS_CONFIG_FILE = "kerberos.config"
   val BASICAUTH_CONFIG_FILE = "basicauth.config"
   val BASICAUTH_CONFIGURER_CLASS = "basicauth.configurer.class"
+  val KERBEROS_CONFIGURER_CLASS = "kerberos.configure.class"
 
-  def getBasicAuthConfigurerClass(): Option[Class[_ <: HttpClientConfigurer]] = {
+  def getCustomConfigurerClass(propertyName: String): Option[Class[_ <: HttpClientConfigurer]] = {
     val configClassProp = System.getProperty(BASICAUTH_CONFIGURER_CLASS)
     if (configClassProp != null && !configClassProp.isEmpty) {
       try {
@@ -113,9 +114,15 @@ object SolrSupport extends LazyLogging {
     val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
     if (loginProp != null && !loginProp.isEmpty) {
       logger.debug("Kerberos configured with config file {}", loginProp)
-      HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
-      logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
-//      readKerberosFile(loginProp)
+      val configurerClassOptional = getCustomConfigurerClass(KERBEROS_CONFIGURER_CLASS)
+      if (configurerClassOptional.isDefined) {
+        logger.info("Class {} defined for kerberos custom configurer", configurerClassOptional.get)
+        val configurerClass: Class[_ <: HttpClientConfigurer] = configurerClassOptional.get
+        HttpClientUtil.addConfigurer(configurerClass.newInstance())
+      } else {
+        HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
+        logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+      }
     } else {
       val kerberosConfigFile = getKerberosPropertyFromConfig()
       if (kerberosConfigFile.isDefined) {
@@ -138,15 +145,15 @@ object SolrSupport extends LazyLogging {
       } else {
         logger.debug("Basic auth configured with creds {}", credentials)
       }
-      val configurerClassOptional = getBasicAuthConfigurerClass()
+      val configurerClassOptional = getCustomConfigurerClass(BASICAUTH_CONFIGURER_CLASS)
       if (configurerClassOptional.isDefined) {
         logger.info("Class {} defined for basic auth custom configurer", configurerClassOptional.get)
         val configurerClass: Class[_ <: HttpClientConfigurer] = configurerClassOptional.get
         HttpClientUtil.addConfigurer(configurerClass.newInstance())
       } else {
         HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
+        logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
       }
-      logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
     } else {
       val basicAuthConfigFile = getBasicAuthConfigFile()
       if (basicAuthConfigFile.isDefined) {
