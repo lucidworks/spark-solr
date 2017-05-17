@@ -1,7 +1,7 @@
 package com.lucidworks.spark.util
 
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
-import java.lang.reflect.Modifier
+import java.lang.reflect.{Constructor, Modifier}
 import java.net.{ConnectException, InetAddress, SocketException, URL}
 import java.nio.file.{Files, Path, Paths}
 import java.util.Date
@@ -64,13 +64,13 @@ object SolrSupport extends LazyLogging {
   val BASICAUTH_CONFIGURER_CLASS = "basicauth.configurer.class"
   val KERBEROS_CONFIGURER_CLASS = "kerberos.configure.class"
 
-  def getCustomConfigurerClass(propertyName: String): Option[Class[_ <: HttpClientConfigurer]] = {
-    val configClassProp = System.getProperty(BASICAUTH_CONFIGURER_CLASS)
+  def getCustomConfigurerClass(propertyName: String): Option[Class[_ <: FusionHttpClientConfigurer]] = {
+    val configClassProp = System.getProperty(propertyName)
     if (configClassProp != null && !configClassProp.isEmpty) {
       try {
         // Get the class name, check if it's on classpath and load it
         val clazz: Class[_] = ClassLoader.getSystemClassLoader.loadClass(configClassProp)
-        val httpConfigurerClass: Class[_ <: HttpClientConfigurer] = clazz.asSubclass(classOf[HttpClientConfigurer])
+        val httpConfigurerClass: Class[_ <: FusionHttpClientConfigurer] = clazz.asSubclass(classOf[FusionHttpClientConfigurer])
         return Some(httpConfigurerClass)
       } catch {
         case _: ClassNotFoundException => logger.warn("Class name {} not found in classpath", configClassProp)
@@ -110,15 +110,16 @@ object SolrSupport extends LazyLogging {
     None
   }
 
-  def setupKerberosIfNeeded(): Unit = synchronized {
+  def setupKerberosIfNeeded(zkHost: String): Unit = synchronized {
     val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
     if (loginProp != null && !loginProp.isEmpty) {
       logger.debug("Kerberos configured with config file {}", loginProp)
       val configurerClassOptional = getCustomConfigurerClass(KERBEROS_CONFIGURER_CLASS)
       if (configurerClassOptional.isDefined) {
         logger.info("Class {} defined for kerberos custom configurer", configurerClassOptional.get)
-        val configurerClass: Class[_ <: HttpClientConfigurer] = configurerClassOptional.get
-        HttpClientUtil.addConfigurer(configurerClass.newInstance())
+        val configurerClass: Class[_ <: FusionHttpClientConfigurer] = configurerClassOptional.get
+        val constructor = configurerClass.getDeclaredConstructor(classOf[java.lang.String])
+        HttpClientUtil.addConfigurer(constructor.newInstance(zkHost))
       } else {
         HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
         logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
@@ -127,7 +128,7 @@ object SolrSupport extends LazyLogging {
       val kerberosConfigFile = getKerberosPropertyFromConfig()
       if (kerberosConfigFile.isDefined) {
         System.setProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP, kerberosConfigFile.get)
-        setupKerberosIfNeeded()
+        setupKerberosIfNeeded(zkHost)
       }
     }
   }
@@ -136,20 +137,21 @@ object SolrSupport extends LazyLogging {
     logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
   }
 
-  def setupBasicAuthIfNeeded(): Unit = synchronized {
+  def setupBasicAuthIfNeeded(zkHost: String): Unit = synchronized {
     val credentials = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_BASIC_AUTH_CREDENTIALS)
     val configFile = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG)
-    if (credentials != null || configFile != null) {
+    val configurerClassOptional = getCustomConfigurerClass(BASICAUTH_CONFIGURER_CLASS)
+    if (credentials != null || configFile != null || configurerClassOptional.isDefined) {
       if (configFile != null) {
         logger.debug("Basic auth configured with config file {}", configFile)
       } else {
         logger.debug("Basic auth configured with creds {}", credentials)
       }
-      val configurerClassOptional = getCustomConfigurerClass(BASICAUTH_CONFIGURER_CLASS)
       if (configurerClassOptional.isDefined) {
         logger.info("Class {} defined for basic auth custom configurer", configurerClassOptional.get)
-        val configurerClass: Class[_ <: HttpClientConfigurer] = configurerClassOptional.get
-        HttpClientUtil.addConfigurer(configurerClass.newInstance())
+        val configurerClass: Class[_ <: FusionHttpClientConfigurer] = configurerClassOptional.get
+        val constructor = configurerClass.getDeclaredConstructor(classOf[java.lang.String])
+        HttpClientUtil.addConfigurer(constructor.newInstance(zkHost))
       } else {
         HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
         logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
@@ -158,7 +160,7 @@ object SolrSupport extends LazyLogging {
       val basicAuthConfigFile = getBasicAuthConfigFile()
       if (basicAuthConfigFile.isDefined) {
         System.setProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG, basicAuthConfigFile.get)
-        setupBasicAuthIfNeeded()
+        setupBasicAuthIfNeeded(zkHost)
       }
     }
   }
@@ -172,8 +174,8 @@ object SolrSupport extends LazyLogging {
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
-    setupKerberosIfNeeded()
-    setupBasicAuthIfNeeded()
+    setupKerberosIfNeeded(zkHost)
+    setupBasicAuthIfNeeded(zkHost)
     val solrClient = new CloudSolrClient.Builder()
       .withZkHost(zkHost)
       .build()
