@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
@@ -30,14 +31,16 @@ public class SolrStreamIterator extends TupleStreamIterator {
   protected int numWorkers;
   protected int workerId;
   protected SolrClientCache solrClientCache;
+  protected CloudSolrClient cloudSolrClient;
 
   // Remove the whole code around StreamContext, numWorkers, workerId once SOLR-10490 is fixed.
   // It should just work if an 'fq' passed in the params with HashQ filter
-  public SolrStreamIterator(String shardUrl, SolrClient solrServer, SolrQuery solrQuery, int numWorkers, int workerId) {
+  public SolrStreamIterator(String shardUrl, CloudSolrClient cloudSolrClient, SolrQuery solrQuery, int numWorkers, int workerId) {
     super(solrQuery);
 
     this.shardUrl = shardUrl;
-    this.solrServer = solrServer;
+    this.cloudSolrClient = cloudSolrClient;
+    this.solrServer = SolrSupport.getHttpSolrClient(shardUrl, cloudSolrClient.getZkHost());
     this.solrQuery = mergeFq(solrQuery);
     this.numWorkers = numWorkers;
     this.workerId = workerId;
@@ -50,16 +53,11 @@ public class SolrStreamIterator extends TupleStreamIterator {
     //SolrQuerySupport.validateExportHandlerQuery(solrServer, solrQuery);
   }
 
-  public SolrStreamIterator(String shardUrl, SolrClient solrServer, SolrQuery solrQuery) {
-    this(shardUrl, solrServer, solrQuery, 0, 0);
-  }
-
   protected TupleStream openStream() {
     SolrStream stream;
     try {
       stream = new SolrStream(shardUrl, solrQuery);
-      if (numWorkers > 0)
-        stream.setStreamContext(getStreamContext());
+      stream.setStreamContext(getStreamContext());
       stream.open();
     } catch (IOException e1) {
       throw new RuntimeException(e1);
@@ -67,10 +65,10 @@ public class SolrStreamIterator extends TupleStreamIterator {
     return stream;
   }
 
-  // TODO: Remove once SOLR-10490 is fixed
+  // We have to set the streaming context so that we can pass our own cloud client with authentication
   protected StreamContext getStreamContext() {
     StreamContext context = new StreamContext();
-    solrClientCache = new SolrClientCache();
+    solrClientCache = new SparkSolrClientCache(cloudSolrClient);
     context.setSolrClientCache(solrClientCache);
     context.numWorkers = numWorkers;
     context.workerID = workerId;
