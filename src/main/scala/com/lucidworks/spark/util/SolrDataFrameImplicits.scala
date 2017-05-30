@@ -5,7 +5,7 @@ import org.apache.spark.sql.{DataFrameReader, DataFrameWriter, Row, SaveMode}
 /**
   * Usage:
   *
-  * import DatasetLoader._
+  * import SolrDataFrameImplicits._
   * // then you can:
   * val spark: SparkSession
   * val collectionName: String
@@ -20,6 +20,8 @@ object SolrDataFrameImplicits {
   implicit class SolrReader(reader: DataFrameReader) {
     def solr(collection: String, query: String = "*:*") =
       reader.format("solr").option("collection", collection).option("query", query).load()
+    def solr(collection: String, options: Map[String, String]) =
+      reader.format("solr").option("collection", collection).options(options).load()
   }
 
   implicit class SolrWriter(writer: DataFrameWriter[Row]) {
