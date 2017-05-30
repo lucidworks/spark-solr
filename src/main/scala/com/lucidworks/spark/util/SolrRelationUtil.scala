@@ -280,10 +280,10 @@ object SolrRelationUtil extends LazyLogging {
         crit = Some("*" + f.value + "*")
       case f: StringEndsWith =>
         attr = Some(f.attribute)
-        crit = Some(f.value + "*")
+        crit = Some("*"+f.value)
       case f: StringStartsWith =>
         attr = Some(f.attribute)
-        crit = Some("*" + f.value)
+        crit = Some(f.value+"*")
       case _ => throw new IllegalArgumentException("Filters of type '" + filter + " (" + filter.getClass.getName + ")' not supported!")
     }
 
