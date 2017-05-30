@@ -369,7 +369,7 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
       sb ++= s", ${BATCH_SIZE}=${batchSize.get}"
     }
     if (getChildDocFieldName.isDefined) {
-      sb ++= s", ${CHILDDOC_FIELD_NAME}=${getChildDocFieldName.get}"
+      sb ++= s", ${CHILD_DOC_FIELDNAME}=${getChildDocFieldName.get}"
     }
     sb ++= ")"
     sb.toString
