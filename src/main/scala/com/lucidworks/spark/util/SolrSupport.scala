@@ -113,7 +113,7 @@ object SolrSupport extends LazyLogging {
   def setupKerberosIfNeeded(zkHost: String): Unit = synchronized {
     val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
     if (loginProp != null && !loginProp.isEmpty) {
-      logger.debug("Kerberos configured with config file {}", loginProp)
+      logger.info("Kerberos configured with config file {}", loginProp)
       val configurerClassOptional = getCustomConfigurerClass(KERBEROS_CONFIGURER_CLASS)
       if (configurerClassOptional.isDefined) {
         logger.info("Class {} defined for kerberos custom configurer", configurerClassOptional.get)
@@ -122,7 +122,7 @@ object SolrSupport extends LazyLogging {
         HttpClientUtil.addConfigurer(constructor.newInstance(zkHost))
       } else {
         HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
-        logger.debug(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+        logger.info(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
       }
     } else {
       val kerberosConfigFile = getKerberosPropertyFromConfig()
@@ -154,7 +154,7 @@ object SolrSupport extends LazyLogging {
         HttpClientUtil.addConfigurer(constructor.newInstance(zkHost))
       } else {
         HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
-        logger.debug(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
+        logger.info(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
       }
     } else {
       val basicAuthConfigFile = getBasicAuthConfigFile()
