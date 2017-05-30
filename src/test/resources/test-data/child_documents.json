@@ -1,0 +1,2 @@
+{ "user":"a", "dates":[ "2017-05-02",  "2017-05-03"], "status":"OK", "tags":[{ "foo":123, "bar":"val1", "parent": "a"},{ "foo":456, "bar":"val2", "parent": "a"}]}
+{ "user":"b", "dates":[ "2017-04-29",  "2017-04-30"], "status":"OK", "tags":[{ "foo":789, "bar":"val1", "parent": "b"},{ "foo":1011, "bar":"val2", "parent": "b"}]}

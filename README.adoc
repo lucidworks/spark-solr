@@ -8,6 +8,29 @@ This project includes tools for reading data from Solr as a Spark RDD and indexi
 
 toc::[]
 
+//tag::version-compatibility[]
+== Version Compatibility
+
+The spark-solr project has several releases, each of which support different versions of Spark and Solr. The compatibility
+chart below shows the versions supported across the past releases. 'Connector' refers to the 'spark-solr' library
+
+[width="40%",frame="topbot",options="header,footer"]
+|======================
+|Connector      | Spark | Solr
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta4%7Cjar[3.0.0-beta4]  | 2.1.0 | 6.5.1
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta3%7Cjar[3.0.0-beta3]  | 2.1.0 | 6.4.2
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta2%7Cjar[3.0.0-beta2]  | 2.1.0 | 6.4.2
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta%7Cjar[3.0.0-beta]  | 2.1.0 | 6.3.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-alpha.2%7Cjar[3.0.0-alpha.2]  | 2.0.1 | 6.2.1
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.4.0%7Cjar[2.4.0]          | 1.6.3 | 6.4.2
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.3.4%7Cjar[2.3.4]          | 1.6.3 | 6.3.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.3.3%7Cjar[2.3.3]          | 1.6.3 | 6.3.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.2.3%7Cjar[2.2.3]          | 1.6.2 | 6.1.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.1.0%7Cjar[2.1.0]          | 1.6.2 | 6.1.0
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.0.4%7Cjar[2.0.4]          | 1.6.1 | 5.5.2
+|======================
+
+
 //tag::getting-started[]
 == Getting started
 
@@ -15,10 +38,9 @@ toc::[]
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --packages "com.lucidworks.spark:spark-solr:3.0.0-alpha"
-                          or
-./bin/spark-shell --jars spark-solr-3.0.0-alpha.jar
+./bin/spark-shell --jars spark-solr-3.0.0-alpha.2-shaded.jar
 
+The shaded jar can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central] or built from the respective branch
 
 === Connect to your SolrCloud Instance
 
@@ -241,6 +263,40 @@ Usage: `option("dv", "true")`
 
 Default: false
 
+==== skip_non_dv
+
+The `skip_non_dv` option instructs the `solr` datasource to skip all fields that are not docValues.
+
+Usage: `option("skip_non_dv", "true")`
+
+Default: false
+
+=== Index parameters
+
+==== soft_commit_secs
+
+If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
+
+Usage: `option("soft_commit_secs", "10")`
+
+Default: None
+
+==== batch_size
+
+The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
+
+Usage: `option("batch_size", "10000")`
+
+Default: 500
+
+==== gen_uniq_key
+
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
+
+Usage: `option("gen_uniq_key", "true")`
+
+Default: false
+
 ==== sample_seed
 
 The `sample_seed` option allows you to read a random sample of documents from Solr using the specified seed. This option can be useful if you just need to explore the data before performing operations on the full result set. By default, if this option is provided, a 10% sample size is read from Solr, but you can use the `sample_pct` option to control the sample size.
@@ -256,14 +312,6 @@ The `sample_pct` option allows you to set the size of a random sample of documen
 Usage: `option("sample_pct", "0.05")`
 
 Default: 0.1
-
-==== skip_non_dv
-
-The `skip_non_dv` option instructs the `solr` datasource to skip all fields that are not docValues.
-
-Usage: `option("skip_non_dv", "true")`
-
-Default: false
 
 === solr.params
 
