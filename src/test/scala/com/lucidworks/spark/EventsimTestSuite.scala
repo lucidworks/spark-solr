@@ -10,6 +10,7 @@ import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.spark.sql.DataFrame
 
 import scala.collection.JavaConverters._
+import com.lucidworks.spark.util.SolrDataFrameImplicits._
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -178,10 +179,7 @@ class EventsimTestSuite extends EventsimBuilder {
   }
 
   test("Length range filter queries") {
-    val df: DataFrame = sparkSession.read.format("solr")
-      .option("zkHost", zkHost)
-      .option("collection", collectionName)
-      .load()
+    val df: DataFrame = sparkSession.read.option("zkhost", zkHost).solr(collectionName)
     df.createOrReplaceTempView("events")
 
     val timeQueryDF = sparkSession.sql("SELECT * from events WHERE `length` >= '700' and `length` <= '1000'")
