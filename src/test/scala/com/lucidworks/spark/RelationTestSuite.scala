@@ -480,6 +480,21 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     ratingsDF.collectAsList()
   }
 
+  test("Wildcard Handling in LIKE clause") {
+    val moviesCollection = "movies" + UUID.randomUUID().toString.replace('-','_')
+    buildMoviesCollectionWithText(moviesCollection)
+
+    {
+      val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection)
+      val df = sparkSession.read.format("solr").options(opts).load()
+      df.createOrReplaceTempView(moviesCollection)
+      var rs = sparkSession.sql(s"select movie_id, title from ${moviesCollection} where title like 'Money%'")
+      assert(rs.count == 1)
+      rs = sparkSession.sql(s"select movie_id, title from ${moviesCollection} where title like '%Short'")
+      assert(rs.count == 1)
+    }
+  }
+
   def buildMoviesCollection(moviesCollection: String) : Int = {
     SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
 
