@@ -41,7 +41,7 @@ class TestQuerying extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
     try {
       val csvDF = buildTestData()
-      val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "solr.params" -> "fl=id,one_txt,two_txt")
+      val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, "fields" -> "id,one_txt,two_txt")
       csvDF.write.format("solr").options(solrOpts).mode(Overwrite).save()
 
       // Explicit commit to make sure all docs are visible

@@ -1,5 +1,7 @@
 package com.lucidworks.spark.util
 
+import java.lang.Float
+import java.net.URLDecoder
 import java.sql.Timestamp
 import java.util
 import java.util.Date
@@ -19,6 +21,12 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
+case class QueryField(name:String, alias: Option[String] = None, funcReturnType: Option[DataType] = None) {
+  def fl() : String = {
+    if (alias.isDefined) s"${alias.get}:${name}" else name
+  }
+}
+
 object SolrRelationUtil extends LazyLogging {
 
   val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
@@ -29,6 +37,31 @@ object SolrRelationUtil extends LazyLogging {
       if (fieldName.endsWith(ext)) return true
     })
     false
+  }
+
+  def parseQueryFields(solrFields: Array[String]) : Array[QueryField] = {
+    solrFields.map(f => {
+      val colonAt = f.indexOf(':') // there can be multiple colons, so just split on the first for now
+      if (colonAt != -1) {
+        val alias = f.substring(0,colonAt)
+        var field = f.substring(colonAt+1)
+        var funcReturnType : Option[DataType] = None
+        if (field.indexOf('(') != -1 && field.indexOf(')') != -1) {
+          // this is a Solr function query
+          val lix = field.lastIndexOf(':')
+          if (lix != -1) {
+            funcReturnType = Some(DataType.fromJson("\""+field.substring(lix+1)+"\""))
+            field = field.substring(0,lix) // strip off the additional type info from the function query
+          } else {
+            funcReturnType = Some(LongType)
+          }
+          logger.debug(s"Found a Solr function query: ${field} with return type: ${funcReturnType}")
+        }
+        QueryField(URLDecoder.decode(field, "UTF-8"), Some(alias), funcReturnType)
+      } else {
+        QueryField(f)
+      }
+    })
   }
 
   def getBaseSchema(
@@ -121,23 +154,34 @@ object SolrRelationUtil extends LazyLogging {
     DataTypes.createStructType(structFields.toList)
   }
 
-  def deriveQuerySchema(fields: Array[String], schema: StructType): StructType = {
+  def deriveQuerySchema(fields: Array[QueryField], schema: StructType): StructType = {
     val fieldMap = new mutable.HashMap[String, StructField]()
     for (structField <- schema.fields) fieldMap.put(structField.name, structField)
 
     val listOfFields = new ListBuffer[StructField]
     for (field <- fields) {
-      if (fieldMap.contains(field)) {
-        if (fieldMap.get(field).isDefined) {
-          listOfFields.add(fieldMap.get(field).get)
-        } else {
-          logger.info("No structField definition found for field '" + field + "'")
-        }
+      if (field.funcReturnType.isDefined) {
+        listOfFields.add(DataTypes.createStructField(field.alias.get, field.funcReturnType.get, false, Metadata.empty))
       } else {
-        if (field.equals("score")) {
-          listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+        val fieldName = field.name
+        if (fieldMap.contains(fieldName)) {
+          if (fieldMap.get(fieldName).isDefined) {
+            val structField = fieldMap.get(fieldName).get
+            if (field.alias.isDefined) {
+              // have to use the alias here!!
+              listOfFields.add(DataTypes.createStructField(field.alias.get, structField.dataType, structField.nullable, structField.metadata))
+            } else {
+              listOfFields.add(structField)
+            }
+          } else {
+            logger.info("No structField definition found for field '" + fieldName + "'")
+          }
         } else {
-          logger.info("Base schema does not contain field '" + field + "'")
+          if (fieldName == "score") {
+            listOfFields.add(DataTypes.createStructField("score", DataTypes.DoubleType, false, Metadata.empty))
+          } else {
+            logger.info("Base schema does not contain field '" + field + "'")
+          }
         }
       }
     }
@@ -315,17 +359,61 @@ object SolrRelationUtil extends LazyLogging {
         // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
         if (fieldType.eq(TimestampType)) new Timestamp(DateTime.parse(s).getMillis)
         else s
-      case i: java.lang.Integer => new java.lang.Long(i.longValue())
-      case f: java.lang.Float => new java.lang.Double(f.doubleValue())
+      case i: java.lang.Integer => {
+        fieldType match {
+          case it: IntegerType => i
+          case lt: LongType => new java.lang.Long(i.longValue())
+          case st: StringType => i.toString
+          case ft: FloatType => new java.lang.Float(i.floatValue())
+          case dt: DoubleType => new java.lang.Double(i.doubleValue())
+          case ht: ShortType => new java.lang.Short(i.shortValue())
+          case _ => throw new MatchError(s"Can't convert Integer value ${i} to ${fieldType}")
+        }
+      }
+      case l: java.lang.Long => {
+        fieldType match {
+          case lt: LongType => l
+          case st: StringType => l.toString
+          case dt: DoubleType => new java.lang.Double(l.doubleValue())
+          case _ => throw new MatchError(s"Can't convert Long value ${l} to ${fieldType}")
+        }
+      }
+      case f: java.lang.Float => {
+        fieldType match {
+          case ft: FloatType => f
+          case st: StringType => f.toString
+          case dt: DoubleType => new java.lang.Double(f.doubleValue())
+          case _ => throw new MatchError(s"Can't convert Float value ${f} to ${fieldType}")
+        }
+      }
+      case d: java.lang.Double => {
+        fieldType match {
+          case dt: DoubleType => d
+          case st: StringType => d.toString
+          case _ => throw new MatchError(s"Can't convert Double value ${d} to ${fieldType}")
+        }
+      }
+      case n: java.lang.Number => {
+        fieldType match {
+          case it: IntegerType => new Integer(n.intValue())
+          case lt: LongType => new java.lang.Long(n.longValue())
+          case st: StringType => n.toString
+          case ft: FloatType => new java.lang.Float(n.floatValue())
+          case dt: DoubleType => new java.lang.Double(n.doubleValue())
+          case ht: ShortType => new java.lang.Short(n.shortValue())
+          case _ => throw new MatchError(s"Can't convert number value ${n} (${n.getClass.getName}) to ${fieldType}")
+        }
+      }
       case al: java.util.ArrayList[_] =>
         val jlist = al.iterator.map {
           case d: Date => new Timestamp(d.getTime)
-          case s: String =>
+          case s: String => {
             fieldType match {
               case at: ArrayType => if (at.elementType.eq(TimestampType)) new Timestamp(DateTime.parse(s).getMillis) else s
               case _: TimestampType => new Timestamp(DateTime.parse(s).getMillis)
               case _ => s
             }
+          }
           case i: java.lang.Integer => new java.lang.Long(i.longValue())
           case f: java.lang.Float => new java.lang.Double(f.doubleValue())
           case v => v
@@ -363,7 +451,7 @@ object SolrRelationUtil extends LazyLogging {
     if (fieldValues != null) {
       val iterableValues = fieldValues.iterator().map {
         case d: Date => new Timestamp(d.getTime)
-        case s: String =>
+        case s: String => {
           fieldType match {
             // This is a workaround. When date fields are streamed through export handler, they are represented with String class type
             case t: ArrayType =>
@@ -373,6 +461,7 @@ object SolrRelationUtil extends LazyLogging {
                 s
             case _ => s
           }
+        }
         case i: java.lang.Integer => new java.lang.Long(i.longValue())
         case f: java.lang.Float => new java.lang.Double(f.doubleValue())
         case a => a

@@ -1,6 +1,6 @@
 package com.lucidworks.spark.rdd
 
-import com.lucidworks.spark.{SolrPartitioner, SolrRDDPartition}
+import com.lucidworks.spark.{SolrLimitPartition, SolrPartitioner, SolrRDDPartition}
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
@@ -15,7 +15,7 @@ import scala.collection.JavaConverters
 class SelectSolrRDD(
     zkHost: String,
     collection: String,
-    @transient sc: SparkContext,
+    @transient private val sc: SparkContext,
     requestHandler: Option[String] = None,
     query : Option[String] = Option(DEFAULT_QUERY),
     fields: Option[Array[String]] = None,
@@ -23,8 +23,9 @@ class SelectSolrRDD(
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
-    uKey: Option[String] = None)
-  extends SolrRDD[SolrDocument](zkHost, collection, sc)
+    uKey: Option[String] = None,
+    val maxRows: Option[Int] = None)
+  extends SolrRDD[SolrDocument](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
   protected def copy(
@@ -34,27 +35,44 @@ class SelectSolrRDD(
     rows: Option[Int] = rows,
     splitField: Option[String] = splitField,
     splitsPerShard: Option[Int] = splitsPerShard,
-    solrQuery: Option[SolrQuery] = solrQuery): SelectSolrRDD = {
-      new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+    solrQuery: Option[SolrQuery] = solrQuery,
+    uKey: Option[String] = uKey,
+    maxRows: Option[Int] = maxRows): SelectSolrRDD = {
+      new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
   }
 
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
     split match {
-      case partition: SolrRDDPartition =>
+      case partition: SolrRDDPartition => {
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
-        logger.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
+        logger.info("Using the shard url " + url + " for getting partition data for split: " + split.index)
         val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
         query.setRequestHandler(solrRequestHandler)
-        logger.info("Using cursorMarks to fetch documents from "+partition.preferredReplica+" for query: "+partition.query)
+        logger.info("Using cursorMarks to fetch documents from " + partition.preferredReplica + " for query: " + partition.query)
         val resultsIterator = new StreamingResultsIterator(SolrSupport.getHttpSolrClient(url), partition.query, partition.cursorMark)
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
-
+      }
+      case p: SolrLimitPartition => {
+        // this is a single partition for the entire query ... we'll read all rows at once
+        val query = p.query
+        val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
+        query.setRequestHandler(solrRequestHandler)
+        query.setRows(p.maxRows)
+        query.set("distrib.singlePass", "true")
+        query.setStart(null) // important! must start as null else the Iterator will advance the start position by the row size
+        val resultsIterator = new StreamingResultsIterator(SolrSupport.getCachedCloudClient(p.zkhost), query)
+        resultsIterator.setMaxSampleDocs(p.maxRows)
+        context.addTaskCompletionListener { (context) =>
+          logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from the limit (${p.maxRows}) partition of ${p.collection}")
+        }
+        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
+      }
       case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
   }
@@ -62,6 +80,11 @@ class SelectSolrRDD(
   override def getPartitions: Array[Partition] = {
     val query = if (solrQuery.isEmpty) buildQuery else solrQuery.get
     val rq = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
+    // if the user requested a max # of rows, use a single partition
+    if (maxRows.isDefined) {
+      logger.debug(s"Using a single limit partition for a maxRows=${maxRows} query.")
+      return Array(SolrLimitPartition(0, zkHost, collection, maxRows.get, query))
+    }
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     logger.info(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
@@ -97,7 +120,7 @@ class SelectSolrRDD(
 
   override def query(q: String): SelectSolrRDD = copy(query = Some(q))
 
-  override def query(solrQuery: SolrQuery): SelectSolrRDD = copy(solrQuery = Some(solrQuery))
+  override def query(solrQuery: SolrQuery): SelectSolrRDD = copy (solrQuery = Some (solrQuery))
 
   override def select(fl: String): SelectSolrRDD = copy(fields = Some(fl.split(",")))
 
@@ -118,7 +141,7 @@ class SelectSolrRDD(
     if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     }
-    if (!solrQuery.getRows.eq(null)) {
+    if (!solrQuery.getRows.eq(null) && rows.isDefined) {
       solrQuery = solrQuery.setRows(rows.get)
     }
 
