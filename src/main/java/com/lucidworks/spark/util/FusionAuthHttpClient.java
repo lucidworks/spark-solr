@@ -1,6 +1,6 @@
 package com.lucidworks.spark.util;
 
-import org.apache.http.client.HttpClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 
 public abstract class FusionAuthHttpClient {
 
@@ -14,5 +14,5 @@ public abstract class FusionAuthHttpClient {
     return zkHost;
   }
 
-  public abstract HttpClient buildHttpClient() throws Exception;
+  public abstract HttpSolrClient.Builder getHttpClientBuilder() throws Exception;
 }

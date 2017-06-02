@@ -14,7 +14,6 @@ import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
-import org.apache.http.client.HttpClient
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -101,6 +100,13 @@ object SolrSupport extends LazyLogging {
   }
 
   def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+    val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
+    if (fusionAuthClass.isDefined) {
+      val authHttpClient = getAuthHttpClient(zkHost)
+      if (authHttpClient.isDefined) {
+        authHttpClient.get.withBaseSolrUrl(shardUrl).build()
+      }
+    }
     new HttpSolrClient.Builder()
       .withBaseSolrUrl(shardUrl)
       .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
@@ -115,21 +121,22 @@ object SolrSupport extends LazyLogging {
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClient = getAuthHttpClient(zkHost)
     if (authHttpClient.isDefined) {
-      solrClientBuilder.withHttpClient(authHttpClient.get)
+      solrClientBuilder.withLBHttpSolrClientBuilder(
+        new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClient.get))
     }
     val solrClient = solrClientBuilder.build()
     solrClient.connect()
     solrClient
   }
 
-  private def getAuthHttpClient(zkHost: String): Option[HttpClient] = {
+  private def getAuthHttpClient(zkHost: String): Option[HttpSolrClient.Builder] = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
       logger.info("Custom class '{}' configured for auth", fusionAuthClass.isDefined)
       val authClass: Class[_ <: FusionAuthHttpClient] = fusionAuthClass.get
       val constructor = authClass.getDeclaredConstructor(classOf[java.lang.String])
       val authHttpClient: FusionAuthHttpClient = constructor.newInstance(zkHost)
-      return Some(authHttpClient.buildHttpClient())
+      return Some(authHttpClient.getHttpClientBuilder())
     }
     None
   }
@@ -141,10 +148,6 @@ object SolrSupport extends LazyLogging {
 
   def getCachedCloudClient(zkHost: String): CloudSolrClient = {
     CacheSolrClient.cache.get(zkHost)
-  }
-
-  def getHttpClient(zkHost: String) = {
-    getCachedCloudClient(zkHost).getHttpClient
   }
 
   def getSolrBaseUrl(zkHost: String) = {

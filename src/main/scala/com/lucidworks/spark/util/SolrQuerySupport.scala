@@ -5,9 +5,7 @@ import java.util
 
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
-import com.lucidworks.spark.util.JsonUtil._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.http.client.HttpClient
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
@@ -23,7 +21,6 @@ import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
-import org.json4s._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
@@ -83,6 +80,10 @@ object SolrQuerySupport extends LazyLogging {
     val uniqueKeyRequest = new UniqueKey()
     val client = SolrSupport.getCachedCloudClient(zkHost)
     val uniqueKeyResponse: UniqueKeyResponse = uniqueKeyRequest.process(client, collection)
+    if (uniqueKeyResponse.getStatus != 0) {
+      throw new RuntimeException(
+        "Solr request returned with status code '" + uniqueKeyResponse.getStatus + "'. Response: '" + uniqueKeyResponse.getResponse.toString)
+    }
     uniqueKeyResponse.getUniqueKey
   }
 
@@ -247,9 +248,9 @@ object SolrQuerySupport extends LazyLogging {
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 
-  def getFieldTypes(fields: Set[String], solrUrl: String, httpClient: HttpClient, zkHost: String, collection: String): Map[String, SolrFieldMeta] = {
+  def getFieldTypes(fields: Set[String], solrUrl: String, zkHost: String, collection: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
-    val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl, httpClient)
+    val fieldTypeToClassMap = getFieldTypeToClassMap(zkHost, collection)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
     val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, zkHost, collection)
     fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
@@ -401,7 +402,8 @@ object SolrQuerySupport extends LazyLogging {
       val response: SchemaResponse.FieldsResponse = schemaRequest.process(solrCloudClient, collection)
 
       if (response.getStatus != 0) {
-        throw new Exception("Error querying schema for collection " + collection)
+        throw new RuntimeException(
+          "Solr request returned with status code '" + response.getStatus + "'. Response: '" + response.getResponse.toString)
       }
       constructFieldInfoMap(asScalaBuffer(response.getFields).toList)
     } catch {
@@ -451,6 +453,10 @@ object SolrQuerySupport extends LazyLogging {
     val lukeRequest = new LukeRequest()
     lukeRequest.setNumTerms(0)
     val lukeResponse = lukeRequest.process(cloudClient, collection)
+    if (lukeResponse.getStatus != 0) {
+      throw new RuntimeException(
+        "Solr request returned with status code '" + lukeResponse.getStatus + "'. Response: '" + lukeResponse.getResponse.toString)
+    }
     mapAsScalaMap(lukeResponse.getFieldInfo).toMap.keySet
   }
 
@@ -489,46 +495,20 @@ object SolrQuerySupport extends LazyLogging {
            "boolean": "solr.BooleanField"
          }
    */
-  def getFieldTypeToClassMap(solrUrl: String, httpClient: HttpClient) : Map[String, String] = {
+  def getFieldTypeToClassMap(zkHost: String, collection: String) : Map[String, String] = {
     val fieldTypeToClassMap: mutable.Map[String, String] = new mutable.HashMap[String, String]
-    val fieldTypeUrl = solrUrl + "schema/fieldtypes"
-    try {
-      val fieldTypeMeta = SolrJsonSupport.getJson(httpClient, fieldTypeUrl, 2)
-      if (fieldTypeMeta.has("fieldTypes")) {
-        (fieldTypeMeta \ "fieldTypes").values match {
-          case types: List[Any] =>
-            if (types.nonEmpty) {
-              // Get the name, type and add them to the map
-              types.foreach {
-                case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
-                  val fieldTypePayload = m.asInstanceOf[Map[String, Any]]
-                  if (fieldTypePayload.contains("name") && fieldTypePayload.contains("class")) {
-                    val fieldTypeName = fieldTypePayload.get("name")
-                    val fieldTypeClass = fieldTypePayload.get("class")
-                    if (fieldTypeName.isDefined && fieldTypeClass.isDefined) {
-                      fieldTypeName.get match {
-                        case name: String =>
-                          fieldTypeClass.get match {
-                            case typeClass: String =>
-                              fieldTypeToClassMap.put(name, typeClass)
-                          }
-                      }
-                    }
-                  }
-              }
-            }
-          case t: AnyRef => logger.warn("Found unexpected object type '" + t + "' when parsing field types json")
-        }
-      }
-    } catch {
-      case e: Exception =>
-        logger.error("Can't get field type metadata from Solr url " + fieldTypeUrl)
-        e match {
-          case e1: RuntimeException => throw e1
-          case e2: Exception => throw new RuntimeException(e2)
-        }
-    }
 
+    val fieldTypeRequest = new SchemaRequest.FieldTypes()
+    val fieldTypeResponse = fieldTypeRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
+    if (fieldTypeResponse.getStatus != 0) {
+      throw new RuntimeException(
+        "Solr request returned with status code '" + fieldTypeResponse.getStatus + "'. Response: '" + fieldTypeResponse.getResponse.toString)
+    }
+    for (fieldType <- asScalaBuffer(fieldTypeResponse.getFieldTypes)) {
+      val fieldTypeName = fieldType.getAttributes.get("name").toString
+      val fieldTypeClass = fieldType.getAttributes.get("class").asInstanceOf[String]
+      fieldTypeToClassMap.put(fieldTypeName, fieldTypeClass)
+    }
     fieldTypeToClassMap.toMap
   }
 

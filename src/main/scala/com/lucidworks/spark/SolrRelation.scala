@@ -9,7 +9,6 @@ import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.http.entity.StringEntity
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.io.stream.expr._
@@ -661,7 +660,7 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", SolrSupport.getCachedCloudClient(zkHost).getHttpClient, zkHost, collectionId)
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", zkHost, collectionId)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
@@ -702,17 +701,7 @@ class SolrRelation(
       logger.info("softAutoCommitSecs? "+conf.softAutoCommitSecs)
       val softAutoCommitSecs = conf.softAutoCommitSecs.get
       val softAutoCommitMs = softAutoCommitSecs * 1000
-      var configApi = solrBaseUrl
-      if (!configApi.endsWith("/")) {
-        configApi += "/"
-      }
-      configApi += collectionId+"/config"
-
-      val postRequest = new org.apache.http.client.methods.HttpPost(configApi)
-      val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
-      postRequest.setEntity(new StringEntity(configJson))
-      logger.info("POSTing: "+configJson+" to "+configApi)
-      SolrJsonSupport.doJsonRequest(cloudClient.getLbClient.getHttpClient, configApi, postRequest)
+      SolrRelationUtil.setAutoSoftCommit(zkHost, collectionId, softAutoCommitMs)
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000

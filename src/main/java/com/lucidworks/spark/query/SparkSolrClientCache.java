@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
@@ -21,10 +22,7 @@ public class SparkSolrClientCache extends SolrClientCache {
   }
 
   public synchronized HttpSolrClient getHttpSolrClient(String host) {
-    return new HttpSolrClient.Builder()
-        .withBaseSolrUrl(host)
-        .withHttpClient(solrClient.getHttpClient())
-        .build();
+    return SolrSupport.getHttpSolrClient(host, solrClient.getZkHost());
   }
 
 }

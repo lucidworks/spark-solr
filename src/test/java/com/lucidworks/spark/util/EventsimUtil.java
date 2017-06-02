@@ -23,7 +23,7 @@ public class EventsimUtil {
   private static ObjectMapper objectMapper = new ObjectMapper();
 
   /**
-   * Load the eventsim json dataset and post it through HttpClient
+   * Load the eventsim json dataset and write it using Solr writer
    * @throws Exception
    */
   public static void loadEventSimDataSet(String zkHost, String collectionName, SparkSession sparkSession) throws Exception {

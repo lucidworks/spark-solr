@@ -366,6 +366,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       newOptions.put(SOLR_ZK_HOST_PARAM(), zkHost);
       newOptions.put(SOLR_COLLECTION_PARAM(), testCollection2);
       newOptions.put(FLATTEN_MULTIVALUED(), "false");
+      newOptions.put(SOFT_AUTO_COMMIT_SECS(), "2");
 
       Dataset cleanDF = sparkSession.read().format("solr").options(options).load();
       log.info("Writing data to Solr");
