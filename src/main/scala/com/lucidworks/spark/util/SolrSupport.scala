@@ -20,6 +20,7 @@ import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
+import org.apache.solr.common.params.ModifiableSolrParams
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
@@ -117,13 +118,17 @@ object SolrSupport extends LazyLogging {
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
     setupKerberosIfNeeded(zkHost)
     setupBasicAuthIfNeeded(zkHost)
-
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClient = getAuthHttpClient(zkHost)
     if (authHttpClient.isDefined) {
       solrClientBuilder.withLBHttpSolrClientBuilder(
         new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClient.get))
     }
+    val params = new ModifiableSolrParams()
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 6000)
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 300)
+    params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
+    val httpClient = HttpClientUtil.createClient(params)
     val solrClient = solrClientBuilder.build()
     solrClient.connect()
     solrClient

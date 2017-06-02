@@ -39,6 +39,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
     sparkSession = SparkSession.builder()
       .appName("test")
       .master("local")
+      .config("spark.ui.enabled", "false")
       .config("spark.default.parallelism", "1")
       .getOrCreate();
     jsc = new JavaSparkContext(sparkSession.sparkContext());

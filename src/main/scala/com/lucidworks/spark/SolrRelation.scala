@@ -417,7 +417,7 @@ class SolrRelation(
   override def buildScan(): RDD[Row] = buildScan(Array.empty, Array.empty)
 
   override def buildScan(fields: Array[String], filters: Array[Filter]): RDD[Row] = {
-    logger.info(s"buildScan: uniqueKey: ${uniqueKey}, querySchema: ${querySchema}, baseSchema: ${baseSchema}, push-down fields: [${fields.mkString(",")}], filters: [${filters.mkString(",")}]")
+    logger.debug(s"buildScan: uniqueKey: ${uniqueKey}, querySchema: ${querySchema}, baseSchema: ${baseSchema}, push-down fields: [${fields.mkString(",")}], filters: [${filters.mkString(",")}]")
     val query = initialQuery.getCopy
     var qt = query.getRequestHandler
 
@@ -513,7 +513,7 @@ class SolrRelation(
           conf.requestHandler.isEmpty &&
           !requiresStreamingRDD(qt) &&
           !conf.useCursorMarks.getOrElse(false)) {
-        logger.info(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
+        logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(scanSchema)
         val isFDV: Boolean = if (fields.isEmpty && query.getFields == null) true else SolrRelation.checkQueryFieldsForDV(scanSchema)
@@ -573,7 +573,7 @@ class SolrRelation(
         uKey = Some(uniqueKey),
         maxRows = conf.maxRows)
       val docs = solrRDD.query(query)
-      logger.info(s"Converting SolrRDD of type ${docs.getClass.getName} to rows matching schema: ${scanSchema}")
+      logger.debug(s"Converting SolrRDD of type ${docs.getClass.getName} to rows matching schema: ${scanSchema}")
       val rows = SolrRelationUtil.toRows(scanSchema, docs)
       rows
     } catch {

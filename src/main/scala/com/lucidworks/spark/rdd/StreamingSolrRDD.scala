@@ -70,7 +70,7 @@ class StreamingSolrRDD(
 
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[java.util.Map[_, _]] = {
-    logger.info("Computing split")
+    logger.debug(s"Computing split: ${split.index}")
     split match {
       case partition: CloudStreamPartition =>
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")
@@ -81,10 +81,10 @@ class StreamingSolrRDD(
         //TODO: Add backup mechanism to StreamingResultsIterator by being able to query any replica in case the main url goes down
         val url = partition.preferredReplica.replicaUrl
         val query = partition.query
-        logger.info("Using the shard url " + url + " for getting partition data for split: "+ split.index)
+        logger.debug(s"Using the shard url ${url} for getting partition data for split: ${split.index}")
         val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
         query.setRequestHandler(solrRequestHandler)
-        logger.info("Using export handler to fetch documents from " + partition.preferredReplica + " for query: "+partition.query)
+        logger.debug(s"Using export handler to fetch documents from ${partition.preferredReplica} for query: ${partition.query}")
         val resultsIterator = getExportHandlerBasedIterator(url, query, partition.numWorkers, partition.workerId)
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
