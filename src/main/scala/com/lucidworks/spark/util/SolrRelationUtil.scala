@@ -85,16 +85,16 @@ object SolrRelationUtil extends LazyLogging {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrUrl = solrBaseUrl + collection + "/"
     val httpClient = SolrSupport.getCachedCloudClient(zkHost).getHttpClient
-    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl, httpClient)
+    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
     logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
     if (fieldsFromLuke.isEmpty)
       return new StructType()
 
     val fieldTypeMap =
       if (fields.isEmpty)
-        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, httpClient)
+        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, httpClient, zkHost, collection)
       else
-        SolrQuerySupport.getFieldTypes(fields, solrUrl, httpClient)
+        SolrQuerySupport.getFieldTypes(fields, solrUrl, httpClient, zkHost, collection)
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 

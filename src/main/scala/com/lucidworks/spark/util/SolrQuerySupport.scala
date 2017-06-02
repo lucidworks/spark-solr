@@ -11,16 +11,19 @@ import org.apache.http.client.HttpClient
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
-import org.apache.solr.client.solrj.request.QueryRequest
+import org.apache.solr.client.solrj.request.schema.SchemaRequest
+import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
+import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.common.params.SolrParams
+import org.apache.solr.client.solrj.response.schema.SchemaResponse
+import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
+import org.apache.solr.common.SolrDocument
+import org.apache.solr.common.params.{ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
-import org.apache.solr.common.{SolrDocument, SolrException}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row}
 import org.json4s._
-import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
@@ -77,28 +80,10 @@ object SolrQuerySupport extends LazyLogging {
   )
 
   def getUniqueKey(zkHost: String, collection: String): String = {
-    logger.debug("Looking up uniquekey for collection: {}", collection)
-    try {
-      val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
-      // Hit Solr Schema API to get base information
-      val schemaUrl: String = solrBaseUrl + collection + "/schema"
-      try {
-        val schemaMeta = SolrJsonSupport.getJson(SolrSupport.getHttpClient(zkHost), schemaUrl, 2)
-        if (schemaMeta.has("schema") && (schemaMeta \ "schema").has("uniqueKey")) {
-          schemaMeta \ "schema" \ "uniqueKey" match {
-            case v: JString => return v.s
-            case v: Any => throw new Exception("Unexpected type '" + v.getClass + "' other than JString for uniqueKey '" + v + "'");
-          }
-        }
-      }
-      catch {
-        case solrExc: SolrException =>
-          logger.warn("Can't get uniqueKey for " + collection + " due to solr: " + solrExc)
-      }
-    } catch {
-      case e: Exception => logger.warn("Can't get uniqueKey for " + collection + " due to: " + e)
-    }
-    QueryConstants.DEFAULT_REQUIRED_FIELD
+    val uniqueKeyRequest = new UniqueKey()
+    val client = SolrSupport.getCachedCloudClient(zkHost)
+    val uniqueKeyResponse: UniqueKeyResponse = uniqueKeyRequest.process(client, collection)
+    uniqueKeyResponse.getUniqueKey
   }
 
   def toQuery(queryString: String): SolrQuery = {
@@ -262,14 +247,11 @@ object SolrQuerySupport extends LazyLogging {
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 
-  def getFieldTypes(fields: Set[String], solrBaseUrl: String, collection: String, httpClient: HttpClient): Map[String, SolrFieldMeta] =
-    getFieldTypes(fields, solrBaseUrl + collection + "/", httpClient)
-
-  def getFieldTypes(fields: Set[String], solrUrl: String, httpClient: HttpClient): Map[String, SolrFieldMeta] = {
+  def getFieldTypes(fields: Set[String], solrUrl: String, httpClient: HttpClient, zkHost: String, collection: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(solrUrl, httpClient)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, httpClient)
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, zkHost, collection)
     fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
       case(name, payloadRef) =>
       payloadRef match {
@@ -363,23 +345,25 @@ object SolrQuerySupport extends LazyLogging {
   }
 
   /**
-   * Do multiple requests if the length of url exceeds limit size (2048).
-   * We need this to retrieve schema of dynamic fields
-   * @param solrUrl
-   * @param fieldNames
-   * @param fieldDefs
-   * @return
-   */
+    * Do multiple requests if the length of url exceeds limit size (2048).
+    * We need this to retrieve schema of dynamic fields
+    * @param solrUrl
+    * @param fieldNames
+    * @param fieldDefs
+    * @return
+    */
   def getFieldDefinitionsFromSchema(
       solrUrl: String,
       fieldNames: Seq[String],
-      httpClient: HttpClient,
+      zkHost: String,
+      collection: String,
       fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
     logger.debug("Requesting schema for fields: {} ", fieldNames.mkString(","))
 
+
     if (fieldNames.isEmpty && fieldDefs.isEmpty)
-      return fetchFieldSchemaInfoFromSolr(fieldsUrlBase, httpClient)
+      return fetchFieldSchemaInfoFromSolr("", zkHost, collection)
 
     if (fieldNames.isEmpty && fieldDefs.nonEmpty)
       return fieldDefs
@@ -387,7 +371,6 @@ object SolrQuerySupport extends LazyLogging {
     val allowedUrlLimit = 2048 - fieldsUrlBase.length
     var flLength = 0
     val sb = new StringBuilder()
-    sb.append("&fl=")
 
     for (i <- fieldNames.indices) {
       val fieldName = fieldNames(i)
@@ -396,36 +379,34 @@ object SolrQuerySupport extends LazyLogging {
         if (i < fieldNames.size) sb.append(",")
         flLength = flLength + fieldName.length + 1
       } else {
-        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString(), httpClient)
-        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), httpClient, defs ++ fieldDefs)
+        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(sb.toString(), zkHost, collection)
+        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), zkHost, collection, defs ++ fieldDefs)
       }
     }
-    val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString(), httpClient)
-    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, httpClient, defs ++ fieldDefs)
+    val defs = fetchFieldSchemaInfoFromSolr(sb.toString(), zkHost, collection)
+    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, zkHost, collection, defs ++ fieldDefs)
   }
 
-  def fetchFieldSchemaInfoFromSolr(fieldsUrl: String, httpClient: HttpClient) : Map[String, Any] = {
+  def fetchFieldSchemaInfoFromSolr(fl: String, zkHost: String, collection: String) : Map[String, Any] = {
     try {
-      SolrJsonSupport.getJson(httpClient, fieldsUrl, 2).values match {
-        case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
-          val payload = m.asInstanceOf[Map[String, Any]]
-          if (payload.contains("fields")) {
-            if (payload.get("fields").isDefined) {
-              payload.get("fields").get match {
-                case fields: List[Any] =>
-                  constructFieldInfoMap(fields)
-              }
-            } else {
-              throw new Exception("No fields payload inside the response: " + payload)
-            }
-          } else {
-            throw new Exception("No fields payload inside the response: " + payload)
-          }
-        case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass + "' from schema object " + somethingElse)
+      val params = new ModifiableSolrParams()
+      params.set("showDefaults", "true")
+      params.set("includeDynamic", "true")
+      if (fl != null && fl.nonEmpty) {
+        params.set("fl", fl)
       }
+
+      val schemaRequest = new SchemaRequest.Fields(params)
+      val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
+      val response: SchemaResponse.FieldsResponse = schemaRequest.process(solrCloudClient, collection)
+
+      if (response.getStatus != 0) {
+        throw new Exception("Error querying schema for collection " + collection)
+      }
+      constructFieldInfoMap(asScalaBuffer(response.getFields).toList)
     } catch {
       case e: Exception =>
-        logger.error("Can't get field metadata from Solr using request '" + fieldsUrl + "' due to exception " + e)
+        logger.error("Can't get field metadata from Solr using request due to exception " + e)
         e match {
           case e1: RuntimeException => throw e1
           case e2: Exception => throw new RuntimeException(e2)
@@ -448,28 +429,29 @@ object SolrQuerySupport extends LazyLogging {
         } else {
           logger.info("'name' is not defined in the payload " + fieldInfo)
         }
+      case m: util.Map[_, _] if mapAsScalaMap(m).keySet.forall(_.isInstanceOf[String]) =>
+        val fieldInfo = mapAsScalaMap(m).toMap.asInstanceOf[Map[String, Any]]
+        if (fieldInfo.contains("name")) {
+          val fieldName = fieldInfo.get("name")
+          if (fieldName.isDefined) {
+            fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
+          } else {
+            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
+          }
+        } else {
+          logger.info("'name' is not defined in the payload " + fieldInfo)
+        }
       case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass)
     }
     fieldInfoMap.toMap
   }
 
-  def getFieldsFromLuke(solrUrl: String, httpClient: HttpClient): Set[String] = {
-    val lukeUrl: String = solrUrl + "admin/luke?numTerms=0"
-    try {
-      val adminMeta: JValue = SolrJsonSupport.getJson(httpClient, lukeUrl, 2)
-      if (!adminMeta.has("fields")) {
-        throw new Exception("Cannot find 'fields' payload inside Schema: " + compact(adminMeta))
-      }
-      val fieldsRef = adminMeta \ "fields"
-      fieldsRef.values match {
-        case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String]) => m.asInstanceOf[Map[String, Any]].keySet
-        case somethingElse: Any =>  throw new Exception("Unknown type '" + somethingElse.getClass + "'")
-      }
-    } catch {
-      case e1: Exception =>
-        logger.warn("Can't get schema fields from url " + lukeUrl + " due to: " + e1)
-        throw e1
-    }
+  def getFieldsFromLuke(zkHost: String, collection: String): Set[String] = {
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val lukeRequest = new LukeRequest()
+    lukeRequest.setNumTerms(0)
+    val lukeResponse = lukeRequest.process(cloudClient, collection)
+    mapAsScalaMap(lukeResponse.getFieldInfo).toMap.keySet
   }
 
   def validateExportHandlerQuery(solrServer: SolrClient, solrQuery: SolrQuery) = {
