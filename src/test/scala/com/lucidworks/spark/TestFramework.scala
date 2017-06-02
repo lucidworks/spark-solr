@@ -76,6 +76,7 @@ trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
     sparkSession = SparkSession.builder()
       .appName("spark-solr-tester")
       .master("local")
+       .config("spark.ui.enabled","false")
       .config("spark.default.parallelism", "1")
       .getOrCreate()
 
