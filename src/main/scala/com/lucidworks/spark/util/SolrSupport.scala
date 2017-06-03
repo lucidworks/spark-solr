@@ -105,7 +105,8 @@ object SolrSupport extends LazyLogging {
     if (fusionAuthClass.isDefined) {
       val authHttpClient = getAuthHttpClient(zkHost)
       if (authHttpClient.isDefined) {
-        authHttpClient.get.withBaseSolrUrl(shardUrl).build()
+        logger.info("Custom http client defined: {}", authHttpClient)
+        return authHttpClient.get.withBaseSolrUrl(shardUrl).build()
       }
     }
     new HttpSolrClient.Builder()
@@ -137,7 +138,7 @@ object SolrSupport extends LazyLogging {
   private def getAuthHttpClient(zkHost: String): Option[HttpSolrClient.Builder] = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
-      logger.info("Custom class '{}' configured for auth", fusionAuthClass.isDefined)
+      logger.info("Custom class '{}' configured for auth", fusionAuthClass.get)
       val authClass: Class[_ <: FusionAuthHttpClient] = fusionAuthClass.get
       val constructor = authClass.getDeclaredConstructor(classOf[java.lang.String])
       val authHttpClient: FusionAuthHttpClient = constructor.newInstance(zkHost)

@@ -12,9 +12,11 @@ import org.apache.solr.client.solrj.io.SolrClientCache;
 public class SparkSolrClientCache extends SolrClientCache {
 
   private final CloudSolrClient solrClient;
+  private final HttpSolrClient httpSolrClient;
 
-  public SparkSolrClientCache(CloudSolrClient solrClient) {
+  public SparkSolrClientCache(CloudSolrClient solrClient, HttpSolrClient httpSolrClient) {
     this.solrClient = solrClient;
+    this.httpSolrClient = httpSolrClient;
   }
 
   public synchronized CloudSolrClient getCloudSolrClient(String zkHost) {
@@ -22,7 +24,8 @@ public class SparkSolrClientCache extends SolrClientCache {
   }
 
   public synchronized HttpSolrClient getHttpSolrClient(String host) {
-    return SolrSupport.getHttpSolrClient(host, solrClient.getZkHost());
+     httpSolrClient.setBaseURL(host);
+     return httpSolrClient;
   }
 
 }

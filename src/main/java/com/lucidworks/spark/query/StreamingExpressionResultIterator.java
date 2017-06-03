@@ -2,6 +2,7 @@ package com.lucidworks.spark.query;
 
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.client.solrj.io.stream.StreamContext;
@@ -27,13 +28,15 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   protected String collection;
   protected String qt;
   protected CloudSolrClient cloudSolrClient;
+  protected HttpSolrClient httpSolrClient;
   protected SolrClientCache solrClientCache;
 
   private final Random random = new Random(5150L);
 
-  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, String collection, SolrParams solrParams) {
+  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, HttpSolrClient httpSolrClient, String collection, SolrParams solrParams) {
     super(solrParams);
     this.cloudSolrClient = cloudSolrClient;
+    this.httpSolrClient = httpSolrClient;
     this.collection = collection;
 
     qt = solrParams.get(CommonParams.QT);
@@ -88,7 +91,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   // We have to set the streaming context so that we can pass our own cloud client with authentication
   protected StreamContext getStreamContext() {
     StreamContext context = new StreamContext();
-    solrClientCache = new SparkSolrClientCache(cloudSolrClient);
+    solrClientCache = new SparkSolrClientCache(cloudSolrClient, httpSolrClient);
     context.setSolrClientCache(solrClientCache);
     return context;
   }

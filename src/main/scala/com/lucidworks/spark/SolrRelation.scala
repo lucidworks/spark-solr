@@ -659,8 +659,10 @@ class SolrRelation(
     val collectionId = conf.getCollection.get
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+
     val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", zkHost, collectionId)
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
@@ -681,7 +683,6 @@ class SolrRelation(
       }
     })
 
-    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val solrParams = new ModifiableSolrParams()
     solrParams.add("updateTimeoutSecs","30")
     val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)

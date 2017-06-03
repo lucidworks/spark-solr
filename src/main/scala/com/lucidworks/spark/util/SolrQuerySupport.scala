@@ -8,7 +8,7 @@ import com.lucidworks.spark.rdd.SolrRDD
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
-import org.apache.solr.client.solrj.impl.{InputStreamResponseParser, StreamingBinaryResponseParser}
+import org.apache.solr.client.solrj.impl.{CloudSolrClient, InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
@@ -248,11 +248,11 @@ object SolrQuerySupport extends LazyLogging {
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 
-  def getFieldTypes(fields: Set[String], solrUrl: String, zkHost: String, collection: String): Map[String, SolrFieldMeta] = {
+  def getFieldTypes(fields: Set[String], solrUrl: String, cloudClient: CloudSolrClient, collection: String): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
-    val fieldTypeToClassMap = getFieldTypeToClassMap(zkHost, collection)
+    val fieldTypeToClassMap = getFieldTypeToClassMap(cloudClient, collection)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
-    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, zkHost, collection)
+    val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, cloudClient, collection)
     fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
       case(name, payloadRef) =>
       payloadRef match {
@@ -356,7 +356,7 @@ object SolrQuerySupport extends LazyLogging {
   def getFieldDefinitionsFromSchema(
       solrUrl: String,
       fieldNames: Seq[String],
-      zkHost: String,
+      cloudSolrClient: CloudSolrClient,
       collection: String,
       fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
     val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
@@ -364,7 +364,7 @@ object SolrQuerySupport extends LazyLogging {
 
 
     if (fieldNames.isEmpty && fieldDefs.isEmpty)
-      return fetchFieldSchemaInfoFromSolr("", zkHost, collection)
+      return fetchFieldSchemaInfoFromSolr("", cloudSolrClient, collection)
 
     if (fieldNames.isEmpty && fieldDefs.nonEmpty)
       return fieldDefs
@@ -380,15 +380,15 @@ object SolrQuerySupport extends LazyLogging {
         if (i < fieldNames.size) sb.append(",")
         flLength = flLength + fieldName.length + 1
       } else {
-        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(sb.toString(), zkHost, collection)
-        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), zkHost, collection, defs ++ fieldDefs)
+        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
+        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), cloudSolrClient, collection, defs ++ fieldDefs)
       }
     }
-    val defs = fetchFieldSchemaInfoFromSolr(sb.toString(), zkHost, collection)
-    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, zkHost, collection, defs ++ fieldDefs)
+    val defs = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
+    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, cloudSolrClient, collection, defs ++ fieldDefs)
   }
 
-  def fetchFieldSchemaInfoFromSolr(fl: String, zkHost: String, collection: String) : Map[String, Any] = {
+  def fetchFieldSchemaInfoFromSolr(fl: String, cloudSolrClient: CloudSolrClient, collection: String) : Map[String, Any] = {
     try {
       val params = new ModifiableSolrParams()
       params.set("showDefaults", "true")
@@ -398,8 +398,7 @@ object SolrQuerySupport extends LazyLogging {
       }
 
       val schemaRequest = new SchemaRequest.Fields(params)
-      val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
-      val response: SchemaResponse.FieldsResponse = schemaRequest.process(solrCloudClient, collection)
+      val response: SchemaResponse.FieldsResponse = schemaRequest.process(cloudSolrClient, collection)
 
       if (response.getStatus != 0) {
         throw new RuntimeException(
@@ -495,11 +494,11 @@ object SolrQuerySupport extends LazyLogging {
            "boolean": "solr.BooleanField"
          }
    */
-  def getFieldTypeToClassMap(zkHost: String, collection: String) : Map[String, String] = {
+  def getFieldTypeToClassMap(cloudSolrClient: CloudSolrClient, collection: String) : Map[String, String] = {
     val fieldTypeToClassMap: mutable.Map[String, String] = new mutable.HashMap[String, String]
 
     val fieldTypeRequest = new SchemaRequest.FieldTypes()
-    val fieldTypeResponse = fieldTypeRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
+    val fieldTypeResponse = fieldTypeRequest.process(cloudSolrClient, collection)
     if (fieldTypeResponse.getStatus != 0) {
       throw new RuntimeException(
         "Solr request returned with status code '" + fieldTypeResponse.getStatus + "'. Response: '" + fieldTypeResponse.getResponse.toString)
