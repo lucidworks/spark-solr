@@ -103,10 +103,12 @@ object SolrSupport extends LazyLogging {
   def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
-      val authHttpClient = getAuthHttpClient(zkHost)
-      if (authHttpClient.isDefined) {
-        logger.info("Custom http client defined: {}", authHttpClient)
-        return authHttpClient.get.withBaseSolrUrl(shardUrl).build()
+      val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
+      if (authHttpClientBuilder.isDefined) {
+        logger.info("Custom http client defined: {}", authHttpClientBuilder)
+        return authHttpClientBuilder.get
+          .withHttpClient(getSolrCloudClient(zkHost).getHttpClient)
+          .withBaseSolrUrl(shardUrl).build()
       }
     }
     new HttpSolrClient.Builder()
@@ -120,10 +122,10 @@ object SolrSupport extends LazyLogging {
     setupKerberosIfNeeded(zkHost)
     setupBasicAuthIfNeeded(zkHost)
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
-    val authHttpClient = getAuthHttpClient(zkHost)
-    if (authHttpClient.isDefined) {
+    val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
+    if (authHttpClientBuilder.isDefined) {
       solrClientBuilder.withLBHttpSolrClientBuilder(
-        new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClient.get))
+        new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
     }
     val params = new ModifiableSolrParams()
     params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 6000)
@@ -135,7 +137,7 @@ object SolrSupport extends LazyLogging {
     solrClient
   }
 
-  private def getAuthHttpClient(zkHost: String): Option[HttpSolrClient.Builder] = {
+  private def getAuthHttpClientBuilder(zkHost: String): Option[HttpSolrClient.Builder] = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
       logger.info("Custom class '{}' configured for auth", fusionAuthClass.get)
