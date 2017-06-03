@@ -74,7 +74,11 @@ class StreamingSolrRDD(
     split match {
       case partition: CloudStreamPartition =>
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")
-        val resultsIterator = new StreamingExpressionResultIterator(SolrSupport.getCachedCloudClient(zkHost), SolrSupport.getHttpSolrClient(null, zkHost), partition.collection, partition.params)
+        val resultsIterator = new StreamingExpressionResultIterator(
+          SolrSupport.getCachedCloudClient(zkHost),
+          SolrSupport.getHttpSolrClient(SolrSupport.getSolrBaseUrl(zkHost) + partition.collection, zkHost), // the baseUrl is just a dummy. It will be later replaced with valid host name at {@code SparkSolrClientCache#getHttpSolrClient}
+          partition.collection,
+          partition.params)
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
       case partition: ExportHandlerPartition =>
 
