@@ -1,5 +1,6 @@
 package com.lucidworks.spark.query;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
@@ -86,6 +87,13 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
       }
     }
     return stream;
+  }
+
+  protected void afterStreamClosed() throws Exception {
+    IOUtils.closeQuietly(httpSolrClient);
+    if (solrClientCache != null) {
+      solrClientCache.close();
+    }
   }
 
   // We have to set the streaming context so that we can pass our own cloud client with authentication

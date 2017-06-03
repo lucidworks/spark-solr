@@ -26,7 +26,6 @@ public class SolrStreamIterator extends TupleStreamIterator {
 
   private static final Logger log = Logger.getLogger(SolrStreamIterator.class);
 
-  protected SolrClient solrServer;
   protected SolrQuery solrQuery;
   protected String shardUrl;
   protected int numWorkers;
@@ -43,7 +42,6 @@ public class SolrStreamIterator extends TupleStreamIterator {
     this.shardUrl = shardUrl;
     this.cloudSolrClient = cloudSolrClient;
     this.httpSolrClient = httpSolrClient;
-    this.solrServer = SolrSupport.getHttpSolrClient(shardUrl, cloudSolrClient.getZkHost());
     this.solrQuery = mergeFq(solrQuery);
     this.numWorkers = numWorkers;
     this.workerId = workerId;
@@ -79,9 +77,6 @@ public class SolrStreamIterator extends TupleStreamIterator {
   }
 
   protected void afterStreamClosed() throws Exception {
-    if (!(solrServer instanceof CloudSolrClient)) {
-      IOUtils.closeQuietly(solrServer);
-    }
     if (solrClientCache != null) {
       solrClientCache.close();
     }
