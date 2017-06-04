@@ -89,13 +89,6 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
     return stream;
   }
 
-  protected void afterStreamClosed() throws Exception {
-    IOUtils.closeQuietly(httpSolrClient);
-    if (solrClientCache != null) {
-      solrClientCache.close();
-    }
-  }
-
   // We have to set the streaming context so that we can pass our own cloud client with authentication
   protected StreamContext getStreamContext() {
     StreamContext context = new StreamContext();

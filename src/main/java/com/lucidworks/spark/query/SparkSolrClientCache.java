@@ -6,7 +6,6 @@ import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 
 /**
@@ -35,14 +34,6 @@ public class SparkSolrClientCache extends SolrClientCache {
     }
     httpSolrClient.setBaseURL(host);
     return httpSolrClient;
-  }
-
-  public synchronized void close() {
-    try {
-      httpSolrClient.close();
-    } catch (IOException e) {
-      log.error("Error closing SolrClient for " + httpSolrClient, e);
-    }
   }
 
 }

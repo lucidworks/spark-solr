@@ -77,9 +77,7 @@ public class SolrStreamIterator extends TupleStreamIterator {
   }
 
   protected void afterStreamClosed() throws Exception {
-    if (solrClientCache != null) {
-      solrClientCache.close();
-    }
+    // No need to close http or cloudClient because they are re-used from cache
   }
 
   protected SolrQuery mergeFq(SolrQuery solrQuery) {

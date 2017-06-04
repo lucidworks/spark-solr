@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
+import com.lucidworks.spark.util.SolrSupport.ShardInfo
 import com.lucidworks.spark.{SolrReplica, SolrShard}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
@@ -30,7 +31,7 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._
 
-object CacheSolrClient {
+object CacheCloudSolrClient {
   private val loader = new CacheLoader[String, CloudSolrClient]() {
     def load(zkHost: String): CloudSolrClient = {
       SolrSupport.getNewSolrCloudClient(zkHost)
@@ -46,6 +47,27 @@ object CacheSolrClient {
   }
 
   val cache: LoadingCache[String, CloudSolrClient] = CacheBuilder
+    .newBuilder()
+    .removalListener(listener)
+    .build(loader)
+}
+
+object CacheHttpSolrClient {
+  private val loader = new CacheLoader[ShardInfo, HttpSolrClient]() {
+    def load(shardUrl: ShardInfo): HttpSolrClient = {
+      SolrSupport.getNewHttpSolrClient(shardUrl.shardUrl, shardUrl.zkHost)
+    }
+  }
+
+  private val listener = new RemovalListener[ShardInfo, HttpSolrClient]() {
+    def onRemoval(rn: RemovalNotification[ShardInfo, HttpSolrClient]): Unit = {
+      if (rn != null && rn.getValue != null) {
+        rn.getValue.close()
+      }
+    }
+  }
+
+  val cache: LoadingCache[ShardInfo, HttpSolrClient] = CacheBuilder
     .newBuilder()
     .removalListener(listener)
     .build(loader)
@@ -100,7 +122,7 @@ object SolrSupport extends LazyLogging {
     }
   }
 
-  def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+  private def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
       val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
@@ -115,6 +137,16 @@ object SolrSupport extends LazyLogging {
       .withBaseSolrUrl(shardUrl)
       .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
       .build()
+  }
+
+  case class ShardInfo(shardUrl: String, zkHost: String)
+
+  def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+    getHttpSolrClient(shardUrl, zkHost)
+  }
+
+  def getCachedHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+    CacheHttpSolrClient.cache.get(ShardInfo(shardUrl, zkHost))
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
@@ -155,7 +187,7 @@ object SolrSupport extends LazyLogging {
   }
 
   def getCachedCloudClient(zkHost: String): CloudSolrClient = {
-    CacheSolrClient.cache.get(zkHost)
+    CacheCloudSolrClient.cache.get(zkHost)
   }
 
   def getSolrBaseUrl(zkHost: String) = {
@@ -259,7 +291,7 @@ object SolrSupport extends LazyLogging {
       // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
       case e @ (_: SessionExpiredException | _:OperationTimeoutException) =>
         logger.info("Got an exception with message '" + e.getMessage +  "'.  Resetting the cached solrClient")
-        CacheSolrClient.cache.invalidate(zkHost)
+        CacheCloudSolrClient.cache.invalidate(zkHost)
         val newClient = SolrSupport.getCachedCloudClient(zkHost)
         sendBatchToSolr(newClient, collection, batch, commitWithin)
     }
