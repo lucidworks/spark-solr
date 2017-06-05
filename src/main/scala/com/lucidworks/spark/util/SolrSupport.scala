@@ -164,7 +164,7 @@ object SolrSupport extends LazyLogging {
     params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 300)
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
     val httpClient = HttpClientUtil.createClient(params)
-    val solrClient = solrClientBuilder.build()
+    val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
     solrClient.connect()
     solrClient
   }
