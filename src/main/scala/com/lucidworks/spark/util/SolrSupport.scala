@@ -289,11 +289,14 @@ object SolrSupport extends LazyLogging {
       sendBatchToSolr(solrClient, collection, batch, commitWithin)
     } catch {
       // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
-      case e @ (_: SessionExpiredException | _:OperationTimeoutException) =>
-        logger.info("Got an exception with message '" + e.getMessage +  "'.  Resetting the cached solrClient")
-        CacheCloudSolrClient.cache.invalidate(zkHost)
-        val newClient = SolrSupport.getCachedCloudClient(zkHost)
-        sendBatchToSolr(newClient, collection, batch, commitWithin)
+      case e : Exception =>
+        SolrException.getRootCause(e) match {
+          case e1 @ (_:SessionExpiredException | _:OperationTimeoutException) =>
+            logger.info("Got an exception with message '" + e1.getMessage +  "'.  Resetting the cached solrClient")
+            CacheCloudSolrClient.cache.invalidate(zkHost)
+            val newClient = SolrSupport.getCachedCloudClient(zkHost)
+            sendBatchToSolr(newClient, collection, batch, commitWithin)
+        }
     }
   }
 
