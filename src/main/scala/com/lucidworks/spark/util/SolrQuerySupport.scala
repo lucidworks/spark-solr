@@ -296,7 +296,8 @@ object SolrQuerySupport extends LazyLogging {
           }
 
           val isDocValues: Option[Boolean] = {
-            if (payload.contains("docValues")) {
+            // location field types are not docValue supported even though schema says so
+            if (payload.contains("docValues") && fieldType != "location") {
               if (payload.get("docValues").isDefined) {
                 payload.get("docValues").get match {
                   case v: Boolean => Some(v)
@@ -400,6 +401,7 @@ object SolrQuerySupport extends LazyLogging {
       val schemaRequest = new SchemaRequest.Fields(params)
       val response: SchemaResponse.FieldsResponse = schemaRequest.process(cloudSolrClient, collection)
 
+      logger.debug("Schema response from Solr: {}", response.getFields)
       if (response.getStatus != 0) {
         throw new RuntimeException(
           "Solr request returned with status code '" + response.getStatus + "'. Response: '" + response.getResponse.toString)

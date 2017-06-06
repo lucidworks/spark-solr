@@ -257,6 +257,9 @@
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_359" type="string" indexed="true" stored="true" docValues="true" />
     <field name="the_abcdefghijklmnopqrstuvwxyz_field_360" type="string" indexed="true" stored="true" docValues="true" />
 
+  <field name="pickup_location" type="location" multiValued="false" indexed="true" stored="true"/>
+  <field name="dropoff_location" type="location" multiValued="false" indexed="true" stored="true"/>
+
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
@@ -272,6 +275,7 @@
   <dynamicField indexed="true" name="*_ls" stored="true" type="long" multiValued="true"/>
   <dynamicField name="random_*" type="random"/>
   <uniqueKey>id</uniqueKey>
+  <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
   <fieldType name="long" class="solr.TrieLongField" precisionStep="6" docValues="true"/>
   <fieldType name="tlong" class="solr.TrieLongField" precisionStep="6" docValues="true"/>

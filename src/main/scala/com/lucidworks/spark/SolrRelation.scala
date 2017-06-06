@@ -515,7 +515,6 @@ class SolrRelation(
           !conf.useCursorMarks.getOrElse(false)) {
         logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
-        val hasUnsupportedExportTypes : Boolean = SolrRelation.checkQueryFieldsForUnsupportedExportTypes(scanSchema)
         val isFDV: Boolean = if (fields.isEmpty && query.getFields == null) true else SolrRelation.checkQueryFieldsForDV(scanSchema)
         var sortClauses: ListBuffer[SortClause] = ListBuffer.empty
         if (!query.getSorts.isEmpty) {
@@ -537,7 +536,7 @@ class SolrRelation(
           if (sortClauses.nonEmpty)
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
-            if (isFDV && !hasUnsupportedExportTypes) {
+            if (isFDV) {
               SolrRelation.addSortField(baseSchema.get, scanSchema, query, uniqueKey)
               logger.info("Added sort field '" + query.getSortField + "' to the query")
               true
@@ -545,12 +544,12 @@ class SolrRelation(
             else
               false
 
-        if (isFDV && isSDV && !hasUnsupportedExportTypes) {
+        if (isFDV && isSDV) {
           qt = QT_EXPORT
           query.setRequestHandler(qt)
           logger.info("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
-          logger.debug(s"Using requestHandler: $qt isFDV? $isFDV and isSDV? $isSDV and hasUnsupportedExportTypes? $hasUnsupportedExportTypes")
+          logger.debug(s"Using requestHandler: $qt isFDV? $isFDV and isSDV? $isSDV")
         }
       }
 
@@ -908,14 +907,6 @@ object SolrRelation extends LazyLogging {
         return
       }
     })
-  }
-
-  def checkQueryFieldsForUnsupportedExportTypes(querySchema: StructType) : Boolean = {
-    for (structField <- querySchema.fields) {
-      if (structField.dataType == BooleanType)
-        return true
-    }
-    false
   }
 
   def parseSortParamFromString(sortParam: String):  List[SortClause] = {
