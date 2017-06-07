@@ -377,16 +377,18 @@ object SolrQuerySupport extends LazyLogging {
     for (i <- fieldNames.indices) {
       val fieldName = fieldNames(i)
       if (flLength + fieldName.length + 1 < allowedUrlLimit) {
-        sb.append(fieldName)
-        if (i < fieldNames.size) sb.append(",")
-        flLength = flLength + fieldName.length + 1
+        if (fieldName != null || fieldName.nonEmpty) {
+          sb.append(fieldName)
+          if (i < fieldNames.size) sb.append(",")
+          flLength = flLength + fieldName.length + 1
+        }
       } else {
         val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
-        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), cloudSolrClient, collection, defs ++ fieldDefs)
+        return getFieldDefinitionsFromSchema(solrUrl, fieldNames.takeRight(fieldNames.length - i), cloudSolrClient, collection, defs ++ fieldDefs)
       }
     }
     val defs = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
-    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, cloudSolrClient, collection, defs ++ fieldDefs)
+    getFieldDefinitionsFromSchema(solrUrl, Seq.empty, cloudSolrClient, collection, defs ++ fieldDefs)
   }
 
   def fetchFieldSchemaInfoFromSolr(fl: String, cloudSolrClient: CloudSolrClient, collection: String) : Map[String, Any] = {
