@@ -3,12 +3,14 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.sql.Timestamp
 import java.util
-import java.util.Date
+import java.util.{Collections, Date}
 
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.GenericSolrRequest
+import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}
 import org.apache.solr.common.SolrDocument
+import org.apache.solr.common.util.ContentStreamBase
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
@@ -84,17 +86,17 @@ object SolrRelationUtil extends LazyLogging {
 
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrUrl = solrBaseUrl + collection + "/"
-    val httpClient = SolrSupport.getCachedCloudClient(zkHost).getHttpClient
-    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(solrUrl, httpClient)
+    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
     logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
     if (fieldsFromLuke.isEmpty)
       return new StructType()
 
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val fieldTypeMap =
       if (fields.isEmpty)
-        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, httpClient)
+        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, cloudClient, collection)
       else
-        SolrQuerySupport.getFieldTypes(fields, solrUrl, httpClient)
+        SolrQuerySupport.getFieldTypes(fields, solrUrl, cloudClient, collection)
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
@@ -524,5 +526,20 @@ object SolrRelationUtil extends LazyLogging {
       Row(values.toArray:_*)
     })
     rows
+  }
+
+  def setAutoSoftCommit(zkHost: String, collection: String, softAutoCommitMs: Int): Unit = {
+    val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
+
+    logger.info("POSTing: " + configJson + " to collection " + collection)
+    val solrRequest = new GenericSolrRequest(SolrRequest.METHOD.POST, "/config", null)
+    val content = new ContentStreamBase.StringStream(configJson)
+    solrRequest.setContentStreams(Collections.singleton(content))
+
+    try {
+      solrRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
+    } catch {
+      case e: Exception => logger.error("Error setting softAutoCommit.maxTime. Exception: {}", e.getMessage)
+    }
   }
 }

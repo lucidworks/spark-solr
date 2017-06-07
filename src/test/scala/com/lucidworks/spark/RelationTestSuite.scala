@@ -496,7 +496,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
   }
 
   def buildMoviesCollection(moviesCollection: String) : Int = {
-    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 2, cloudClient, sc)
 
     val movieDocs : Array[String] = Array(
       UUID.randomUUID().toString+",movie200,The Big Short",

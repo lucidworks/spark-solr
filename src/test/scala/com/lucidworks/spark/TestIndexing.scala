@@ -2,8 +2,9 @@ package com.lucidworks.spark
 
 import java.util.UUID
 
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
 import com.lucidworks.spark.util.SolrDataFrameImplicits._
+import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrSupport}
+import org.apache.spark.sql.functions.{concat, lit}
 
 class TestIndexing extends TestSuiteBuilder {
 
@@ -19,14 +20,19 @@ class TestIndexing extends TestSuiteBuilder {
       assert(csvDF.count() == 999)
 
       val solrOpts = Map("zkhost" -> zkHost, "collection" -> collectionName, ConfigurationConstants.GENERATE_UNIQUE_KEY -> "true")
-      csvDF.write.option("zkhost", zkHost).option(ConfigurationConstants.GENERATE_UNIQUE_KEY, "true").solr(collectionName)
+      val newDF = csvDF
+        .withColumn("pickup_location", concat(csvDF.col("pickup_latitude"), lit(","), csvDF.col("pickup_longitude")))
+        .withColumn("dropoff_location", concat(csvDF.col("dropoff_latitude"), lit(","), csvDF.col("dropoff_longitude")))
+      newDF.write.option("zkhost", zkHost).option(ConfigurationConstants.GENERATE_UNIQUE_KEY, "true").solr(collectionName)
 
       // Explicit commit to make sure all docs are visible
       val solrCloudClient = SolrSupport.getCachedCloudClient(zkHost)
       solrCloudClient.commit(collectionName, true, true)
 
       val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
+      solrDF.printSchema()
       assert (solrDF.count() == 999)
+      solrDF.take(10)
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
