@@ -22,6 +22,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
 
+import scala.collection.breakOut
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.reflect.runtime.universe._
@@ -169,7 +170,9 @@ class SolrRelation(
         if (fieldSet.isEmpty) {
           throw new IllegalStateException("Failed to extract schema fields for streaming expression: " + streamingExpr)
         }
-        var exprSchema = new StructType(fieldSet.toArray.sortBy(f => f.name))
+        // Remove presence of any duplicates in the set
+        val fieldList: List[StructField] = fieldSet.groupBy(_.name).map(_._2.head)(breakOut)
+        var exprSchema = new StructType(fieldList.toArray.sortBy(f => f.name))
         logger.info(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
         exprSchema
       } else if (initialQuery.getRequestHandler == QT_SQL) {
