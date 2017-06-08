@@ -4,6 +4,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpException;
 import org.apache.http.HttpRequest;
@@ -14,6 +15,7 @@ import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.protocol.HttpClientContext;
@@ -38,6 +40,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
@@ -548,9 +551,9 @@ public class FusionPipelineClient {
     postRequest.setEntity(et);
 
     HttpEntity entity = null;
+    CloseableHttpResponse response = null;
     try {
 
-      HttpResponse response;
       HttpClientContext context = null;
       if (isKerberos) {
         response = httpClient.execute(postRequest);
@@ -577,6 +580,10 @@ public class FusionPipelineClient {
         } finally {
           entity = null;
         }
+
+        try {
+          response.close();
+        } catch (Exception ignore){}
 
         synchronized (this) {
           fusionSession = resetSession(hostAndPort);
@@ -614,6 +621,84 @@ public class FusionPipelineClient {
           log.warn("Failed to consume entity due to: " + ignore);
         }
       }
+
+      if (response != null) {
+        try {
+          response.close();
+        } catch (Exception ignore){}
+      }
+    }
+  }
+
+  public static class HttpEntityAndResponse implements HttpEntity {
+
+    protected HttpEntity delegate;
+    protected CloseableHttpResponse httpResponse;
+
+    public HttpEntityAndResponse(HttpEntity delegate, CloseableHttpResponse httpResponse) {
+      this.delegate = delegate;
+      this.httpResponse = httpResponse;
+    }
+
+    public void close() {
+      if (delegate != null) {
+        try {
+          EntityUtils.consume(delegate);
+        } catch (Exception ignore) {
+          log.warn("Failed to consume entity due to: " + ignore);
+        }
+      }
+
+      if (httpResponse != null) {
+        try {
+          httpResponse.close();
+        } catch (Exception ignore){}
+      }
+    }
+
+    @Override
+    public boolean isRepeatable() {
+      return delegate.isRepeatable();
+    }
+
+    @Override
+    public boolean isChunked() {
+      return delegate.isChunked();
+    }
+
+    @Override
+    public long getContentLength() {
+      return delegate.getContentLength();
+    }
+
+    @Override
+    public Header getContentType() {
+      return delegate.getContentType();
+    }
+
+    @Override
+    public Header getContentEncoding() {
+      return delegate.getContentEncoding();
+    }
+
+    @Override
+    public InputStream getContent() throws IOException, UnsupportedOperationException {
+      return delegate.getContent();
+    }
+
+    @Override
+    public void writeTo(OutputStream outputStream) throws IOException {
+      delegate.writeTo(outputStream);
+    }
+
+    @Override
+    public boolean isStreaming() {
+      return delegate.isStreaming();
+    }
+
+    @Override
+    public void consumeContent() throws IOException {
+      delegate.consumeContent();
     }
   }
 
@@ -628,7 +713,7 @@ public class FusionPipelineClient {
     FusionSession fusionSession = getSession(endpoint, requestId);
 
     HttpEntity entity;
-    HttpResponse response;
+    CloseableHttpResponse response;
     HttpClientContext context = null;
 
     if (log.isDebugEnabled()) {
@@ -653,7 +738,7 @@ public class FusionPipelineClient {
 
     if (!retry) {
       if (statusCode == 200 || statusCode == 204) {
-        return entity;
+        return new HttpEntityAndResponse(entity, response);
       } else {
         raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
       }
@@ -669,9 +754,11 @@ public class FusionPipelineClient {
         EntityUtils.consume(entity);
       } catch (Exception ignore) {
         log.warn("Failed to consume entity due to: " + ignore);
-      } finally {
-        entity = null;
       }
+
+      try {
+        response.close();
+      } catch (Exception ignore){}
 
       String sessionKey = fusionSession.id;
       synchronized (this) {
@@ -698,13 +785,29 @@ public class FusionPipelineClient {
     } else if (statusCode != 200 && statusCode != 204) {
       raiseFusionServerException(endpoint, entity, statusCode, response, requestId);
     }
-    return entity;
+    return new HttpEntityAndResponse(entity, response);
   }
 
   protected void raiseFusionServerException(String endpoint, HttpEntity entity, int statusCode, HttpResponse response, int requestId) {
     String body = extractResponseBodyText(entity);
+    Object statusLine = response.getStatusLine();
+
+    if (entity != null) {
+      try {
+        EntityUtils.consume(entity);
+      } catch (Exception ignore) {
+        log.warn("Failed to consume entity due to: " + ignore);
+      }
+    }
+
+    if (response instanceof CloseableHttpResponse) {
+      try {
+        ((CloseableHttpResponse)response).close();
+      } catch (IOException ignore) {}
+    }
+
     throw new SolrException(SolrException.ErrorCode.getErrorCode(statusCode),
-            "Request " + requestId + " to [" + endpoint + "] failed due to: (" + statusCode + ")" + response.getStatusLine() + ": " + body);
+            "Request " + requestId + " to [" + endpoint + "] failed due to: (" + statusCode + ")" + statusLine + ": " + body);
   }
 
   public static String extractResponseBodyText(HttpEntity entity) {

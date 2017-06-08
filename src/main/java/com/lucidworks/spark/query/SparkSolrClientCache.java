@@ -3,6 +3,10 @@ package com.lucidworks.spark.query;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.lang.invoke.MethodHandles;
 
 /**
  * Overriding so that we can pass our own cloud client for StreamingContext
@@ -10,10 +14,14 @@ import org.apache.solr.client.solrj.io.SolrClientCache;
  */
 public class SparkSolrClientCache extends SolrClientCache {
 
-  private final CloudSolrClient solrClient;
+  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
-  public SparkSolrClientCache(CloudSolrClient solrClient) {
+  private final CloudSolrClient solrClient;
+  private final HttpSolrClient httpSolrClient;
+
+  public SparkSolrClientCache(CloudSolrClient solrClient, HttpSolrClient httpSolrClient) {
     this.solrClient = solrClient;
+    this.httpSolrClient = httpSolrClient;
   }
 
   public synchronized CloudSolrClient getCloudSolrClient(String zkHost) {
@@ -21,10 +29,11 @@ public class SparkSolrClientCache extends SolrClientCache {
   }
 
   public synchronized HttpSolrClient getHttpSolrClient(String host) {
-    return new HttpSolrClient.Builder()
-        .withBaseSolrUrl(host)
-        .withHttpClient(solrClient.getHttpClient())
-        .build();
+    if (host != null && host.endsWith("/")) {
+      host = host.substring(0, host.length() - 1);
+    }
+    httpSolrClient.setBaseURL(host);
+    return httpSolrClient;
   }
 
 }
