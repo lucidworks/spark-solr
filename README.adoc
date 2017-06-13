@@ -37,7 +37,7 @@ chart below shows the versions supported across the past releases. 'Connector' r
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --jars spark-solr-3.0.0-alpha.2-shaded.jar
+./bin/spark-shell --jars spark-solr-3.0.1-shaded.jar
 
 The shaded jar can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central] or built from the respective branch
 
