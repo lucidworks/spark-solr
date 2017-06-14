@@ -259,6 +259,7 @@
 
   <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
+    <dynamicField indexed="true" name="s_*" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
   <dynamicField indexed="true" name="*_b" stored="true" type="boolean"/>
   <dynamicField indexed="true" name="*_f" stored="true" type="float"/>
