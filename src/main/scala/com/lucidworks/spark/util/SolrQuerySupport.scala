@@ -396,11 +396,11 @@ object SolrQuerySupport extends Logging {
         flLength = flLength + fieldName.length + 1
       } else {
         val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
-        return getFieldDefinitionsFromSchema(fieldsUrlBase, fieldNames.takeRight(fieldNames.length - i), defs ++ fieldDefs)
+        return getFieldDefinitionsFromSchema(solrUrl, fieldNames.takeRight(fieldNames.length - i), defs ++ fieldDefs)
       }
     }
     val defs = fetchFieldSchemaInfoFromSolr(fieldsUrlBase + sb.toString())
-    getFieldDefinitionsFromSchema(fieldsUrlBase, Seq.empty, defs ++ fieldDefs)
+    getFieldDefinitionsFromSchema(solrUrl, Seq.empty, defs ++ fieldDefs)
   }
 
   def fetchFieldSchemaInfoFromSolr(fieldsUrl: String) : Map[String, Any] = {
