@@ -5,10 +5,9 @@ import org.apache.solr.common.params.SolrParams
 import org.apache.spark.Partition
 
 trait SolrRDDPartition extends Partition {
-  def cursorMark: String
-  def solrShard: SolrShard
-  def query: SolrQuery
-  def preferredReplica: SolrReplica // Preferred replica to query
+  val solrShard: SolrShard
+  val query: SolrQuery
+  var preferredReplica: SolrReplica // Preferred replica to query
 }
 
 case class CloudStreamPartition(
@@ -18,30 +17,22 @@ case class CloudStreamPartition(
     params: SolrParams)
   extends Partition
 
-case class ShardRDDPartition(
+case class SelectSolrRDDPartition(
     index: Int,
     cursorMark: String,
     solrShard: SolrShard,
     query: SolrQuery,
-    preferredReplica: SolrReplica)
-  extends SolrRDDPartition
-
-case class SplitRDDPartition(
-    index: Int,
-    cursorMark: String,
-    solrShard: SolrShard,
-    query: SolrQuery,
-    preferredReplica: SolrReplica)
+    var preferredReplica: SolrReplica)
   extends SolrRDDPartition
 
 case class ExportHandlerPartition(
     index: Int,
     solrShard: SolrShard,
     query: SolrQuery,
-    preferredReplica: SolrReplica,
+    var preferredReplica: SolrReplica,
     numWorkers: Int,
     workerId: Int)
-  extends Partition
+  extends SolrRDDPartition
 
 case class SolrLimitPartition(
     index: Int = 0,

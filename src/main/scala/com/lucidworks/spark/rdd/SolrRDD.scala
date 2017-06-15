@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.SolrQuerySupport
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark._
@@ -30,8 +30,7 @@ abstract class SolrRDD[T: ClassTag](
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     split match {
-      case partition: SplitRDDPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: SolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
+      case partition: SelectSolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
       case partition: ExportHandlerPartition => Array(partition.preferredReplica.replicaHostName)
       case _: AnyRef => Seq.empty
     }
@@ -58,6 +57,32 @@ abstract class SolrRDD[T: ClassTag](
   def requestHandler(requestHandler: String): SolrRDD[T]
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
+
+  def getReplicaToQuery(partition: SolrRDDPartition, attempt_no: Int): String = {
+    val preferredReplica = partition.preferredReplica.replicaUrl
+    if (attempt_no == 0)
+      preferredReplica
+    else {
+      logger.info(s"Task attempt no. ${attempt_no}. Checking if replica ${preferredReplica} is healthy")
+      // can't do much if there is only one replica for this shard
+      if (partition.solrShard.replicas.length == 1)
+        return preferredReplica
+
+      // Query preferred replica to check if the response is successful. If not, try with a different replica
+      try {
+        SolrQuerySupport.querySolr(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query, 0, "*")
+        preferredReplica
+      } catch {
+        case e: Exception =>
+          logger.error(s"Error querying replica ${preferredReplica} while checking if it's healthy. Exception: $e")
+          val newReplicaToQuery = SolrRDD.randomReplica(partition.solrShard, partition.preferredReplica)
+          logger.info(s"Switching from $preferredReplica to ${newReplicaToQuery.replicaUrl}")
+          partition.preferredReplica = newReplicaToQuery
+          newReplicaToQuery.replicaUrl
+      }
+    }
+  }
+
 }
 
 object SolrRDD {
@@ -68,6 +93,11 @@ object SolrRDD {
 
   def randomReplica(solrShard: SolrShard): SolrReplica = {
     solrShard.replicas(Random.nextInt(solrShard.replicas.size))
+  }
+
+  def randomReplica(solrShard: SolrShard, replicaToExclude: SolrReplica): SolrReplica = {
+    val filteredReplicas = solrShard.replicas.filter(p => p.equals(replicaToExclude))
+    solrShard.replicas(Random.nextInt(filteredReplicas.size))
   }
 
   def apply(
