@@ -82,7 +82,7 @@ class StreamingSolrRDD(
         JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
       case partition: ExportHandlerPartition =>
 
-        val url = getReplicaToQuery(partition, context.attemptNumber())
+        val url = partition.preferredReplica.replicaUrl
         val query = partition.query
         logger.debug(s"Using the shard url ${url} for getting partition data for split: ${split.index}")
         val solrRequestHandler = requestHandler.getOrElse(DEFAULT_REQUEST_HANDLER)
