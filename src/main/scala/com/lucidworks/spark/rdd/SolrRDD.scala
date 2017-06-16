@@ -70,7 +70,12 @@ abstract class SolrRDD[T: ClassTag](
 
       // Query preferred replica to check if the response is successful. If not, try with a different replica
       try {
-        SolrQuerySupport.querySolr(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query, 0, "*")
+        partition match {
+          case _: SelectSolrRDDPartition =>
+            SolrQuerySupport.querySolr(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query.getCopy, 0, "*")
+          case _: ExportHandlerPartition =>
+            SolrQuerySupport.validateExportHandlerQuery(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query.getCopy)
+        }
         preferredReplica
       } catch {
         case e: Exception =>
