@@ -8,6 +8,7 @@ object ConfigurationConstants {
   // Query params
   val SOLR_QUERY_PARAM: String = "query"
   val SOLR_FIELD_PARAM: String = "fields"
+  val SOLR_FILTERS_PARAM: String = "filters"
   val SOLR_ROWS_PARAM: String = "rows"
   val SOLR_DO_SPLITS: String = "splits"
   val SOLR_SPLIT_FIELD_PARAM: String = "split_field"
