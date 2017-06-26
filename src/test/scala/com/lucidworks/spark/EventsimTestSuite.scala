@@ -257,6 +257,17 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause(solrRelation.uniqueKey, SolrQuery.ORDER.asc)))
   }
 
+  test("Get documents with max_rows config") {
+    val df: DataFrame = sparkSession.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(SOLR_FIELD_PARAM, "artist,firstName")
+      .option(MAX_ROWS, 100)
+      .load()
+    val docs = df.collect()
+    assert(docs.length == 100)
+  }
+
   test("Multiple queries with same Dataframe to test request handler switch") {
     val options = Map(
       SOLR_ZK_HOST_PARAM -> zkHost,
