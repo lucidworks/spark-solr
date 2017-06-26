@@ -515,7 +515,8 @@ class SolrRelation(
       if (!hasFuncQueryOrFieldAlias &&
           conf.requestHandler.isEmpty &&
           !requiresStreamingRDD(qt) &&
-          !conf.useCursorMarks.getOrElse(false)) {
+          !conf.useCursorMarks.getOrElse(false) &&
+          conf.maxRows.isEmpty) {
         logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = if (fields.isEmpty && query.getFields == null) true else SolrRelation.checkQueryFieldsForDV(scanSchema)
