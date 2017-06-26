@@ -57,7 +57,7 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
       assert(solrDF.count == 100)
 
       // querying a range
-      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","solr.params" -> "fq=timestamp_tdt:[2014-11-24T17:30:00Z TO 2014-11-24T17:32:00Z]")
+      solrOpts = Map("zkhost" -> zkHost, "collection" -> baseCollectionName,"partition_by" -> "time","time_period" -> "1MINUTES","filters" -> "timestamp_tdt:[2014-11-24T17:30:00Z TO 2014-11-24T17:32:00Z]")
       solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 63)
 

@@ -51,6 +51,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     Array.empty[String]
   }
 
+  def getFilters: Array[String] = {
+    if (config.contains(SOLR_FILTERS_PARAM) && config.get(SOLR_FILTERS_PARAM).isDefined) {
+      return config(SOLR_FILTERS_PARAM).split(",").map(filter => filter.trim)
+    }
+    Array.empty[String]
+  }
+
   def getRows: Option[Int] = {
     if (config.contains(SOLR_ROWS_PARAM) && config.get(SOLR_ROWS_PARAM).isDefined) {
       return Some(config.get(SOLR_ROWS_PARAM).get.toInt)

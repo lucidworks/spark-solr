@@ -124,7 +124,8 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_ZK_HOST_PARAM -> zkHost,
       SOLR_COLLECTION_PARAM -> collectionName,
       SOLR_FIELD_PARAM -> "id,registration",
-      ARBITRARY_PARAMS_STRING -> "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id"
+      SOLR_FILTERS_PARAM -> "lastName:Powell",
+      ARBITRARY_PARAMS_STRING -> "fq=artist:Interpol&defType=edismax&df=id"
     )
     val df = sparkSession.read.format("solr").options(options).load()
     val count = df.count()
@@ -141,16 +142,13 @@ class EventsimTestSuite extends EventsimBuilder {
       .option(ARBITRARY_PARAMS_STRING, "sort=userId desc")
       .load()
 
-    // The below two options are not working with the streaming iterator right now due to parsing issues.
-    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&defType=edismax&df=id&sort=userId desc")
-    //      .option(ARBITRARY_PARAMS_STRING, "fq=lastName:Powell&fq=artist:Interpol&sort=userId desc")
     df.createOrReplaceTempView("events")
 
     val queryDF = sparkSession.sql("SELECT artist FROM events")
-    //  queryDF.count() // count is not going to work with StreamIterator because Spark does not set 'fields' param for
-    // methods that do not need a callback. Better to set fl in the arbitrary params string or 'fields' option
+    val count = queryDF.count()
     val rows = queryDF.collect()
     assert(rows.length == eventSimCount)
+    assert(rows.length == count)
   }
 
   test("SQL count query with export handler") {
