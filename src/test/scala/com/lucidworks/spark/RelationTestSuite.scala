@@ -499,6 +499,34 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     }
   }
 
+  test("Test boolean filter queries with export handler") {
+    val collection = "testBoolean" + UUID.randomUUID().toString.replace("-", "_")
+    try {
+      SolrCloudUtil.buildCollection(zkHost, collection, null, 2, cloudClient, sc)
+
+      val opts = Map("zkhost" -> zkHost, "collection" -> collection)
+
+      val docs = Array(Array("1", true), Array("2", false), Array("3", true), Array("4", false))
+      val updateRequest = new UpdateRequest()
+      docs.foreach(row => {
+        val doc = new SolrInputDocument()
+        doc.setField("id", row(0))
+        doc.setField("stock_b", row(1))
+        updateRequest.add(doc)
+      })
+      updateRequest.process(cloudClient, collection)
+      updateRequest.commit(cloudClient, collection)
+
+      val df = sparkSession.read.format("solr").options(opts).load()
+      assert(df.count() == 4)
+
+      val df1 = sparkSession.read.format("solr").options(opts).option("solr.params", "fq=id:[* TO *]&fq=-stock_b:true").load
+      assert(df1.count() == 2)
+    } finally {
+      SolrCloudUtil.deleteCollection(collection, cluster)
+    }
+  }
+
   def buildMoviesCollection(moviesCollection: String) : Int = {
     SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 2, cloudClient, sc)
 

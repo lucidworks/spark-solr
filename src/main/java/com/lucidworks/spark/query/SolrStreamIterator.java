@@ -1,9 +1,6 @@
 package com.lucidworks.spark.query;
 
-import com.lucidworks.spark.util.SolrSupport;
-import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
@@ -85,10 +82,15 @@ public class SolrStreamIterator extends TupleStreamIterator {
     if (values != null && values.length > 1) {
       String fqResult = "";
       for (int i = 0; i < values.length; i++) {
+        String value = values[i];
+        // Exclusive queries need an inclusive query. Otherwise wrapping around parenthesis won't work
+        if (value.startsWith("-")) {
+          value = "*:* " + value;
+        }
         if (i != values.length - 1) {
-          fqResult += "(" + values[i] + ")" + " AND ";
+          fqResult += "(" + value + ")" + " AND ";
         } else {
-          fqResult += "(" + values[i] + ")";
+          fqResult += "(" + value + ")";
         }
       }
       log.info("Merged multiple FQ params in to a single param. Result: '" + fqResult + "'");
