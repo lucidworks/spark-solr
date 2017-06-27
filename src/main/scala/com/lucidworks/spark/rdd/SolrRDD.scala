@@ -30,8 +30,7 @@ abstract class SolrRDD[T: ClassTag](
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     split match {
-      case partition: SplitRDDPartition => Array(partition.preferredReplica.getHostAndPort())
-      case partition: SolrRDDPartition => Array(partition.preferredReplica.getHostAndPort())
+      case partition: SelectSolrRDDPartition => Array(partition.preferredReplica.getHostAndPort())
       case partition: ExportHandlerPartition => Array(partition.preferredReplica.getHostAndPort())
       case _: AnyRef => Seq.empty
     }
@@ -58,6 +57,25 @@ abstract class SolrRDD[T: ClassTag](
   def requestHandler(requestHandler: String): SolrRDD[T]
 
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
+
+  def getReplicaToQuery(partition: SolrRDDPartition, attempt_no: Int): String = {
+    val preferredReplicaUrl = partition.preferredReplica.replicaUrl
+    if (attempt_no == 0)
+      preferredReplicaUrl
+    else {
+      logger.info(s"Task attempt no. ${attempt_no}. Checking if replica ${preferredReplicaUrl} is healthy")
+      // can't do much if there is only one replica for this shard
+      if (partition.solrShard.replicas.length == 1)
+        return preferredReplicaUrl
+
+      // Switch to another replica as the task has failed
+      val newReplicaToQuery = SolrRDD.randomReplica(partition.solrShard, partition.preferredReplica)
+      logger.info(s"Switching from $preferredReplicaUrl to ${newReplicaToQuery.replicaUrl}")
+      partition.preferredReplica = newReplicaToQuery
+      newReplicaToQuery.replicaUrl
+    }
+  }
+
 }
 
 object SolrRDD {
@@ -68,6 +86,11 @@ object SolrRDD {
 
   def randomReplica(solrShard: SolrShard): SolrReplica = {
     solrShard.replicas(Random.nextInt(solrShard.replicas.size))
+  }
+
+  def randomReplica(solrShard: SolrShard, replicaToExclude: SolrReplica): SolrReplica = {
+    val filteredReplicas = solrShard.replicas.filter(p => p.equals(replicaToExclude))
+    solrShard.replicas(Random.nextInt(filteredReplicas.size))
   }
 
   def apply(

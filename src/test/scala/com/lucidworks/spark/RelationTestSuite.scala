@@ -5,9 +5,9 @@ import java.util.UUID
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.solr.client.solrj.request.UpdateRequest
+import org.apache.solr.client.solrj.request.{CollectionAdminRequest, UpdateRequest}
 import org.apache.solr.common.SolrInputDocument
-import org.apache.spark.sql.types.{TimestampType, StringType, LongType, DoubleType}
+import org.apache.spark.sql.types.{DoubleType, LongType, StringType, TimestampType}
 
 class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
 
@@ -101,9 +101,12 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
           "query" -> "s_the_abcdefghijklmnopqrstuvwxyz_field_1:[* TO *]")).load
 //      testDF.printSchema
       val schema = testDF.schema
+      assert(schema.size > 1999)
       assert(schema != null)
       fields.foreach(_ => schema.fieldIndex(_)) // throws exception if not found
-      assert(testDF.collectAsList().size == 100)
+      val docs = testDF.collectAsList()
+      assert(docs.size == 100)
+      assert(docs.get(0).length == schema.size)
 
       val searchExpr = s"""
           |search(${collectionName},
@@ -115,6 +118,8 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       val exprDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName, "expr" -> searchExpr)).load
       val exprSchema = exprDF.schema
+      assert(schema.size > 1999)
+
       //exprDF.printSchema
       fields.foreach(_ => exprSchema.fieldIndex(_)) // throws exception if not found
       assert(exprDF.collectAsList().size == 100)
@@ -514,6 +519,12 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     indexMoviesRequest.process(cloudClient, moviesCollection)
     indexMoviesRequest.commit(cloudClient, moviesCollection)
 
+    val collectionReloadRequest = CollectionAdminRequest.reloadCollection(moviesCollection)
+    val resp = collectionReloadRequest.process(cloudClient)
+    logger.info(resp.getCollectionCoresStatus.toString)
+    if (!resp.isSuccess) {
+      logger.info(resp.getErrorMessages.toString)
+    }
     return movieDocs.length
   }
 

@@ -477,7 +477,7 @@ object SolrQuerySupport extends LazyLogging {
       }
     } catch {
       case e: Any =>
-        logger.error("Error while validating query request: " + queryRequest.toString)
+        logger.error("Error while validating query request: " + cloneQuery.toString)
         throw e
     }
   }

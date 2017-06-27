@@ -45,7 +45,7 @@ class TestShardSplits extends SparkSolrFunSuite{
     assert(partitions.length == 4)
     partitions.zipWithIndex.foreach {
       case (partition, i) =>
-        val spartition = partition.asInstanceOf[SolrRDDPartition]
+        val spartition = partition.asInstanceOf[SelectSolrRDDPartition]
         assert(spartition.cursorMark == "*")
         assert(spartition.query.get("partitionKeys") == splitFieldName)
         assert(spartition.query.getFilterQueries.apply(0) == s"{!hash workers=2 worker=${i%2}}")
