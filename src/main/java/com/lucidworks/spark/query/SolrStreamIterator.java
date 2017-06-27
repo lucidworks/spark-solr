@@ -39,7 +39,7 @@ public class SolrStreamIterator extends TupleStreamIterator {
     this.shardUrl = shardUrl;
     this.cloudSolrClient = cloudSolrClient;
     this.httpSolrClient = httpSolrClient;
-    this.solrQuery = mergeFq(solrQuery);
+    this.solrQuery = solrQuery;
     this.numWorkers = numWorkers;
     this.workerId = workerId;
 
@@ -75,27 +75,5 @@ public class SolrStreamIterator extends TupleStreamIterator {
 
   protected void afterStreamClosed() throws Exception {
     // No need to close http or cloudClient because they are re-used from cache
-  }
-
-  protected SolrQuery mergeFq(SolrQuery solrQuery) {
-    String[] values = solrQuery.getFilterQueries();
-    if (values != null && values.length > 1) {
-      String fqResult = "";
-      for (int i = 0; i < values.length; i++) {
-        String value = values[i];
-        // Exclusive queries need an inclusive query. Otherwise wrapping around parenthesis won't work
-        if (value.startsWith("-")) {
-          value = "*:* " + value;
-        }
-        if (i != values.length - 1) {
-          fqResult += "(" + value + ")" + " AND ";
-        } else {
-          fqResult += "(" + value + ")";
-        }
-      }
-      log.info("Merged multiple FQ params in to a single param. Result: '" + fqResult + "'");
-      solrQuery.set(CommonParams.FQ, fqResult);
-    }
-    return solrQuery;
   }
 }
