@@ -515,7 +515,8 @@ class SolrRelation(
       if (!hasFuncQueryOrFieldAlias &&
           conf.requestHandler.isEmpty &&
           !requiresStreamingRDD(qt) &&
-          !conf.useCursorMarks.getOrElse(false)) {
+          !conf.useCursorMarks.getOrElse(false) &&
+          conf.maxRows.isEmpty) {
         logger.debug(s"Checking the query and sort fields to determine if streaming is possible for ${collection}")
         // Determine whether to use Streaming API (/export handler) if 'use_export_handler' or 'use_cursor_marks' options are not set
         val isFDV: Boolean = if (fields.isEmpty && query.getFields == null) true else SolrRelation.checkQueryFieldsForDV(scanSchema)
@@ -772,6 +773,7 @@ class SolrRelation(
 
   private def buildQuery: SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
+    val solrParams = conf.getArbitrarySolrParams
 
     if (conf.getStreamingExpr.isDefined) {
       query.setRequestHandler(QT_STREAM)
@@ -789,6 +791,17 @@ class SolrRelation(
       query.setFields(conf.getFields:_*)
     }
 
+    if (conf.getFilters.nonEmpty) {
+      query.setFilterQueries(conf.getFilters:_*)
+    }
+
+    val fqParams = solrParams.remove("fq")
+    if (fqParams != null && fqParams.nonEmpty) {
+      for (fq <- fqParams) {
+        query.addFilterQuery(fq)
+      }
+    }
+
     query.setRows(scala.Int.box(conf.getRows.getOrElse(DEFAULT_PAGE_SIZE)))
     if (conf.getSort.isDefined) {
       val sortClauses = SolrRelation.parseSortParamFromString(conf.getSort.get)
@@ -796,8 +809,8 @@ class SolrRelation(
         query.addSort(sortClause)
       }
     }
-    
-    val sortParams = conf.getArbitrarySolrParams.remove("sort")
+
+    val sortParams = solrParams.remove("sort")
     if (sortParams != null && sortParams.nonEmpty) {
       for (p <- sortParams) {
         val sortClauses = SolrRelation.parseSortParamFromString(p)
@@ -806,7 +819,7 @@ class SolrRelation(
         }
       }
     }
-    query.add(conf.getArbitrarySolrParams)
+    query.add(solrParams)
     query.set("collection", collection)
     query
   }

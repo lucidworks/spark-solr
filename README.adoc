@@ -186,6 +186,12 @@ You can also specify an alias for a field using Solr's field alias syntax, e.g. 
 
 TIP: If you request Solr function queries, then the library must use the `/select` handler to make the request as exporting function queries through `/export` is not supported by Solr.
 
+==== filters
+
+You can use the `filters` option to set filter queries on Solr query:
+
+Usage: `option("filters","firstName:Sam,lastName:Powell")`
+
 ==== rows
 
 You can use the `rows` option to specify the number of rows to retrieve from Solr per request; do not confuse this with `max_rows` (see below). Behind the scenes, the implementation uses either deep paging cursors or Streaming API and response streaming, so it is usually safe to specify a large number of rows.

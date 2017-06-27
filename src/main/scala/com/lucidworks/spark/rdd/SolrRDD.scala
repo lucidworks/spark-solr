@@ -30,8 +30,8 @@ abstract class SolrRDD[T: ClassTag](
 
   override def getPreferredLocations(split: Partition): Seq[String] = {
     split match {
-      case partition: SelectSolrRDDPartition => Array(partition.preferredReplica.replicaHostName)
-      case partition: ExportHandlerPartition => Array(partition.preferredReplica.replicaHostName)
+      case partition: SelectSolrRDDPartition => Array(partition.preferredReplica.getHostAndPort())
+      case partition: ExportHandlerPartition => Array(partition.preferredReplica.getHostAndPort())
       case _: AnyRef => Seq.empty
     }
   }
