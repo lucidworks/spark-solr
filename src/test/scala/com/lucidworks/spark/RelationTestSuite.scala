@@ -3,7 +3,7 @@ package com.lucidworks.spark
 import java.util.UUID
 
 import com.lucidworks.spark.util.ConfigurationConstants._
-import com.lucidworks.spark.util.SolrCloudUtil
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrQuerySupport}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.{CollectionAdminRequest, UpdateRequest}
 import org.apache.solr.common.SolrInputDocument
@@ -528,7 +528,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
   }
 
   def buildMoviesCollection(moviesCollection: String) : Int = {
-    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
 
     val movieDocs : Array[String] = Array(
       UUID.randomUUID().toString+",movie200,The Big Short",
@@ -553,6 +553,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     if (!resp.isSuccess) {
       logger.info(resp.getErrorMessages.toString)
     }
+    assert(SolrQuerySupport.getNumDocsFromSolr(moviesCollection, zkHost, None) == 2)
     return movieDocs.length
   }
 
