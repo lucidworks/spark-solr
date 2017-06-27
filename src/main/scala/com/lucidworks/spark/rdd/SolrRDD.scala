@@ -2,7 +2,7 @@ package com.lucidworks.spark.rdd
 
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.SolrQuerySupport
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark._
@@ -59,32 +59,20 @@ abstract class SolrRDD[T: ClassTag](
   def solrCount: BigInt = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, solrQuery)
 
   def getReplicaToQuery(partition: SolrRDDPartition, attempt_no: Int): String = {
-    val preferredReplica = partition.preferredReplica.replicaUrl
+    val preferredReplicaUrl = partition.preferredReplica.replicaUrl
     if (attempt_no == 0)
-      preferredReplica
+      preferredReplicaUrl
     else {
-      logger.info(s"Task attempt no. ${attempt_no}. Checking if replica ${preferredReplica} is healthy")
+      logger.info(s"Task attempt no. ${attempt_no}. Checking if replica ${preferredReplicaUrl} is healthy")
       // can't do much if there is only one replica for this shard
       if (partition.solrShard.replicas.length == 1)
-        return preferredReplica
+        return preferredReplicaUrl
 
-      // Query preferred replica to check if the response is successful. If not, try with a different replica
-      try {
-        partition match {
-          case _: SelectSolrRDDPartition =>
-            SolrQuerySupport.querySolr(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query.getCopy, 0, "*")
-          case _: ExportHandlerPartition =>
-            SolrQuerySupport.validateExportHandlerQuery(SolrSupport.getCachedHttpSolrClient(preferredReplica, zkHost), partition.query.getCopy)
-        }
-        preferredReplica
-      } catch {
-        case e: Exception =>
-          logger.error(s"Error querying replica ${preferredReplica} while checking if it's healthy. Exception: $e")
-          val newReplicaToQuery = SolrRDD.randomReplica(partition.solrShard, partition.preferredReplica)
-          logger.info(s"Switching from $preferredReplica to ${newReplicaToQuery.replicaUrl}")
-          partition.preferredReplica = newReplicaToQuery
-          newReplicaToQuery.replicaUrl
-      }
+      // Switch to another replica as the task has failed
+      val newReplicaToQuery = SolrRDD.randomReplica(partition.solrShard, partition.preferredReplica)
+      logger.info(s"Switching from $preferredReplicaUrl to ${newReplicaToQuery.replicaUrl}")
+      partition.preferredReplica = newReplicaToQuery
+      newReplicaToQuery.replicaUrl
     }
   }
 
