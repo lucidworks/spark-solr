@@ -9,7 +9,7 @@ import org.apache.spark.sql.SaveMode._
 class TestChildDocuments extends TestSuiteBuilder {
   test("child document should have root as parent document's id") {
     val collectionName = "testChildDocuments-" + UUID.randomUUID().toString
-    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 2, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
 
     try {
       val testDf = buildTestDataFrame()

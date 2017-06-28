@@ -1,9 +1,6 @@
 package com.lucidworks.spark.query;
 
-import com.lucidworks.spark.util.SolrSupport;
-import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
@@ -42,7 +39,7 @@ public class SolrStreamIterator extends TupleStreamIterator {
     this.shardUrl = shardUrl;
     this.cloudSolrClient = cloudSolrClient;
     this.httpSolrClient = httpSolrClient;
-    this.solrQuery = mergeFq(solrQuery);
+    this.solrQuery = solrQuery;
     this.numWorkers = numWorkers;
     this.workerId = workerId;
 
@@ -78,22 +75,5 @@ public class SolrStreamIterator extends TupleStreamIterator {
 
   protected void afterStreamClosed() throws Exception {
     // No need to close http or cloudClient because they are re-used from cache
-  }
-
-  protected SolrQuery mergeFq(SolrQuery solrQuery) {
-    String[] values = solrQuery.getFilterQueries();
-    if (values != null && values.length > 1) {
-      String fqResult = "";
-      for (int i = 0; i < values.length; i++) {
-        if (i != values.length - 1) {
-          fqResult += "(" + values[i] + ")" + " AND ";
-        } else {
-          fqResult += "(" + values[i] + ")";
-        }
-      }
-      log.info("Merged multiple FQ params in to a single param. Result: '" + fqResult + "'");
-      solrQuery.set(CommonParams.FQ, fqResult);
-    }
-    return solrQuery;
   }
 }
