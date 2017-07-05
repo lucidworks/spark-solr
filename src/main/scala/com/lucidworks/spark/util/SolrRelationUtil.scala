@@ -243,7 +243,9 @@ object SolrRelationUtil extends LazyLogging {
     filter match {
       case f: EqualTo =>
         attr = Some(f.attribute)
-        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
+        val equalToValue: String = getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)
+        // Surround the value with double quotes to escape special characters in Strings
+        crit = Some(s""""$equalToValue"""")
       case f: EqualNullSafe =>
         attr = Some(f.attribute)
         crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))

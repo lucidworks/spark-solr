@@ -527,6 +527,32 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     }
   }
 
+  test("Test escaped characters in filter queries") {
+    val collection = "testBoolean" + UUID.randomUUID().toString.replace("-", "_")
+    try {
+      SolrCloudUtil.buildCollection(zkHost, collection, null, 2, cloudClient, sc)
+
+      val opts = Map("zkhost" -> zkHost, "collection" -> collection)
+
+      val docs = Array(Array("1", "a:b"), Array("2", "b:c"), Array("3", "c:d"), Array("4", "e:f"))
+      val updateRequest = new UpdateRequest()
+      docs.foreach(row => {
+        val doc = new SolrInputDocument()
+        doc.setField("id", row(0))
+        doc.setField("field_s", row(1))
+        updateRequest.add(doc)
+      })
+      updateRequest.process(cloudClient, collection)
+      updateRequest.commit(cloudClient, collection)
+
+      val df = sparkSession.read.format("solr").options(opts).load()
+      assert(df.count() == 4)
+      assert(df.filter(df("field_s")==="c:d").count() == 1)
+    } finally {
+      SolrCloudUtil.deleteCollection(collection, cluster)
+    }
+  }
+
   def buildMoviesCollection(moviesCollection: String) : Int = {
     SolrCloudUtil.buildCollection(zkHost, moviesCollection, null, 1, cloudClient, sc)
 
