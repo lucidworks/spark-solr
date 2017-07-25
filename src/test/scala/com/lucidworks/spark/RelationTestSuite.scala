@@ -534,7 +534,7 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
 
       val opts = Map("zkhost" -> zkHost, "collection" -> collection)
 
-      val docs = Array(Array("1", "a:b"), Array("2", "b:c"), Array("3", "c:d"), Array("4", "e:f"))
+      val docs = Array(Array("1", "a:b"), Array("2", "b:c"), Array("3", "c:d"), Array("4", "e:f"), Array("5", "Pool Join"))
       val updateRequest = new UpdateRequest()
       docs.foreach(row => {
         val doc = new SolrInputDocument()
@@ -546,8 +546,9 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       updateRequest.commit(cloudClient, collection)
 
       val df = sparkSession.read.format("solr").options(opts).load()
-      assert(df.count() == 4)
-      assert(df.filter(df("field_s")==="c:d").count() == 1)
+      assert(df.count() == 5)
+      assert(df.filter(df("field_s") === "c:d").count() == 1)
+      assert(df.filter(df("field_s") like "Pool%").count() == 1)
     } finally {
       SolrCloudUtil.deleteCollection(collection, cluster)
     }
