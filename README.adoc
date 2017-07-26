@@ -17,6 +17,7 @@ chart below shows the versions supported across the past releases. 'Connector' r
 [width="40%",frame="topbot",options="header,footer"]
 |======================
 |Connector      | Spark | Solr
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.2%7Cjar[3.0.2]  | 2.1.1 | 6.5.1
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.1%7Cjar[3.0.1]  | 2.1.1 | 6.5.1
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta3%7Cjar[3.0.0-beta3]  | 2.1.0 | 6.4.2
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta%7Cjar[3.0.0-beta]  | 2.1.0 | 6.3.0
