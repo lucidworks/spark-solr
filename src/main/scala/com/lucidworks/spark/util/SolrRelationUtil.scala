@@ -243,7 +243,13 @@ object SolrRelationUtil extends LazyLogging {
     filter match {
       case f: EqualTo =>
         attr = Some(f.attribute)
-        crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
+        val equalToValue: String = getFilterValue(f.attribute, String.valueOf(f.value), baseSchema)
+        if (equalToValue.startsWith("\"") && equalToValue.endsWith("\"")) {
+          crit = Some(equalToValue)
+        } else {
+          // Surround the value with double quotes to escape special characters in Strings
+          crit = Some(s""""$equalToValue"""")
+        }
       case f: EqualNullSafe =>
         attr = Some(f.attribute)
         crit = Some(getFilterValue(f.attribute, String.valueOf(f.value), baseSchema))
@@ -279,13 +285,13 @@ object SolrRelationUtil extends LazyLogging {
         negate = "-"
       case f: StringContains =>
         attr = Some(f.attribute)
-        crit = Some("*" + f.value + "*")
+        crit = Some("(*" + f.value + "*)")
       case f: StringEndsWith =>
         attr = Some(f.attribute)
-        crit = Some("*"+f.value)
+        crit = Some("(*" + f.value + ")")
       case f: StringStartsWith =>
         attr = Some(f.attribute)
-        crit = Some(f.value+"*")
+        crit = Some("(" + f.value + "*)")
       case _ => throw new IllegalArgumentException("Filters of type '" + filter + " (" + filter.getClass.getName + ")' not supported!")
     }
 
