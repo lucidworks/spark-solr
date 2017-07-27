@@ -31,7 +31,7 @@ case class QueryField(name:String, alias: Option[String] = None, funcReturnType:
 object SolrRelationUtil extends LazyLogging {
 
   val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
-    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls").seq
+    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls", "_t").seq
 
   def isValidDynamicFieldName(fieldName: String): Boolean = {
     dynamicExtensionSuffixes.foreach(ext => {
