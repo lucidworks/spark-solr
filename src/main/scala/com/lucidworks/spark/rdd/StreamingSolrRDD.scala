@@ -108,7 +108,7 @@ class StreamingSolrRDD(
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
     val numReplicas = shards.head.replicas.length
-    val numSplits = splitsPerShard.getOrElse(2 * numReplicas)
+    val numSplits = splitsPerShard.getOrElse(4 * numReplicas)
     logger.info(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
 
     val partitions : Array[Partition] = if (numSplits > 1) {
