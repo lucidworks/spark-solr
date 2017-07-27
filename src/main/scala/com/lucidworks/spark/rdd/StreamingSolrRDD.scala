@@ -1,12 +1,13 @@
 package com.lucidworks.spark.rdd
 
-import com.lucidworks.spark.query.{SolrStreamIterator, StreamingExpressionResultIterator}
+import com.lucidworks.spark.query.{SolrStreamIterator, StreamingExpressionResultIterator, TupleStreamIterator}
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
-import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner}
+import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner, SparkSolrAccumulator}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.util.TaskCompletionListener
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
 import scala.collection.JavaConverters
@@ -22,7 +23,8 @@ class StreamingSolrRDD(
     splitField: Option[String] = None,
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
-    uKey: Option[String] = None)
+    uKey: Option[String] = None,
+    val accumulator: Option[SparkSolrAccumulator] = None)
   extends SolrRDD[java.util.Map[_, _]](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
@@ -34,7 +36,7 @@ class StreamingSolrRDD(
     splitField: Option[String] = splitField,
     splitsPerShard: Option[Int] = splitsPerShard,
     solrQuery: Option[SolrQuery] = solrQuery): StreamingSolrRDD = {
-    new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+    new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, accumulator)
   }
 
   /*
@@ -71,7 +73,7 @@ class StreamingSolrRDD(
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[java.util.Map[_, _]] = {
     logger.debug(s"Computing split: ${split.index}")
-    split match {
+    val iterator: TupleStreamIterator = split match {
       case partition: CloudStreamPartition =>
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")
         val resultsIterator = new StreamingExpressionResultIterator(
@@ -79,7 +81,7 @@ class StreamingSolrRDD(
           SolrSupport.getCachedHttpSolrClient(SolrSupport.getSolrBaseUrl(zkHost) + partition.collection, zkHost), // the baseUrl is just a dummy. It will be later replaced with valid host name at {@code SparkSolrClientCache#getHttpSolrClient}
           partition.collection,
           partition.params)
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
+        resultsIterator
       case partition: ExportHandlerPartition =>
 
         val url = getReplicaToQuery(partition, context.attemptNumber())
@@ -92,9 +94,18 @@ class StreamingSolrRDD(
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
+        resultsIterator
       case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
+    if (accumulator.isDefined) {
+      iterator.setAccumulator(accumulator.get)
+    }
+    context.addTaskCompletionListener(new TaskCompletionListener {
+      override def onTaskCompletion(context: TaskContext): Unit = {
+        logger.info("Task input metrics for records: {}", context.taskMetrics().inputMetrics.recordsRead)
+      }
+    })
+    JavaConverters.asScalaIteratorConverter(iterator.iterator()).asScala
   }
 
   override def getPartitions: Array[Partition] = {

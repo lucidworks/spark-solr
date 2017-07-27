@@ -565,6 +565,11 @@ class SolrRelation(
           query.setSort(uniqueKey, SolrQuery.ORDER.asc)
       }
       logger.info(s"Sending ${query} to SolrRDD using ${qt} with maxRows: ${conf.maxRows}")
+      // Register an accumulator for counting documents
+      val acc: SparkSolrAccumulator = new SparkSolrAccumulator
+      val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Read"
+      sparkSession.sparkContext.register(acc, accName)
+
       // Construct the SolrRDD based on the request handler
       val solrRDD: SolrRDD[_] = SolrRDD.apply(
         conf.getZkHost.get,
@@ -574,7 +579,8 @@ class SolrRelation(
         splitsPerShard = conf.getSplitsPerShard,
         splitField = getSplitField(conf),
         uKey = Some(uniqueKey),
-        maxRows = conf.maxRows)
+        maxRows = conf.maxRows,
+        accumulator = Some(acc))
       val docs = solrRDD.query(query)
       logger.debug(s"Converting SolrRDD of type ${docs.getClass.getName} to rows matching schema: ${scanSchema}")
       val rows = SolrRelationUtil.toRows(scanSchema, docs)
@@ -768,7 +774,11 @@ class SolrRelation(
       }
       doc
     })
-    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin)
+    val acc: SparkSolrAccumulator = new SparkSolrAccumulator
+    val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
+    sparkSession.sparkContext.register(acc, accName)
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin, Some(acc))
+    logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }
 
   private def buildQuery: SolrQuery = {

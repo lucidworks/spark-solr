@@ -157,6 +157,7 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
 
     ++numDocs;
     ++iterPos;
+    increment();
 
     return next;
   }

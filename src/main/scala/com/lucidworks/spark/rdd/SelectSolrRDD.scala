@@ -3,7 +3,7 @@ package com.lucidworks.spark.rdd
 import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
-import com.lucidworks.spark.{SelectSolrRDDPartition, SolrLimitPartition, SolrPartitioner}
+import com.lucidworks.spark.{SelectSolrRDDPartition, SolrLimitPartition, SolrPartitioner, SparkSolrAccumulator}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
@@ -24,7 +24,8 @@ class SelectSolrRDD(
     splitsPerShard: Option[Int] = None,
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None,
-    val maxRows: Option[Int] = None)
+    val maxRows: Option[Int] = None,
+    val accumulator: Option[SparkSolrAccumulator] = None)
   extends SolrRDD[SolrDocument](zkHost, collection, sc, uKey = uKey)
   with LazyLogging {
 
@@ -38,12 +39,13 @@ class SelectSolrRDD(
     solrQuery: Option[SolrQuery] = solrQuery,
     uKey: Option[String] = uKey,
     maxRows: Option[Int] = maxRows): SelectSolrRDD = {
-      new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
+      new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows, accumulator)
   }
 
   @DeveloperApi
   override def compute(split: Partition, context: TaskContext): Iterator[SolrDocument] = {
-    split match {
+
+    val iterator: StreamingResultsIterator = split match {
       case partition: SelectSolrRDDPartition => {
         val url = getReplicaToQuery(partition, context.attemptNumber())
         val query = partition.query
@@ -55,7 +57,7 @@ class SelectSolrRDD(
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
+        resultsIterator
       }
       case p: SolrLimitPartition => {
         // this is a single partition for the entire query ... we'll read all rows at once
@@ -70,10 +72,13 @@ class SelectSolrRDD(
         context.addTaskCompletionListener { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from the limit (${p.maxRows}) partition of ${p.collection}")
         }
-        JavaConverters.asScalaIteratorConverter(resultsIterator.iterator()).asScala
+        resultsIterator
       }
       case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
+    if (accumulator.isDefined)
+      iterator.setAccumulator(accumulator.get)
+    JavaConverters.asScalaIteratorConverter(iterator.iterator()).asScala
   }
 
   override def getPartitions: Array[Partition] = {
