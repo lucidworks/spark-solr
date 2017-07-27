@@ -69,10 +69,10 @@ public class FusionPipelineClient {
     if (jassFile == null)
       return;
 
-    log.info("Using kerberized Solr.");
+    final String appname = System.getProperty(LWWW_JAAS_APPNAME, "Client");
+    log.info("Using kerberized Solr with "+jassFile+" and appname: "+appname);
     System.setProperty("sun.security.krb5.debug", "true");
     System.setProperty("java.security.auth.login.config", jassFile);
-    final String appname = System.getProperty(LWWW_JAAS_APPNAME, "Client");
     System.setProperty("solr.kerberos.jaas.appname", appname);
     HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer());
   }
@@ -259,9 +259,10 @@ public class FusionPipelineClient {
       HttpClientContext context = HttpClientContext.create();
       context.setCookieStore(cookieStore);
 
-      HttpResponse response = httpClient.execute(postRequest, context);
-      HttpEntity entity = response.getEntity();
+      CloseableHttpResponse response = httpClient.execute(postRequest, context);
+      HttpEntity entity = null;
       try {
+        entity = response.getEntity();
         int statusCode = response.getStatusLine().getStatusCode();
         if (statusCode != 200 && statusCode != 201 && statusCode != 204) {
           String body = extractResponseBodyText(entity);
@@ -294,7 +295,8 @@ public class FusionPipelineClient {
         }
       } finally {
         if (entity != null)
-          EntityUtils.consume(entity);
+          EntityUtils.consumeQuietly(entity);
+        response.close();
       }
       log.info("Established secure session with Fusion Session API on " + sessionKey + " for user " + user + " in realm " + realm);
     }
@@ -642,11 +644,7 @@ public class FusionPipelineClient {
 
     public void close() {
       if (delegate != null) {
-        try {
-          EntityUtils.consume(delegate);
-        } catch (Exception ignore) {
-          log.warn("Failed to consume entity due to: " + ignore);
-        }
+        EntityUtils.consumeQuietly(delegate);
       }
 
       if (httpResponse != null) {
@@ -793,11 +791,7 @@ public class FusionPipelineClient {
     Object statusLine = response.getStatusLine();
 
     if (entity != null) {
-      try {
-        EntityUtils.consume(entity);
-      } catch (Exception ignore) {
-        log.warn("Failed to consume entity due to: " + ignore);
-      }
+      EntityUtils.consumeQuietly(entity);
     }
 
     if (response instanceof CloseableHttpResponse) {

@@ -19,7 +19,7 @@ class EventsimTestSuite extends EventsimBuilder {
       .query("*:*")
       .rows(10)
       .select(Array("id"))
-    assert(solrRDD.getNumPartitions == numShards*2)
+    assert(solrRDD.getNumPartitions == numShards*4)
     testCommons(solrRDD)
   }
 
@@ -70,7 +70,7 @@ class EventsimTestSuite extends EventsimBuilder {
     )
     val df: DataFrame = sparkSession.read.format("solr").options(options).load()
     assert(df.rdd.getNumPartitions > numShards)
-    assert(df.rdd.getNumPartitions == 4)
+    assert(df.rdd.getNumPartitions == 8)
   }
 
   test("SQL query splits with export handler") {
