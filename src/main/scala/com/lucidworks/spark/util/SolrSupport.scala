@@ -12,7 +12,7 @@ import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.ShardInfo
-import com.lucidworks.spark.{SolrReplica, SolrShard}
+import com.lucidworks.spark.{SolrReplica, SolrShard, SparkSolrAccumulator}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
@@ -256,23 +256,28 @@ object SolrSupport extends LazyLogging {
       collection: String,
       batchSize: Int,
       rdd: RDD[SolrInputDocument],
-      commitWithin: Option[Int]): Unit = {
+      commitWithin: Option[Int],
+      accumulator: Option[SparkSolrAccumulator] = None): Unit = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
       val batch = new ArrayBuffer[SolrInputDocument]()
-      var numDocs = 0
+      var numDocs: Long = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
         batch += doc
         if (batch.length >= batchSize) {
           numDocs += batch.length
+          if (accumulator.isDefined)
+            accumulator.get.add(batch.length.toLong)
           sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
           batch.clear
         }
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
+        if (accumulator.isDefined)
+          accumulator.get.add(batch.length.toLong)
         sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
         batch.clear
       }

@@ -270,6 +270,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def getAccumulatorName: Option[String] = {
+    config.get(ACCUMULATOR_NAME)
+  }
+
   override def toString = {
     val sb = new StringBuilder
     sb ++= "SolrConf("
@@ -377,6 +381,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (getChildDocFieldName.isDefined) {
       sb ++= s", ${CHILD_DOC_FIELDNAME}=${getChildDocFieldName.get}"
+    }
+    if (getAccumulatorName.isDefined) {
+    sb ++= s", ${ACCUMULATOR_NAME}=${getAccumulatorName.get}"
     }
     sb ++= ")"
     sb.toString

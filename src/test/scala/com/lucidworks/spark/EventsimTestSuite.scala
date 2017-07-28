@@ -11,6 +11,7 @@ import org.apache.spark.sql.DataFrame
 
 import scala.collection.JavaConverters._
 import com.lucidworks.spark.util.SolrDataFrameImplicits._
+import org.apache.spark.solr.SparkInternalObjects
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -60,6 +61,19 @@ class EventsimTestSuite extends EventsimBuilder {
   test("count query") {
     val df: DataFrame = sparkSession.read.format("solr").option("zkHost", zkHost).option("collection", collectionName).load()
     assert(df.count() == eventSimCount)
+  }
+
+  test("count query with custom accumulator name") {
+    val acc_name = "custom_acc_name_records_read"
+    val df: DataFrame = sparkSession.read.format("solr")
+      .option("zkHost", zkHost)
+      .option("collection", collectionName)
+      .option(ACCUMULATOR_NAME, acc_name)
+      .load()
+    assert(df.count() == eventSimCount)
+    val acc = SparkInternalObjects.getAccumulatorByName(acc_name)
+    assert(acc.isDefined)
+    assert(acc.get.value == eventSimCount)
   }
 
   test("SQL query splits") {
