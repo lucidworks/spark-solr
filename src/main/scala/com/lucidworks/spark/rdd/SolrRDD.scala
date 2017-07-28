@@ -105,16 +105,17 @@ object SolrRDD {
       splitsPerShard: Option[Int] = None,
       solrQuery: Option[SolrQuery] = None,
       uKey: Option[String] = None,
-      maxRows: Option[Int] = None): SolrRDD[_] = {
+      maxRows: Option[Int] = None,
+      accumulator: Option[SparkSolrAccumulator] = None): SolrRDD[_] = {
     if (requestHandler.isDefined) {
       if (requiresStreamingRDD(requestHandler.get)) {
         // streaming doesn't support maxRows
-        new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey)
+        new StreamingSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, accumulator)
       } else {
-        new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
+        new SelectSolrRDD(zkHost, collection, sc, requestHandler, query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows, accumulator)
       }
     } else {
-      new SelectSolrRDD(zkHost, collection, sc, Some(DEFAULT_REQUEST_HANDLER), query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows)
+      new SelectSolrRDD(zkHost, collection, sc, Some(DEFAULT_REQUEST_HANDLER), query, fields, rows, splitField, splitsPerShard, solrQuery, uKey, maxRows, accumulator)
     }
   }
 
