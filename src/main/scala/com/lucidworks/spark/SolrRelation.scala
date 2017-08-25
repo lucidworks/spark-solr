@@ -569,6 +569,7 @@ class SolrRelation(
       val acc: SparkSolrAccumulator = new SparkSolrAccumulator
       val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Read"
       sparkSession.sparkContext.register(acc, accName)
+      SparkSolrAccumulatorContext.add(accName, acc.id)
 
       // Construct the SolrRDD based on the request handler
       val solrRDD: SolrRDD[_] = SolrRDD.apply(
@@ -777,6 +778,7 @@ class SolrRelation(
     val acc: SparkSolrAccumulator = new SparkSolrAccumulator
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
     sparkSession.sparkContext.register(acc, accName)
+    SparkSolrAccumulatorContext.add(accName, acc.id)
     SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin, Some(acc))
     logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }

@@ -4,14 +4,14 @@ import java.util.Collections
 
 import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.SolrDataFrameImplicits._
 import com.lucidworks.spark.util.{QueryField, SolrRelationUtil}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.SolrQuery.SortClause
+import org.apache.spark.solr.SparkInternalObjects
 import org.apache.spark.sql.DataFrame
 
 import scala.collection.JavaConverters._
-import com.lucidworks.spark.util.SolrDataFrameImplicits._
-import org.apache.spark.solr.SparkInternalObjects
 
 class EventsimTestSuite extends EventsimBuilder {
 
@@ -71,7 +71,8 @@ class EventsimTestSuite extends EventsimBuilder {
       .option(ACCUMULATOR_NAME, acc_name)
       .load()
     assert(df.count() == eventSimCount)
-    val acc = SparkInternalObjects.getAccumulatorByName(acc_name)
+    val acc_id = SparkSolrAccumulatorContext.getId(acc_name)
+    val acc = SparkInternalObjects.getAccumulatorById(acc_id)
     assert(acc.isDefined)
     assert(acc.get.value == eventSimCount)
   }
