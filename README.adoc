@@ -449,7 +449,10 @@ For background on Solr security, see: https://cwiki.apache.org/confluence/displa
 
 === Kerberos
 
-The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
+The kerberos config should be set via system param `java.security.auth.login.config` on extraJavaOptions for both executor and driver
+
+==== SparkApp
+The SparkApp framework (in spark-solr) allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
 
 For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS configuration  file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
 
@@ -475,7 +478,7 @@ spark-submit --master yarn-server \
   -solrJaasAuthConfig=/path/to/jaas-client.conf
 
 
-== Basic Auth
+=== Basic Auth
 
 Basic auth can be configured via System properties `basicauth` or `solr.httpclient.config`. These system properties have to be set on Driver and Executor JVMs
 
