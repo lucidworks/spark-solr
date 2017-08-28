@@ -1,6 +1,6 @@
 package com.lucidworks.spark
 
-import java.util.concurrent.ConcurrentHashMap
+import scala.collection.concurrent.TrieMap
 
 /**
   * Spark made it impossible to lookup an accumulator by name. Holding a global singleton here, so that external
@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
   */
 object SparkSolrAccumulatorContext {
 
-  private val accMapping = new ConcurrentHashMap[String, Long]()
+  private val accMapping = TrieMap.empty[String, Long]
 
   def remove(name: String): Unit = {
     accMapping.remove(name)
@@ -21,7 +21,7 @@ object SparkSolrAccumulatorContext {
     accMapping.put(name, id)
   }
 
-  def getId(name: String): Long = {
+  def getId(name: String): Option[Long] = {
     accMapping.get(name)
   }
 }

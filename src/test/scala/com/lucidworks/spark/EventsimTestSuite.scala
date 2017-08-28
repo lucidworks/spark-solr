@@ -71,8 +71,9 @@ class EventsimTestSuite extends EventsimBuilder {
       .option(ACCUMULATOR_NAME, acc_name)
       .load()
     assert(df.count() == eventSimCount)
-    val acc_id = SparkSolrAccumulatorContext.getId(acc_name)
-    val acc = SparkInternalObjects.getAccumulatorById(acc_id)
+    val acc_id: Option[Long] = SparkSolrAccumulatorContext.getId(acc_name)
+    assert(acc_id.isDefined)
+    val acc = SparkInternalObjects.getAccumulatorById(acc_id.get)
     assert(acc.isDefined)
     assert(acc.get.value == eventSimCount)
   }
