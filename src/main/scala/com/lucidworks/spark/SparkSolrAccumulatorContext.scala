@@ -24,4 +24,6 @@ object SparkSolrAccumulatorContext {
   def getId(name: String): Option[Long] = {
     accMapping.get(name)
   }
+
+  override def toString = s"SparkSolrAccumulatorContext($accMapping)"
 }
