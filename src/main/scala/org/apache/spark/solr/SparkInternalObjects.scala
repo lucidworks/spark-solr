@@ -4,8 +4,8 @@ import org.apache.spark.util.{AccumulatorContext, AccumulatorV2}
 
 object SparkInternalObjects {
 
-  def getAccumulatorByName(name: String): Option[AccumulatorV2[_, _]] = {
-    AccumulatorContext.lookForAccumulatorByName(name)
+  def getAccumulatorById(id: Long): Option[AccumulatorV2[_, _]] = {
+    AccumulatorContext.get(id)
   }
 
 }
