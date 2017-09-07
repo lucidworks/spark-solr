@@ -134,7 +134,7 @@ class SolrRelation(
                 conf.getZkHost.get,
                 sf.collection,
                 conf.escapeFieldNames.getOrElse(false),
-                conf.flattenMultivalued.getOrElse(true),
+                conf.flattenMultivalued,
                 conf.skipNonDocValueFields.getOrElse(false))
             logger.debug(s"Got stream schema: ${streamSchema} for ${sf}")
             sf.fields.foreach(fld => {
@@ -285,7 +285,7 @@ class SolrRelation(
       conf.getZkHost.get,
       collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
-      conf.flattenMultivalued.getOrElse(true),
+      conf.flattenMultivalued,
       conf.skipNonDocValueFields.getOrElse(false))
   }
 

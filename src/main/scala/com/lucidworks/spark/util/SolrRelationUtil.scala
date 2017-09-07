@@ -69,7 +69,7 @@ object SolrRelationUtil extends LazyLogging {
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean,
+      flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean): StructType =
     getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields)
 
@@ -78,7 +78,7 @@ object SolrRelationUtil extends LazyLogging {
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean,
+      flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean): StructType = {
     // If the collection is empty (no documents), return an empty schema
     if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
@@ -118,7 +118,17 @@ object SolrRelationUtil extends LazyLogging {
       metadata.putString("name", fieldName)
       metadata.putString("type", fieldMeta.fieldType)
 
-      if (!flattenMultivalued && fieldMeta.isMultiValued.isDefined) {
+      val keepFieldMultivalued = if (flattenMultivalued.isEmpty) {
+        // consider _t suffix as single-valued by default
+        if (fieldName.endsWith("_t")) {
+          false
+        } else {
+          SolrRelationUtil.isValidDynamicFieldName(fieldName)
+        }
+      } else {
+        !flattenMultivalued.get
+      }
+      if (keepFieldMultivalued && fieldMeta.isMultiValued.isDefined) {
         if (fieldMeta.isMultiValued.get) {
           dataType = new ArrayType(dataType, true)
           metadata.putBoolean("multiValued", value = true)

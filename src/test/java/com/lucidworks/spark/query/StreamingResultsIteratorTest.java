@@ -17,6 +17,7 @@ import java.util.Random;
 
 import static org.junit.Assert.*;
 import com.lucidworks.spark.util.QueryResultsIterator;
+import scala.Some$;
 
 public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
 
@@ -73,7 +74,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
     Thread.sleep(2000);
 
     String uniqueKey = SolrQuerySupport.getUniqueKey(zkHost, testCollection);
-    StructType schema = SolrRelationUtil.getBaseSchema(zkHost, testCollection, false, true, false);
+    StructType schema = SolrRelationUtil.getBaseSchema(zkHost, testCollection, false, Some$.MODULE$.apply(true), false);
     //StreamingResultsIterator sri = new StreamingResultsIterator(cloudSolrClient, solrQuery, "*");
     QueryResultsIterator sri = new QueryResultsIterator(cloudSolrClient, solrQuery, "*") ;
     int numDocsFound = 0;
