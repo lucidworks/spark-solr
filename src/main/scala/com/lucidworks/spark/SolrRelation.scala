@@ -103,6 +103,16 @@ class SolrRelation(
   // Preserve the initial filters if any present in arbitrary config
   lazy val queryFilters: Array[String] = if (initialQuery.getFilterQueries != null) initialQuery.getFilterQueries else Array.empty[String]
 
+  lazy val dynamicSuffixes: Set[String] = SolrQuerySupport.getFieldTypes(
+    Set.empty,
+    SolrSupport.getSolrBaseUrl(conf.getZkHost.get),
+    SolrSupport.getCachedCloudClient(conf.getZkHost.get),
+    collection.split(",")(0),
+    skipDynamicExtensions = false
+  ).keySet
+      .filter(f => f.startsWith("*_") || f.endsWith("_*"))
+      .map(f => if (f.startsWith("*_")) f.substring(1) else f.substring(0, f.length-1))
+
   lazy val querySchema: StructType = {
     if (dataFrame.isDefined) {
       dataFrame.get.schema
@@ -134,8 +144,9 @@ class SolrRelation(
                 conf.getZkHost.get,
                 sf.collection,
                 conf.escapeFieldNames.getOrElse(false),
-                conf.flattenMultivalued.getOrElse(true),
-                conf.skipNonDocValueFields.getOrElse(false))
+                conf.flattenMultivalued,
+                conf.skipNonDocValueFields.getOrElse(false),
+                dynamicSuffixes)
             logger.debug(s"Got stream schema: ${streamSchema} for ${sf}")
             sf.fields.foreach(fld => {
               val fieldName = fld.alias.getOrElse(fld.name)
@@ -285,8 +296,9 @@ class SolrRelation(
       conf.getZkHost.get,
       collection.split(",")(0),
       conf.escapeFieldNames.getOrElse(false),
-      conf.flattenMultivalued.getOrElse(true),
-      conf.skipNonDocValueFields.getOrElse(false))
+      conf.flattenMultivalued,
+      conf.skipNonDocValueFields.getOrElse(false),
+      dynamicSuffixes)
   }
 
   def findStreamingExpressionFields(expr: StreamExpressionParameter, streamOutputFields: ListBuffer[StreamFields], depth: Int) : Unit = {
@@ -678,8 +690,7 @@ class SolrRelation(
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = new ListBuffer[Update]()
     dfSchema.fields.foreach(f => {
-      // TODO: we should load all dynamic field extensions from Solr for making a decision here
-      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name)) {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
