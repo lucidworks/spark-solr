@@ -3,7 +3,7 @@ package com.lucidworks.spark
 import java.util.UUID
 
 import com.lucidworks.spark.util.ConfigurationConstants._
-import com.lucidworks.spark.util.{SolrCloudUtil, SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrCloudUtil, SolrQuerySupport}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.{CollectionAdminRequest, UpdateRequest}
 import org.apache.solr.common.SolrInputDocument
@@ -503,46 +503,24 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val collection = "testLukeCloudAware" + UUID.randomUUID().toString.replace("-", "_")
     try {
       SolrCloudUtil.buildCollection(zkHost, collection, null, 2, cloudClient, sc)
-      val shardList = SolrSupport.buildShardList(zkHost, collection)
-      val shard1Url = shardList.head.replicas.head.replicaUrl
-      val shard2Url = shardList(1).replicas.head.replicaUrl
-      val shard1HttpClient = SolrSupport.getCachedHttpSolrClient(shard1Url, zkHost)
-      val shard2HttpClient = SolrSupport.getCachedHttpSolrClient(shard2Url, zkHost)
 
       val opts = Map("zkhost" -> zkHost, "collection" -> collection)
 
-      // Index docs separately to individual shards with different field names
-      var docs = Array(Array("1", true), Array("2", false), Array("3", true), Array("4", false))
+      // Hard to properly verify this but by sticking to one document, it is highly likely that this
+      // test will fail (2 out of 10 times) without the luke fetching data from each shard
+      var docs = Array(Array("1", true))
       val updateRequest = new UpdateRequest()
-      docs.foreach(row => {
+      docs.zipWithIndex.foreach{case(row, i) =>
         val doc = new SolrInputDocument()
         doc.setField("id", row(0))
         doc.setField("stock_b", row(1))
         updateRequest.add(doc)
-      })
-      updateRequest.process(shard1HttpClient)
+      }
+      updateRequest.process(cloudClient, collection)
       updateRequest.commit(cloudClient, collection)
 
-      docs = Array(Array("12", true), Array("22", false), Array("33", true), Array("44", false))
-      val updateRequest2 = new UpdateRequest()
-      docs.foreach(row => {
-        val doc = new SolrInputDocument()
-        doc.setField("id", row(0))
-        doc.setField("stock1_b", row(1))
-        updateRequest2.add(doc)
-      })
-      updateRequest2.process(shard2HttpClient)
-      updateRequest2.commit(cloudClient, collection)
-
       val df = sparkSession.read.format("solr").options(opts).load()
-      assert(df.count() == 8)
-
-      val df1 = sparkSession.read.format("solr").options(opts).option("solr.params", "fq=id:[* TO *]&fq=stock_b:true").load
-      assert(df1.count() == 2)
-
-      val df2 = sparkSession.read.format("solr").options(opts).option("solr.params", "fq=id:[* TO *]&fq=stock1_b:true").load
-      assert(df2.count() == 2)
-
+      assert(df.count() == 1)
     } finally {
       SolrCloudUtil.deleteCollection(collection, cluster)
     }
