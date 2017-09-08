@@ -506,21 +506,34 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
 
       val opts = Map("zkhost" -> zkHost, "collection" -> collection)
 
-      // Hard to properly verify this but by sticking to one document, it is highly likely that this
-      // test will fail (2 out of 10 times) without the luke fetching data from each shard
-      var docs = Array(Array("1", true))
+      // Index docs using composite id's
+      var docs = Array(Array("1", true), Array("2", false), Array("3", true), Array("4", false))
       val updateRequest = new UpdateRequest()
-      docs.zipWithIndex.foreach{case(row, i) =>
+      docs.foreach(row => {
         val doc = new SolrInputDocument()
-        doc.setField("id", row(0))
+        doc.setField("id", "app1!" + row(0))
         doc.setField("stock_b", row(1))
         updateRequest.add(doc)
-      }
+      })
       updateRequest.process(cloudClient, collection)
       updateRequest.commit(cloudClient, collection)
 
+      docs = Array(Array("12", true), Array("22", false), Array("33", true), Array("44", false))
+      val updateRequest2 = new UpdateRequest()
+      docs.foreach(row => {
+        val doc = new SolrInputDocument()
+        doc.setField("id", "app2!" + row(0))
+        doc.setField("stock1_b", row(1))
+        updateRequest2.add(doc)
+      })
+      updateRequest2.process(cloudClient, collection)
+      updateRequest2.commit(cloudClient, collection)
+
+      // Validate the schema
       val df = sparkSession.read.format("solr").options(opts).load()
-      assert(df.count() == 1)
+      assert(df.schema.fieldNames.contains("stock_b"))
+      assert(df.schema.fieldNames.contains("stock1_b"))
+      assert(df.count() == 8)
     } finally {
       SolrCloudUtil.deleteCollection(collection, cluster)
     }
