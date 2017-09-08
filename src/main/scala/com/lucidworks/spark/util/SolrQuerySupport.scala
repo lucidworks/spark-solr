@@ -248,12 +248,17 @@ object SolrQuerySupport extends LazyLogging {
     SolrQuerySupport.addDefaultSort(solrQuery, uniqueKey)
   }
 
-  def getFieldTypes(fields: Set[String], solrUrl: String, cloudClient: CloudSolrClient, collection: String): Map[String, SolrFieldMeta] = {
+  def getFieldTypes(
+      fields: Set[String],
+      solrUrl: String,
+      cloudClient: CloudSolrClient,
+      collection: String,
+      skipDynamicExtensions: Boolean=true): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(cloudClient, collection)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
     val fieldDefinitionsFromSchema = getFieldDefinitionsFromSchema(solrUrl, fields.toSeq, cloudClient, collection)
-    fieldDefinitionsFromSchema.filterKeys(k => !k.startsWith("*_") && !k.endsWith("_*")).foreach {
+    fieldDefinitionsFromSchema.filterKeys(k => if (skipDynamicExtensions) !k.startsWith("*_") && !k.endsWith("_*") else true).foreach {
       case(name, payloadRef) =>
       payloadRef match {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
@@ -554,7 +559,7 @@ object SolrQuerySupport extends LazyLogging {
       pivotFields: Array[PivotField],
       solrRDD: SolrRDD[_],
       escapeFieldNames: Boolean): DataFrame = {
-    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, Some(true), false)
+    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, Some(true), false, Set.empty)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {

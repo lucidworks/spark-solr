@@ -30,12 +30,9 @@ case class QueryField(name:String, alias: Option[String] = None, funcReturnType:
 
 object SolrRelationUtil extends LazyLogging {
 
-  val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
-    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls", "_t").seq
-
-  def isValidDynamicFieldName(fieldName: String): Boolean = {
+  def isValidDynamicFieldName(fieldName: String, dynamicExtensionSuffixes: Set[String]): Boolean = {
     dynamicExtensionSuffixes.foreach(ext => {
-      if (fieldName.endsWith(ext)) return true
+      if (fieldName.startsWith(ext) || fieldName.endsWith(ext)) return true
     })
     false
   }
@@ -70,8 +67,9 @@ object SolrRelationUtil extends LazyLogging {
       collection: String,
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
-      skipNonDocValueFields: Boolean): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields)
+      skipNonDocValueFields: Boolean,
+      dynamicExtensions: Set[String]): StructType =
+    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
 
   def getBaseSchema(
       fields: Set[String],
@@ -79,7 +77,8 @@ object SolrRelationUtil extends LazyLogging {
       collection: String,
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
-      skipNonDocValueFields: Boolean): StructType = {
+      skipNonDocValueFields: Boolean,
+      dynamicExtensions: Set[String]): StructType = {
     // If the collection is empty (no documents), return an empty schema
     if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
       return new StructType()
@@ -119,12 +118,7 @@ object SolrRelationUtil extends LazyLogging {
       metadata.putString("type", fieldMeta.fieldType)
 
       val keepFieldMultivalued = if (flattenMultivalued.isEmpty) {
-        // consider _t suffix as single-valued by default
-        if (fieldName.endsWith("_t")) {
-          false
-        } else {
-          SolrRelationUtil.isValidDynamicFieldName(fieldName)
-        }
+        SolrRelationUtil.isValidDynamicFieldName(fieldName, dynamicExtensions)
       } else {
         !flattenMultivalued.get
       }

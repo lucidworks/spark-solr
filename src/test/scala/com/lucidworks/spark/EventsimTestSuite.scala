@@ -271,6 +271,18 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause(solrRelation.uniqueKey, SolrQuery.ORDER.asc)))
   }
 
+  test("Test dynamic extensions") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName
+    )
+    val solrRelation = new SolrRelation(options, None, sparkSession)
+    val suffixes = solrRelation.dynamicSuffixes
+    assert(suffixes.contains("s_"))
+    assert(suffixes.contains("random_"))
+    assert(suffixes.contains("_l"))
+  }
+
   test("Get documents with max_rows config") {
     val df: DataFrame = sparkSession.read.format("solr")
       .option("zkHost", zkHost)
