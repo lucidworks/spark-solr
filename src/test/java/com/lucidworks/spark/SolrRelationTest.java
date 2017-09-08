@@ -212,15 +212,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   }
 
   @Test
-  public void testDynamicFieldNames() throws Exception {
-    Dataset aggDF = sparkSession.read().json("src/test/resources/test-data/em_sample.json");
-    for (String fieldName : aggDF.schema().fieldNames()) {
-      if (!fieldName.equals("id") && !fieldName.equals("_version_"))
-        assertTrue("Failed for field name '" + fieldName + "'", SolrRelationUtil.isValidDynamicFieldName(fieldName));
-    }
-  }
-
-  @Test
   public void testAggDataFrame() throws Exception {
     String testCollection = "testAggDataFrame";
     try {
@@ -270,7 +261,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
     Map<String, String> options = new HashMap<String, String>();
     options.put(SOLR_ZK_HOST_PARAM(), zkHost);
     options.put(SOLR_COLLECTION_PARAM(), testCollection);
-    options.put(FLATTEN_MULTIVALUED(), "false");
     options.put(ARBITRARY_PARAMS_STRING(), "sort=id asc");
 
     // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
@@ -301,7 +291,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       Map<String, String> options = new HashMap<String, String>();
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
-      options.put(FLATTEN_MULTIVALUED(), "false");
 
       Dataset df = sparkSession.read().format("solr").options(options).load();
       df.show();
@@ -365,7 +354,6 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       HashMap<String, String> newOptions = new HashMap<String, String>();
       newOptions.put(SOLR_ZK_HOST_PARAM(), zkHost);
       newOptions.put(SOLR_COLLECTION_PARAM(), testCollection2);
-      newOptions.put(FLATTEN_MULTIVALUED(), "false");
       newOptions.put(SOFT_AUTO_COMMIT_SECS(), "2");
 
       Dataset cleanDF = sparkSession.read().format("solr").options(options).load();
