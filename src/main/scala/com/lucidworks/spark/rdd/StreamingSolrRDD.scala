@@ -7,7 +7,6 @@ import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrP
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.util.TaskCompletionListener
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
 import scala.collection.JavaConverters
@@ -100,11 +99,6 @@ class StreamingSolrRDD(
     if (accumulator.isDefined) {
       iterator.setAccumulator(accumulator.get)
     }
-    context.addTaskCompletionListener(new TaskCompletionListener {
-      override def onTaskCompletion(context: TaskContext): Unit = {
-        logger.info("Task input metrics for records: {}", context.taskMetrics().inputMetrics.recordsRead)
-      }
-    })
     JavaConverters.asScalaIteratorConverter(iterator.iterator()).asScala
   }
 
