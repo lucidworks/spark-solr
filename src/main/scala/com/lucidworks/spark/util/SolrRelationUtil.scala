@@ -30,12 +30,9 @@ case class QueryField(name:String, alias: Option[String] = None, funcReturnType:
 
 object SolrRelationUtil extends LazyLogging {
 
-  val dynamicExtensionSuffixes = mutable.Seq("_i", "_s", "_l", "_b", "_f",
-    "_d", "_tdt", "_tdts", "_ss", "_ii", "_txt", "_txt_en", "_ls", "_t").seq
-
-  def isValidDynamicFieldName(fieldName: String): Boolean = {
+  def isValidDynamicFieldName(fieldName: String, dynamicExtensionSuffixes: Set[String]): Boolean = {
     dynamicExtensionSuffixes.foreach(ext => {
-      if (fieldName.endsWith(ext)) return true
+      if (fieldName.startsWith(ext) || fieldName.endsWith(ext)) return true
     })
     false
   }
@@ -69,17 +66,19 @@ object SolrRelationUtil extends LazyLogging {
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean,
-      skipNonDocValueFields: Boolean): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields)
+      flattenMultivalued: Option[Boolean],
+      skipNonDocValueFields: Boolean,
+      dynamicExtensions: Set[String]): StructType =
+    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
 
   def getBaseSchema(
       fields: Set[String],
       zkHost: String,
       collection: String,
       escapeFields: Boolean,
-      flattenMultivalued: Boolean,
-      skipNonDocValueFields: Boolean): StructType = {
+      flattenMultivalued: Option[Boolean],
+      skipNonDocValueFields: Boolean,
+      dynamicExtensions: Set[String]): StructType = {
     // If the collection is empty (no documents), return an empty schema
     if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
       return new StructType()
@@ -118,7 +117,7 @@ object SolrRelationUtil extends LazyLogging {
       metadata.putString("name", fieldName)
       metadata.putString("type", fieldMeta.fieldType)
 
-      if (!flattenMultivalued && fieldMeta.isMultiValued.isDefined) {
+      if (!flattenMultivalued.getOrElse(true) && fieldMeta.isMultiValued.isDefined) {
         if (fieldMeta.isMultiValued.get) {
           dataType = new ArrayType(dataType, true)
           metadata.putBoolean("multiValued", value = true)
