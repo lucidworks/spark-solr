@@ -56,9 +56,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def getExcludeFields: Option[String] = config.get(EXCLUDE_FIELDS)
 
-  def skipNonDocValueFields: Option[Boolean] = if (config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) Some(config(SKIP_NON_DOCVALUE_FIELDS).toBoolean) else None
-
   def getChildDocFieldName: Option[String] = config.get(CHILD_DOC_FIELDNAME)
+
+  def skipNonDocValueFields: Option[Boolean] =
+    if (config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) Some(config(SKIP_NON_DOCVALUE_FIELDS).toBoolean) else None
 
   def maxRows: Option[Int] =
     if (config.get(MAX_ROWS).isDefined) Some(config(MAX_ROWS).toInt) else None
