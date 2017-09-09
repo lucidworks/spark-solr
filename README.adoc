@@ -355,11 +355,11 @@ Usage: `option("datetime_pattern", "yyyy_MM_dd_HH_mm")`
 
 Default: yyyy_MM_dd
 
-==== time_stamp_field_name
+==== timestamp_field_name
 
 This option is used to specify the field name in the indexed documents where time stamp is found.
 
-Usage: `option("time_stamp_field_name", "ts")`
+Usage: `option("timestamp_field_name", "ts")`
 
 Default: timestamp_tdt
 
