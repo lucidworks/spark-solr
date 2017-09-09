@@ -38,7 +38,7 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def partitionBy: Option[String] = config.get(PARTITION_BY)
 
-  def getTimeStampFieldName: Option[String] = config.get(TIMESTAMP_FIELD_NAME)
+  def getTimestampFieldName: Option[String] = config.get(TIMESTAMP_FIELD_NAME)
 
   def getTimePeriod: Option[String] = config.get(TIME_PERIOD)
 
@@ -222,8 +222,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     if (partitionBy.isDefined) {
       sb ++= s", ${PARTITION_BY}=${partitionBy.get}"
     }
-    if (getTimeStampFieldName.isDefined) {
-      sb ++= s", ${TIMESTAMP_FIELD_NAME}=${getTimeStampFieldName.get}"
+    if (getTimestampFieldName.isDefined) {
+      sb ++= s", ${TIMESTAMP_FIELD_NAME}=${getTimestampFieldName.get}"
     }
     if (getTimePeriod.isDefined) {
       sb ++= s", ${TIME_PERIOD}=${getTimePeriod.get}"

@@ -31,7 +31,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getPartitionsForQuery(): Set[String] = {
-    val timestampField = solrConf.getTimeStampFieldName.getOrElse(DEFAULT_TIME_STAMP_FIELD_NAME)
+    val timestampField = solrConf.getTimestampFieldName.getOrElse(DEFAULT_TIMESTAMP_FIELD_NAME)
     val timestampFilterPrefix = s"$timestampField:"
 
     // Get all partitions from cluster state
