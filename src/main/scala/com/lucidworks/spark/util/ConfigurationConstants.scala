@@ -37,7 +37,7 @@ object ConfigurationConstants {
   // Time series partitioning params
 
   val PARTITION_BY:String="partition_by"
-  val TIME_STAMP_FIELD_NAME:String="time_stamp_field_name"
+  val TIMESTAMP_FIELD_NAME:String="timestamp_field_name"
   val TIME_PERIOD:String="time_period"
   val DATETIME_PATTERN:String="datetime_pattern"
   val TIMEZONE_ID:String="timezone_id"
