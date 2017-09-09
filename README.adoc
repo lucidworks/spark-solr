@@ -17,6 +17,7 @@ chart below shows the versions supported across the past releases. 'Connector' r
 [width="40%",frame="topbot",options="header,footer"]
 |======================
 |Connector      | Spark | Solr
+|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.2.0%7Cjar[3.2.0]  | 2.2.0 | 6.6.0
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.1.0%7Cjar[3.1.1]  | 2.1.1 | 6.6.0
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.2%7Cjar[3.0.2]  | 2.1.1 | 6.5.1
 |http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.1%7Cjar[3.0.1]  | 2.1.1 | 6.5.1
@@ -449,7 +450,10 @@ For background on Solr security, see: https://cwiki.apache.org/confluence/displa
 
 === Kerberos
 
-The SparkApp framework allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
+The kerberos config should be set via system param `java.security.auth.login.config` on extraJavaOptions for both executor and driver
+
+==== SparkApp
+The SparkApp framework (in spark-solr) allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
 
 For example, if you need to authenticate using the "solr" Kerberos principal, you need to create a JAAS configuration  file named `jaas-client.conf` that sets the location of your Kerberos keytab file, such as:
 
@@ -475,7 +479,7 @@ spark-submit --master yarn-server \
   -solrJaasAuthConfig=/path/to/jaas-client.conf
 
 
-== Basic Auth
+=== Basic Auth
 
 Basic auth can be configured via System properties `basicauth` or `solr.httpclient.config`. These system properties have to be set on Driver and Executor JVMs
 
