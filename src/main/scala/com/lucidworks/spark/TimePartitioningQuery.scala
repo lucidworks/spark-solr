@@ -48,7 +48,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
       logger.warn(s"No range queries found in filter queries. Returning all partitions: ${allPartitions}")
       return allPartitions
     }
-    getCollectionsForRangerQuery(rangeQuery(0), allPartitions)
+    getCollectionsForRangeQuery(rangeQuery(0), allPartitions)
   }
 
   def getPartitions(activeOnly: Boolean): Set[String] = {
@@ -83,7 +83,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     partitionListBuffer.sorted.toSet
   }
 
-  def getCollectionsForRangerQuery(rangeQuery: String, partitions: Set[String]): Set[String] = {
+  def getCollectionsForRangeQuery(rangeQuery: String, partitions: Set[String]): Set[String] = {
     val luceneQuery: Query = (new StandardQueryParser).parse(rangeQuery, rangeQuery.substring(0, rangeQuery.indexOf(":")))
     if (!luceneQuery.isInstanceOf[TermRangeQuery]) throw new IllegalArgumentException("Failed to parse " + rangeQuery + " into a Lucene range query!")
     val rq: TermRangeQuery = luceneQuery.asInstanceOf[TermRangeQuery]
