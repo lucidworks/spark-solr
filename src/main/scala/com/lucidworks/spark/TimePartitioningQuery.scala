@@ -115,7 +115,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     -1
   }
 
-   def getPartitionMatchRegex: Pattern = {
+  def getPartitionMatchRegex: Pattern = {
     var dtRegex: String = getDateTimePattern
     dtRegex = dtRegex.replace("yyyy", "(\\d{4})")
     dtRegex = dtRegex.replace("yy", "(\\d{2})")
