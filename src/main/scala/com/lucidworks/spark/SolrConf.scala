@@ -20,111 +20,93 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
-  def getCollection: Option[String] = {
-    if (config.contains(SOLR_COLLECTION_PARAM)) return config.get(SOLR_COLLECTION_PARAM)
-    None
-  }
+  def getCollection: Option[String] = config.get(SOLR_COLLECTION_PARAM)
 
-  def getQuery: Option[String] = {
-    if (config.contains(SOLR_QUERY_PARAM)) return config.get(SOLR_QUERY_PARAM)
-    None
-  }
+  def getQuery: Option[String] = config.get(SOLR_QUERY_PARAM)
 
-  def getStreamingExpr: Option[String] = {
-    if (config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
-      return config.get(SOLR_STREAMING_EXPR)
-    }
-    None
-  }
+  def getStreamingExpr: Option[String] = config.get(SOLR_STREAMING_EXPR)
 
-  def getSqlStmt: Option[String] = {
-    if (config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
-      return config.get(SOLR_SQL_STMT)
-    }
-    None
-  }
+  def getSqlStmt: Option[String] = config.get(SOLR_SQL_STMT)
 
-  def getFields: Array[String] = {
-    if (config.contains(SOLR_FIELD_PARAM) && config.get(SOLR_FIELD_PARAM).isDefined) {
-      return config.get(SOLR_FIELD_PARAM).get.split(",").map(field => field.trim)
-    }
-    Array.empty[String]
-  }
+  def getSplitField: Option[String] = config.get(SOLR_SPLIT_FIELD_PARAM)
 
-  def getFilters: Array[String] = {
-    if (config.contains(SOLR_FILTERS_PARAM) && config.get(SOLR_FILTERS_PARAM).isDefined) {
-      return config(SOLR_FILTERS_PARAM).split(",").map(filter => filter.trim)
-    }
-    Array.empty[String]
-  }
+  def getFields: Array[String] =
+    if (config.get(SOLR_FIELD_PARAM).isDefined) config(SOLR_FIELD_PARAM).split(",").map(_.trim) else Array.empty
 
-  def getRows: Option[Int] = {
-    if (config.contains(SOLR_ROWS_PARAM) && config.get(SOLR_ROWS_PARAM).isDefined) {
-      return Some(config.get(SOLR_ROWS_PARAM).get.toInt)
-    }
-    None
-  }
+  def getFilters: Array[String] =
+    if (config.get(SOLR_FILTERS_PARAM).isDefined) config(SOLR_FILTERS_PARAM).split(",").map(_.trim) else Array.empty
 
-  def splits: Option[Boolean] = {
-    if (config.contains(SOLR_DO_SPLITS) && config.get(SOLR_DO_SPLITS).isDefined) {
-      return Some(config.get(SOLR_DO_SPLITS).get.toBoolean)
-    }
-    None
-  }
+  def partitionBy: Option[String] = config.get(PARTITION_BY)
 
-  def docValues: Option[Boolean] = {
-    if (config.contains(SOLR_DOC_VALUES) && config.get(SOLR_DOC_VALUES).isDefined) {
-      return Some(config.get(SOLR_DOC_VALUES).get.toBoolean)
-    }
-    None
-  }
+  def getTimestampFieldName: Option[String] = config.get(TIMESTAMP_FIELD_NAME)
 
-  def getSplitField: Option[String] = {
-    if (config.contains(SOLR_SPLIT_FIELD_PARAM)) return config.get(SOLR_SPLIT_FIELD_PARAM)
-    None
-  }
+  def getTimePeriod: Option[String] = config.get(TIME_PERIOD)
 
-  def getSplitsPerShard: Option[Int] = {
-    if (config.contains(SOLR_SPLITS_PER_SHARD_PARAM) && config.get(SOLR_SPLITS_PER_SHARD_PARAM).isDefined) {
-      return Some(config.get(SOLR_SPLITS_PER_SHARD_PARAM).get.toInt)
-    }
-    None
-  }
+  def getDateTimePattern: Option[String] = config.get(DATETIME_PATTERN)
 
-  def escapeFieldNames: Option[Boolean] = {
-    if (config.contains(ESCAPE_FIELDNAMES_PARAM) && config.get(ESCAPE_FIELDNAMES_PARAM).isDefined) {
-      return Some(config.get(ESCAPE_FIELDNAMES_PARAM).get.toBoolean)
-    }
-    None
-  }
+  def getTimeZoneId: Option[String] = config.get(TIMEZONE_ID)
 
-  def flattenMultivalued: Option[Boolean] = {
-    if (config.contains(FLATTEN_MULTIVALUED) && config.get(FLATTEN_MULTIVALUED).isDefined) {
-      return Some(config.get(FLATTEN_MULTIVALUED).get.toBoolean)
-    }
-    None
-  }
+  def getMaxActivePartitions: Option[String]= config.get(MAX_ACTIVE_PARTITIONS)
 
-  def softAutoCommitSecs: Option[Int] = {
-    if (config.contains(SOFT_AUTO_COMMIT_SECS) && config.get(SOFT_AUTO_COMMIT_SECS).isDefined) {
-      return Some(config.get(SOFT_AUTO_COMMIT_SECS).get.toInt)
-    }
-    None
-  }
+  def getSort: Option[String] = config.get(SORT_PARAM)
 
-  def commitWithin: Option[Int] = {
-    if (config.contains(COMMIT_WITHIN_MILLI_SECS) && config.get(COMMIT_WITHIN_MILLI_SECS).isDefined) {
-      return Some(config.get(COMMIT_WITHIN_MILLI_SECS).get.toInt)
-    }
-    None
-  }
+  def getStreamingExpressionSchema: Option[String] = config.get(STREAMING_EXPR_SCHEMA)
 
-  def batchSize: Option[Int] = {
-    if (config.contains(BATCH_SIZE) && config.get(BATCH_SIZE).isDefined) {
-      return Some(config.get(BATCH_SIZE).get.toInt)
-    }
-    None
-  }
+  def getSolrSQLSchema: Option[String] = config.get(SOLR_SQL_SCHEMA)
+
+  def getExcludeFields: Option[String] = config.get(EXCLUDE_FIELDS)
+
+  def getChildDocFieldName: Option[String] = config.get(CHILD_DOC_FIELDNAME)
+
+  def skipNonDocValueFields: Option[Boolean] =
+    if (config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) Some(config(SKIP_NON_DOCVALUE_FIELDS).toBoolean) else None
+
+  def maxRows: Option[Int] =
+    if (config.get(MAX_ROWS).isDefined) Some(config(MAX_ROWS).toInt) else None
+
+  def getAccumulatorName: Option[String] = config.get(ACCUMULATOR_NAME)
+
+  def getRows: Option[Int] =
+    if (config.get(SOLR_ROWS_PARAM).isDefined) Some(config(SOLR_ROWS_PARAM).toInt) else None
+
+  def splits: Option[Boolean] =
+    if (config.get(SOLR_DO_SPLITS).isDefined) Some(config(SOLR_DO_SPLITS).toBoolean) else None
+
+  def docValues: Option[Boolean] =
+    if (config.get(SOLR_DOC_VALUES).isDefined) Some(config(SOLR_DOC_VALUES).toBoolean) else None
+
+  def getSplitsPerShard: Option[Int] =
+    if (config.get(SOLR_SPLITS_PER_SHARD_PARAM).isDefined) Some(config(SOLR_SPLITS_PER_SHARD_PARAM).toInt) else None
+
+  def escapeFieldNames: Option[Boolean] =
+    if (config.get(ESCAPE_FIELDNAMES_PARAM).isDefined) Some(config(ESCAPE_FIELDNAMES_PARAM).toBoolean) else None
+
+  def flattenMultivalued: Option[Boolean] =
+    if (config.get(FLATTEN_MULTIVALUED).isDefined) Some(config(FLATTEN_MULTIVALUED).toBoolean) else None
+
+  def softAutoCommitSecs: Option[Int] =
+    if (config.get(SOFT_AUTO_COMMIT_SECS).isDefined) Some(config(SOFT_AUTO_COMMIT_SECS).toInt) else None
+
+  def commitWithin: Option[Int] =
+    if (config.get(COMMIT_WITHIN_MILLI_SECS).isDefined) Some(config(COMMIT_WITHIN_MILLI_SECS).toInt) else None
+
+  def batchSize: Option[Int] =
+    if (config.get(BATCH_SIZE).isDefined) Some(config(BATCH_SIZE).toInt) else None
+
+  def useCursorMarks: Option[Boolean] =
+    if (config.get(USE_CURSOR_MARKS).isDefined) Some(config(USE_CURSOR_MARKS).toBoolean) else None
+
+  def genUniqKey: Option[Boolean] =
+    if (config.get(GENERATE_UNIQUE_KEY).isDefined) Some(config(GENERATE_UNIQUE_KEY).toBoolean) else None
+
+  def genUniqChildKey: Option[Boolean] =
+    if (config.get(GENERATE_UNIQUE_CHILD_KEY).isDefined) Some(config(GENERATE_UNIQUE_CHILD_KEY).toBoolean) else None
+
+  def sampleSeed: Option[Int] =
+    if (config.get(SAMPLE_SEED).isDefined) Some(config(SAMPLE_SEED).toInt) else None
+
+  def samplePct: Option[Float] =
+    if (config.get(SAMPLE_PCT).isDefined) Some(config(SAMPLE_PCT).toFloat) else None
 
   def requestHandler: Option[String] = {
 
@@ -147,78 +129,6 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
-  def useCursorMarks: Option[Boolean] = {
-    if (config.contains(USE_CURSOR_MARKS) && config.get(USE_CURSOR_MARKS).isDefined) {
-      return Some(config.get(USE_CURSOR_MARKS).get.toBoolean)
-    }
-    None
-  }
-
-  def genUniqKey: Option[Boolean] = {
-    if (config.contains(GENERATE_UNIQUE_KEY) && config.get(GENERATE_UNIQUE_KEY).isDefined) {
-      return Some(config.get(GENERATE_UNIQUE_KEY).get.toBoolean)
-    }
-    None
-  }
-
-  def genUniqChildKey: Option[Boolean] = {
-    if (config.contains(GENERATE_UNIQUE_CHILD_KEY) && config.get(GENERATE_UNIQUE_CHILD_KEY).isDefined) {
-      return Some(config.get(GENERATE_UNIQUE_CHILD_KEY).get.toBoolean)
-    }
-    None
-  }
-
-  def sampleSeed: Option[Int] = {
-    if (config.contains(SAMPLE_SEED) && config.get(SAMPLE_SEED).isDefined) {
-      return Some(config.get(SAMPLE_SEED).get.toInt)
-    }
-    None
-  }
-
-  def samplePct: Option[Float] = {
-    if (config.contains(SAMPLE_PCT) && config.get(SAMPLE_PCT).isDefined) {
-      return Some(config.get(SAMPLE_PCT).get.toFloat)
-    }
-    None
-  }
-
-  def partition_by: Option[String]={
-    if (config.contains(PARTITION_BY) && config.get(PARTITION_BY).isDefined) {
-      return Some(config.get(PARTITION_BY).get.toString)
-    }
-    None
-  }
-
-  def getTimeStampFieldName: Option[String]={
-    if (config.contains(TIME_STAMP_FIELD_NAME) && config.get(TIME_STAMP_FIELD_NAME).isDefined) return (config.get(TIME_STAMP_FIELD_NAME))
-    None
-  }
-
-  def getTimePeriod: Option[String]={
-    if (config.contains(TIME_PERIOD) && config.get(TIME_PERIOD).isDefined) return (config.get(TIME_PERIOD))
-    None
-  }
-
-  def getDateTimePattern: Option[String]={
-    if (config.contains(DATETIME_PATTERN) && config.get(DATETIME_PATTERN).isDefined) return (config.get(DATETIME_PATTERN))
-    None
-  }
-
-  def getTimeZoneId: Option[String]={
-    if (config.contains(TIMEZONE_ID) && config.get(TIMEZONE_ID).isDefined) return (config.get(TIMEZONE_ID))
-    None
-  }
-
-  def getMaxActivePartitions: Option[String]={
-    if (config.contains(MAX_ACTIVE_PARTITIONS) && config.get(MAX_ACTIVE_PARTITIONS).isDefined) return (config.get(MAX_ACTIVE_PARTITIONS))
-    None
-  }
-
-  def getSort: Option[String] = {
-    if (config.contains(SORT_PARAM) && config.get(SORT_PARAM).isDefined) return config.get(SORT_PARAM)
-    None
-  }
-
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
@@ -234,44 +144,6 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
       }
     }
     solrParams
-  }
-
-  def getStreamingExpressionSchema: Option[String] = {
-    if (config.contains(STREAMING_EXPR_SCHEMA) && config.get(STREAMING_EXPR_SCHEMA).isDefined) return config.get(STREAMING_EXPR_SCHEMA)
-    None
-  }
-
-  def getSolrSQLSchema: Option[String] = {
-    if (config.contains(SOLR_SQL_SCHEMA) && config.get(SOLR_SQL_SCHEMA).isDefined) return config.get(SOLR_SQL_SCHEMA)
-    None
-  }
-
-  def getExcludeFields: Option[String] = {
-    if (config.contains(EXCLUDE_FIELDS) && config.get(EXCLUDE_FIELDS).isDefined) return config.get(EXCLUDE_FIELDS)
-    None
-  }
-
-  def skipNonDocValueFields: Option[Boolean] = {
-    if (config.contains(SKIP_NON_DOCVALUE_FIELDS) && config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) {
-      return Some(config.get(SKIP_NON_DOCVALUE_FIELDS).get.toBoolean)
-    }
-    None
-  }
-
-  def getChildDocFieldName: Option[String] = {
-    if (config.contains(CHILD_DOC_FIELDNAME) && config.get(CHILD_DOC_FIELDNAME).isDefined) return config.get(CHILD_DOC_FIELDNAME)
-    None
-  }
-
-  def maxRows: Option[Int] = {
-    if (config.contains(MAX_ROWS) && config.get(MAX_ROWS).isDefined) {
-      return Some(config.get(MAX_ROWS).get.toInt)
-    }
-    None
-  }
-
-  def getAccumulatorName: Option[String] = {
-    config.get(ACCUMULATOR_NAME)
   }
 
   override def toString = {
@@ -347,11 +219,11 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
 
     // time-based partitioning options
-    if (partition_by.isDefined) {
-      sb ++= s", ${PARTITION_BY}=${partition_by.get}"
+    if (partitionBy.isDefined) {
+      sb ++= s", ${PARTITION_BY}=${partitionBy.get}"
     }
-    if (getTimeStampFieldName.isDefined) {
-      sb ++= s", ${TIME_STAMP_FIELD_NAME}=${getTimeStampFieldName.get}"
+    if (getTimestampFieldName.isDefined) {
+      sb ++= s", ${TIMESTAMP_FIELD_NAME}=${getTimestampFieldName.get}"
     }
     if (getTimePeriod.isDefined) {
       sb ++= s", ${TIME_PERIOD}=${getTimePeriod.get}"
