@@ -78,6 +78,7 @@ class SolrRelation(
     val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
     val allCollections = timePartitionQuery.getPartitionsForQuery()
     collection = allCollections mkString ","
+    logger.info(s"Collection rewritten from ${conf.getCollection.get} to ${allCollections}")
   }
 
 

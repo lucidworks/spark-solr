@@ -30,12 +30,12 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     }
   }
 
-  def getPartitionsForQuery(): Set[String] = {
+  def getPartitionsForQuery(): List[String] = {
     val timestampField = solrConf.getTimestampFieldName.getOrElse(DEFAULT_TIMESTAMP_FIELD_NAME)
     val timestampFilterPrefix = s"$timestampField:"
 
     // Get all partitions from cluster state
-    val allPartitions: Set[String] = getPartitions(true)
+    val allPartitions: List[String] = getPartitions(true)
 
     if (query.getFilterQueries == null) {
       logger.warn(s"No filter query found in ${query}")
@@ -48,11 +48,12 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
       logger.warn(s"No range queries found in filter queries. Returning all partitions: ${allPartitions}")
       return allPartitions
     }
+    logger.debug(s"All partitions returned for query are: ${allPartitions}")
     getCollectionsForRangeQuery(rangeQuery(0), allPartitions)
   }
 
-  def getPartitions(activeOnly: Boolean): Set[String] = {
-    val partitions: Set[String] = findAllPartitions
+  def getPartitions(activeOnly: Boolean): List[String] = {
+    val partitions: List[String] = findAllPartitions
     if (activeOnly) {
       if (solrConf.getMaxActivePartitions.isDefined) {
         val maxActivePartitions = solrConf.getMaxActivePartitions.get.toInt
@@ -68,7 +69,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     partitions
   }
 
-  def findAllPartitions: Set[String] = {
+  def findAllPartitions: List[String] = {
     val collections: Set[String] = SolrSupport.getCachedCloudClient(solrConf.getZkHost.get)
         .getZkStateReader.getClusterState.getCollectionsMap.keySet().asScala.toSet
     val partitionMatchRegex: Pattern = getPartitionMatchRegex
@@ -80,10 +81,10 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
         partitionListBuffer.+=(coll)
       }
     })
-    partitionListBuffer.sorted.toSet
+    partitionListBuffer.toList.sorted
   }
 
-  def getCollectionsForRangeQuery(rangeQuery: String, partitions: Set[String]): Set[String] = {
+  def getCollectionsForRangeQuery(rangeQuery: String, partitions: List[String]): List[String] = {
     val luceneQuery: Query = (new StandardQueryParser).parse(rangeQuery, rangeQuery.substring(0, rangeQuery.indexOf(":")))
     if (!luceneQuery.isInstanceOf[TermRangeQuery]) throw new IllegalArgumentException("Failed to parse " + rangeQuery + " into a Lucene range query!")
     val rq: TermRangeQuery = luceneQuery.asInstanceOf[TermRangeQuery]
@@ -95,22 +96,22 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     }
     val fromIndex: Int = if (lower != null) mapToExistingCollIndex(lower, partitions) else 0
     val toIndex:Int = if (upper != null) mapToExistingCollIndex(upper, partitions) else partitions.size - 1
+    logger.debug(s"Partitions fromIndex: ${fromIndex}. toIndex: ${toIndex}")
     partitions.slice(fromIndex, toIndex + 1)
   }
 
-  def mapToExistingCollIndex(crit: String, partitions: Set[String]): Int = {
+  def mapToExistingCollIndex(crit: String, partitions: List[String]): Int = {
     val collDate = DateMathParser.parseMath(null, crit.toUpperCase)
     val coll: String = getCollectionNameForDate(collDate)
 
-    val partitionList = partitions.toList
     val size = partitions.size
     val lastIndex = size - 1
-    if (coll.compareTo(partitionList.apply(lastIndex)) > 0) {
+    if (coll.compareTo(partitions.apply(lastIndex)) > 0) {
       return lastIndex
     }
-    partitionList.zipWithIndex.foreach{case(partition, index) =>
+    partitions.zipWithIndex.foreach{case(partition, index) =>
       if (coll == partition) return index
-      if (index < lastIndex) if (coll.compareTo(partitionList.apply(index+1)) < 0) return index
+      if (index < lastIndex) if (coll.compareTo(partitions.apply(index+1)) < 0) return index
     }
     -1
   }
