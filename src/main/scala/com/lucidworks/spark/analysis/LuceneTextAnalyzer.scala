@@ -88,6 +88,20 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   def invalidMessages: String = analyzerSchema.invalidMessages.result()
   /** Returns the analyzer mapped to the given field in the configured analysis schema, if any. */
   def getFieldAnalyzer(field: String): Option[Analyzer] = analyzerSchema.getAnalyzer(field)
+
+  def analyze(field: String, o: Any): Seq[String] = {
+    o match {
+      case s: String => analyze(field, s)
+      case as: mutable.WrappedArray[String] => analyzeMV(field, as)
+      case a: Any => analyze(field, a.toString)
+      case _ => Seq.empty[String]
+    }
+  }
+
+  def analyzeJava(field: String, o: Any): java.util.List[String] = {
+    seqAsJavaList(analyze(field, o))
+  }
+
   /** Looks up the analyzer mapped to the given field from the configured analysis schema,
     * uses it to perform analysis on the given string, returning the produced token sequence.
     */
