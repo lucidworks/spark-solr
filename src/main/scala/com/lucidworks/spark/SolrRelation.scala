@@ -49,40 +49,19 @@ class SolrRelation(
 
   checkRequiredParams()
 
-  var collection = conf.getCollection.getOrElse({
-    var coll = Option.empty[String]
-    if (conf.getSqlStmt.isDefined) {
-      val collectionFromSql = SolrRelation.findSolrCollectionNameInSql(conf.getSqlStmt.get)
-      if (collectionFromSql.isDefined) {
-        coll = collectionFromSql
-      }
-    }
-    if (coll.isDefined) {
-      logger.info(s"resolved collection option from sql to be ${coll.get}")
-      coll.get
-    } else {
-      throw new IllegalArgumentException("collection option is required!")
-    }
-  })
-
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
     logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
-  if (conf.partition_by.isDefined && conf.partition_by.get=="time") {
-    val feature = new PartitionByTimeQueryParams(conf)
-    val p = new PartitionByTimeQuerySupport(feature,conf)
-    val allCollections = p.getPartitionsForQuery()
-    collection = allCollections mkString ","
-  }
-
+  lazy val initialQuery: SolrQuery = buildQuery
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
+  lazy val collection = resolveCollection()
+
   // loaded lazily to avoid going to Solr until it's necessary, mainly to assist with mocking this class for unit tests
   lazy val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
-  lazy val initialQuery: SolrQuery = buildQuery
 
   // to handle field aliases and function queries, we need to parse the fields option
   // from the user into QueryField objects
@@ -843,12 +822,37 @@ class SolrRelation(
       }
     }
     query.add(solrParams)
-    query.set("collection", collection)
     query
   }
 
   private def checkRequiredParams(): Unit = {
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
+  }
+
+  private def resolveCollection(): String = {
+    var collection = conf.getCollection.getOrElse({
+      var coll = Option.empty[String]
+      if (conf.getSqlStmt.isDefined) {
+        val collectionFromSql = SolrRelation.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+        if (collectionFromSql.isDefined) {
+          coll = collectionFromSql
+        }
+      }
+      if (coll.isDefined) {
+        logger.info(s"resolved collection option from sql to be ${coll.get}")
+        coll.get
+      } else {
+        throw new IllegalArgumentException("collection option is required!")
+      }
+    })
+    if (conf.partitionBy.isDefined && conf.partitionBy.get == "time") {
+      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
+      val allCollections = timePartitionQuery.getPartitionsForQuery()
+      logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
+      collection =  allCollections.mkString(",")
+    }
+    initialQuery.set("collection", collection)
+    collection
   }
 }
 

@@ -41,6 +41,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(SAMPLE_SEED(), "5150");
       options.put(SAMPLE_PCT(), "0.1");
+      options.put(SOLR_SPLITS_PER_SHARD_PARAM(), "2");
       Dataset fromSolr = sparkSession.read().format(Constants.SOLR_FORMAT()).options(options).load();
       long count = fromSolr.count();
 

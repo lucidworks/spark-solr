@@ -10,7 +10,7 @@ class TestSolrRelation extends SparkSolrFunSuite with SparkSolrContextBuilder {
 
   test("Missing collection property") {
     intercept[IllegalArgumentException] {
-      new SolrRelation(Map("zkhost" -> "localhost:121"), None, sparkSession)
+      new SolrRelation(Map("zkhost" -> "localhost:121"), None, sparkSession).collection
     }
   }
 
