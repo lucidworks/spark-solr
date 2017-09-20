@@ -1,13 +1,14 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
+import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.SaveMode._
 
+import com.lucidworks.spark.util.ConfigurationConstants._
 /**
  This class is used to test the PartitionByTimeQuerySupport class
   */
 class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
-
 
   test("Test partition selection for query") {
     val collection1Name = "test" + "_2014_11_24_17_30"
@@ -69,5 +70,26 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     }
   }
 
+  test("Test partition selection") {
+    val rangeQuery = "timestamp:{2017-09-09T00:00:00.00Z TO *]"
+    val solrQuery = new SolrQuery()
+    solrQuery.addFilterQuery(rangeQuery)
 
+    val dfParams = Map(
+      PARTITION_BY -> "time",
+      TIMESTAMP_FIELD_NAME -> "timestamp",
+      TIME_PERIOD -> "1DAYS",
+      DATETIME_PATTERN -> "yyyy_MM_dd",
+      TIMEZONE_ID -> "UTC",
+      "collection" -> "events"
+    )
+    val solrConf = new SolrConf(dfParams)
+
+    val timePartitioningQuery = new TimePartitioningQuery(solrConf, solrQuery)
+    val allPartitions = List("events_2017_09_01", "events_2017_09_03", "events_2017_09_05", "events_2017_09_07",
+      "events_2017_09_10", "events_2017_09_11", "events_2017_09_13")
+    val selectedPartitions = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, allPartitions)
+    assert(selectedPartitions.toSet == Set("events_2017_09_10", "events_2017_09_11", "events_2017_09_13"))
+    logger.info(s"Selected partitions are: ${selectedPartitions}")
+  }
 }

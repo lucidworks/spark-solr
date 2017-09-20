@@ -111,7 +111,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     }
     partitions.zipWithIndex.foreach{case(partition, index) =>
       if (coll == partition) return index
-      if (index < lastIndex) if (coll.compareTo(partitions.apply(index+1)) < 0) return index
+      if (index <= lastIndex) if (coll.compareTo(partitions.apply(index)) < 0) return index
     }
     -1
   }
