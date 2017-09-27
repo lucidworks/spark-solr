@@ -671,27 +671,24 @@ class SolrRelation(
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = new ListBuffer[Update]()
-    val fieldsRequested = new ListBuffer[String]()
+    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
     dfSchema.fields.foreach(f => {
       if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
             logger.info(s"adding new field: ${toAddFieldMap(ef).asJava}")
-            fieldsToAddToSolr += new AddField(toAddFieldMap(ef).asJava)
-            fieldsRequested += ef.name
+            fieldsToAddToSolr += (ef.name -> new AddField(toAddFieldMap(ef).asJava))
           })
         } else {
           logger.info(s"adding new field: ${toAddFieldMap(f).asJava}")
-          fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
-          fieldsRequested += f.name
+          fieldsToAddToSolr += (f.name -> new AddField(toAddFieldMap(f).asJava))
         }
       }
     })
 
     if (fieldsToAddToSolr.nonEmpty) {
-      addFieldsForInsert(fieldsToAddToSolr.toList, fieldsRequested.toList, collectionId, cloudClient)
+      addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
@@ -851,56 +848,42 @@ class SolrRelation(
     collection
   }
 
-  private def addFieldsForInsert(fieldsToAddToSolr: List[Update], fieldsRequested: List[String], collectionId: String, cloudClient: CloudSolrClient) = {
+  private def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
     logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
     val solrParams = new ModifiableSolrParams()
     solrParams.add("updateTimeoutSecs","30")
-    val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
+    val updateList : java.util.ArrayList[Update] = new java.util.ArrayList[Update]
+    fieldsToAddToSolr.values.foreach(v => updateList.add(v))
+    val addFieldsUpdateRequest = new MultiUpdate(updateList, solrParams)
+
     val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
       addFieldsUpdateRequest.process(cloudClient, collectionId)
     if (updateResponse.getStatus >= 400) {
       val errMsg = "Schema update request failed due to: "+updateResponse
       logger.error(errMsg)
       throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
-    }
-    logger.info(s"Request to add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
-    // verify the fields we just added exist in the schema
-    var foundIt = false
-    val timeout: Long = System.nanoTime + TimeUnit.NANOSECONDS.convert(30, TimeUnit.SECONDS)
-    val fieldToCheck = fieldsRequested.last
-    logger.info(s"Checking if newly added field $fieldToCheck exists in the schema for $collectionId ...")
-    while (!foundIt && System.nanoTime() < timeout) {
-      val getFieldReq = new org.apache.solr.client.solrj.request.schema.SchemaRequest.Field(fieldToCheck)
-      try {
-        val getFieldResp = getFieldReq.process(cloudClient, collectionId)
-        val field = getFieldResp.getField
-        logger.info(s"Lookup to verify field $fieldToCheck exists in schema returned: ${field}")
-        foundIt = true
-      } catch {
-        case e: Exception => logger.warn(s"Failed to get field $fieldToCheck we just added to the schema due to: ${e}; will wait for a few secs and try again")
-      }
-      if (!foundIt) {
-        try {
-          Thread.sleep(2500) // little sleep to let solr apply the schema updates
-        } catch {
-          case ie: InterruptedException => Thread.interrupted()
+    } else {
+      logger.info(s"Request to add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
+      val respNL = updateResponse.getResponse
+      if (respNL != null) {
+        val errors = respNL.get("errors")
+        if (errors != null) {
+          logger.error(s"Request to add ${fieldsToAddToSolr.size} fields failed with errors: ${errors}. Will re-try each add individually ...")
+          fieldsToAddToSolr.foreach((pair) => {
+            try {
+              val resp = pair._2.process(cloudClient, collectionId)
+              if (resp.getResponse.get("errors") != null) {
+                val e2 = resp.getResponse.get("errors")
+                logger.warn(s"Add field ${pair._1} failed due to: ${e2}")
+              } else {
+                logger.info(s"Add field ${pair._1} returned: $resp")
+              }
+            } catch {
+              case se: SolrServerException => logger.warn(s"Add schema field ${pair._1} failed due to: $se")
+              case ioe: IOException => logger.warn(s"Add schema field ${pair._1} failed due to: $ioe")
+            }
+          })
         }
-      }
-    }
-    if (!foundIt) {
-      logger.warn(s"Didn't see new field $fieldToCheck in schema for ${collectionId} after 30 secs! Will try to re-add the fields we need.")
-      try {
-        val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
-          addFieldsUpdateRequest.process(cloudClient, collectionId)
-        if (updateResponse.getStatus >= 400) {
-          logger.warn("Schema update request failed due to: "+updateResponse)
-        } else {
-          logger.info(s"Retry add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
-        }
-      } catch {
-        // it may still work out, so don't fail, but this is not good
-        case e: SolrServerException => logger.warn(s"Re-try adding schema fields failed due to: $e")
-        case io: IOException => logger.warn(s"Re-try adding schema fields failed due to: $io")
       }
     }
   }
