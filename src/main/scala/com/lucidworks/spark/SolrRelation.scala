@@ -1,16 +1,20 @@
 package com.lucidworks.spark
 
+import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
+import com.lucidworks.spark.SolrRelation.logger
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.rdd.{SolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.{SolrQuery, SolrServerException}
 import org.apache.solr.client.solrj.SolrQuery.SortClause
+import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
 import org.apache.solr.common.SolrException.ErrorCode
@@ -667,35 +671,24 @@ class SolrRelation(
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = new ListBuffer[Update]()
+    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
     dfSchema.fields.foreach(f => {
       if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
             logger.info(s"adding new field: ${toAddFieldMap(ef).asJava}")
-            fieldsToAddToSolr += new AddField(toAddFieldMap(ef).asJava)
+            fieldsToAddToSolr += (ef.name -> new AddField(toAddFieldMap(ef).asJava))
           })
         } else {
           logger.info(s"adding new field: ${toAddFieldMap(f).asJava}")
-          fieldsToAddToSolr += new AddField(toAddFieldMap(f).asJava)
+          fieldsToAddToSolr += (f.name -> new AddField(toAddFieldMap(f).asJava))
         }
       }
     })
 
-    val solrParams = new ModifiableSolrParams()
-    solrParams.add("updateTimeoutSecs","30")
-    val addFieldsUpdateRequest = new MultiUpdate(fieldsToAddToSolr.asJava, solrParams)
-
     if (fieldsToAddToSolr.nonEmpty) {
-      logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
-      val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
-        addFieldsUpdateRequest.process(cloudClient, collectionId)
-      if (updateResponse.getStatus >= 400) {
-        val errMsg = "Schema update request failed due to: "+updateResponse
-        logger.error(errMsg)
-        throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
-      }
+      addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
@@ -853,6 +846,46 @@ class SolrRelation(
     }
     initialQuery.set("collection", collection)
     collection
+  }
+
+  private def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
+    logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+    val solrParams = new ModifiableSolrParams()
+    solrParams.add("updateTimeoutSecs","30")
+    val updateList : java.util.ArrayList[Update] = new java.util.ArrayList[Update]
+    fieldsToAddToSolr.values.foreach(v => updateList.add(v))
+    val addFieldsUpdateRequest = new MultiUpdate(updateList, solrParams)
+
+    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
+      addFieldsUpdateRequest.process(cloudClient, collectionId)
+    if (updateResponse.getStatus >= 400) {
+      val errMsg = "Schema update request failed due to: "+updateResponse
+      logger.error(errMsg)
+      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+    } else {
+      logger.info(s"Request to add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
+      val respNL = updateResponse.getResponse
+      if (respNL != null) {
+        val errors = respNL.get("errors")
+        if (errors != null) {
+          logger.error(s"Request to add ${fieldsToAddToSolr.size} fields failed with errors: ${errors}. Will re-try each add individually ...")
+          fieldsToAddToSolr.foreach((pair) => {
+            try {
+              val resp = pair._2.process(cloudClient, collectionId)
+              if (resp.getResponse.get("errors") != null) {
+                val e2 = resp.getResponse.get("errors")
+                logger.warn(s"Add field ${pair._1} failed due to: ${e2}")
+              } else {
+                logger.info(s"Add field ${pair._1} returned: $resp")
+              }
+            } catch {
+              case se: SolrServerException => logger.warn(s"Add schema field ${pair._1} failed due to: $se")
+              case ioe: IOException => logger.warn(s"Add schema field ${pair._1} failed due to: $ioe")
+            }
+          })
+        }
+      }
+    }
   }
 }
 

@@ -8,7 +8,7 @@ import com.lucidworks.spark.rdd.SolrRDD
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
-import org.apache.solr.client.solrj.impl.{CloudSolrClient, InputStreamResponseParser, StreamingBinaryResponseParser}
+import org.apache.solr.client.solrj.impl.{CloudSolrClient, HttpSolrClient, InputStreamResponseParser, StreamingBinaryResponseParser}
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
@@ -457,10 +457,20 @@ object SolrQuerySupport extends LazyLogging {
   }
 
   def getFieldsFromLuke(zkHost: String, collection: String): Set[String] = {
-    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val shardList = SolrSupport.buildShardList(zkHost, collection)
+    val fieldSetBuffer: ListBuffer[String] = ListBuffer.empty[String]
+    shardList.foreach(shard => {
+      val randomReplica = SolrRDD.randomReplica(shard)
+      val replicaHttpClient = SolrSupport.getCachedHttpSolrClient(randomReplica.replicaUrl, zkHost)
+      fieldSetBuffer.++=(getFieldsFromLukePerShard(zkHost, replicaHttpClient))
+    })
+    fieldSetBuffer.toSet
+  }
+
+  def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
     val lukeRequest = new LukeRequest()
     lukeRequest.setNumTerms(0)
-    val lukeResponse = lukeRequest.process(cloudClient, collection)
+    val lukeResponse = lukeRequest.process(httpSolrClient)
     if (lukeResponse.getStatus != 0) {
       throw new RuntimeException(
         "Solr request returned with status code '" + lukeResponse.getStatus + "'. Response: '" + lukeResponse.getResponse.toString)
