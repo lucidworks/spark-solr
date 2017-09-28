@@ -132,7 +132,7 @@ https://lucene.apache.org/solr/guide/pagination-of-results.html[Cursors] are use
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See <<splits>> section to enable and configure intra shard splitting.
 
-Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr parameters using <<solr.params>>.
+Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr parameters using <<solr-params,solr.params>>.
 
 === Streaming API (/export)
 
