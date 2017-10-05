@@ -289,6 +289,14 @@ Usage: `option("soft_commit_secs", "10")`
 
 Default: None
 
+==== commit_within
+
+The `commit_within` param sets `commitWithin` on the indexing requests processed by SolrClient. This value should be in milliseconds. See https://lucene.apache.org/solr/guide/6_6/updatehandlers-in-solrconfig.html#UpdateHandlersinSolrConfig-commitWithin[commitWithin]
+
+Usage: `option("commit_within", "5000")`
+
+Default: None
+
 ==== batch_size
 
 The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
@@ -321,13 +329,14 @@ Usage: `option("sample_pct", "0.05")`
 
 Default: 0.1
 
-=== solr.params
+==== solr.params
 
 The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
 
 TIP: Don't use this to pass parameters that are covered by other options, such as `fl` (use the `fields` option) or `sort`. This option is strictly intended for parameters that are *NOT* covered by other options.
 
 Usage: `option("solr.params", "fq=userId:[10 TO 1000]")`
+
 
 === Querying Time Series Data
 
@@ -379,31 +388,6 @@ Usage: `option("max_active_partitions", "100")`
 
 Default: null
 
-=== Index parameters
-
-==== soft_commit_secs
-
-If specified, the `soft_commit_secs` option will be set via SolrConfig API during indexing
-
-Usage: `option("soft_commit_secs", "10")`
-
-Default: None
-
-==== batch_size
-
-The `batch_size` option determines the number of documents that are sent to Solr via a HTTP call during indexing. Set this option higher if the docs are small and memory is available.
-
-Usage: `option("batch_size", "10000")`
-
-Default: 500
-
-==== gen_uniq_key
-
-If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
-
-Usage: `option("gen_uniq_key", "true")`
-
-Default: false
 
 //end::tuning[]
 
