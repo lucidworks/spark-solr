@@ -63,7 +63,7 @@ val df = spark.read.format("solr")
 import com.lucidworks.spark.rdd.SolrRDD
 val solrRDD = new SolrRDD(zkHost, collectionName, sc)
 
-SolrRDD is an RDD of https://lucene.apache.org/solr/6_1_0/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
+SolrRDD is an RDD of https://lucene.apache.org/solr/api/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
 
 ==== via RDD (Java)
 
@@ -128,22 +128,22 @@ The first .jar is what you'd want to use if you were using spark-solr in your ow
 
 === Cursors
 
-https://cwiki.apache.org/confluence/display/solr/Pagination+of+Results[Cursors] are used by default to pull documents out of Solr. By default, the number of tasks allocated will be the number of shards available for the collection.
+https://lucene.apache.org/solr/guide/pagination-of-results.html[Cursors] are used by default to pull documents out of Solr. By default, the number of tasks allocated will be the number of shards available for the collection.
 
 If your Spark cluster has more available executor slots than the number of shards, then you can increase parallelism when reading from Solr by splitting each shard into sub ranges using a split field. A good candidate for the split field is the version field that is attached to every document by the shard leader during indexing. See <<splits>> section to enable and configure intra shard splitting.
 
-Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr parameters using <<solr.params>>.
+Cursors won't work if the index changes during the query time. Constrain your query to a static index by using additional Solr parameters using <<solr-params,solr.params>>.
 
 === Streaming API (/export)
 
-If the fields that are being queried have https://cwiki.apache.org/confluence/display/solr/DocValues[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<request_handler>> allows you to enable Streaming API via DataFrame.
+If the fields that are being queried have https://lucene.apache.org/solr/guide/docvalues.html[docValues] enabled, then the Streaming API can be used to pull documents from Solr in a true Streaming fashion. This method is *8-10x* faster than Cursors. The option <<request_handler>> allows you to enable Streaming API via DataFrame.
 
 //end::querying[]
 
 //tag::indexing[]
 == Indexing
 
-Objects can be sent to Solr via Spark Streaming or DataFrames. The schema is inferred from the DataFrame and any fields that do not exist in Solr schema will be added via Schema API. See https://cwiki.apache.org/confluence/display/solr/Schema+Factory+Definition+in+SolrConfig[ManagedIndexSchemaFactory].
+Objects can be sent to Solr via Spark Streaming or DataFrames. The schema is inferred from the DataFrame and any fields that do not exist in Solr schema will be added via Schema API. See https://lucene.apache.org/solr/guide/schema-factory-definition-in-solrconfig.html[ManagedIndexSchemaFactory].
 
 See <<Index parameters>> for configuration and tuning.
 
@@ -215,12 +215,12 @@ Defalut: None
 
 ==== request_handler
 
-Set the Solr request handler for queries. This option can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://cwiki.apache.org/confluence/display/solr/Exporting+Result+Sets[Exporting Result Sets] for more information.
+Set the Solr request handler for queries. This option can be used to export results from Solr via `/export` handler which streams data out of Solr. See https://lucene.apache.org/solr/guide/exporting-result-sets.html[Exporting Result Sets] for more information.
 
 The `/export` handler needs fields to be explicitly specified. Please use the `fields` option or specify the fields in the query.
 
 Usage: `option("request_handler", "/export")`
-Default: /select 
+Default: /select
 
 ==== Increase Read Parallelism using Intra-Shard Splits
 
@@ -307,7 +307,7 @@ Default: 500
 
 ==== gen_uniq_key
 
-If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/5_5_0/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
+If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/api/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field
 
 Usage: `option("gen_uniq_key", "true")`
 
@@ -388,7 +388,6 @@ Usage: `option("max_active_partitions", "100")`
 
 Default: null
 
-
 //end::tuning[]
 
 //tag::spark-troubleshooting[]
@@ -430,11 +429,11 @@ See `com.lucidworks.spark.example.streaming.oneusagov.OneUsaGovStreamProcessor` 
 //tag::spark-auth[]
 == Authenticating with Solr
 
-For background on Solr security, see: https://cwiki.apache.org/confluence/display/solr/Security.
+For background on Solr security, see: https://lucene.apache.org/solr/guide/6_6/securing-solr.html[Securing Solr].
 
 === Kerberos
 
-The kerberos config should be set via system param `java.security.auth.login.config` on extraJavaOptions for both executor and driver
+The Kerberos config should be set via system param `java.security.auth.login.config` on extraJavaOptions for both executor and driver.
 
 ==== SparkApp
 The SparkApp framework (in spark-solr) allows you to pass the path to a JAAS authentication configuration file using the `-solrJaasAuthConfig option`.
