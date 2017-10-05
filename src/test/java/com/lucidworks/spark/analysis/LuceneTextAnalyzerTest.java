@@ -51,7 +51,7 @@ public class LuceneTextAnalyzerTest {
     assertExpectedTokens(analyzer2, "some-dashed-phrase", Arrays.asList("some", "dashed", "phrase"));
 
     String stdTokMax3Schema = json(
-        "{'defaultLuceneMatchVersion': '5.0.0',\n" +
+        "{'defaultLuceneMatchVersion': '6.0.0',\n" +
         " 'analyzers': [{'name': 'StdTok_max3',\n" +
         "                'tokenizer': {'type': 'standard', 'maxTokenLength': '3'} }],\n" +
         "'fields': [{'regex': '.+', 'analyzer': 'StdTok_max3'}] }\n");
@@ -285,7 +285,7 @@ public class LuceneTextAnalyzerTest {
     assertExpectedTokens(analyzer1, new StringReader("Te,st. punct"), Arrays.asList("te", "st", "punct"));
 
     String stdTokMax3Schema = json(
-        "{'defaultLuceneMatchVersion': '5.0.0',\n" +
+        "{'defaultLuceneMatchVersion': '6.0.0',\n" +
             " 'analyzers': [{'name': 'StdTok_max3',\n" +
             "                'tokenizer': {'type': 'standard', 'maxTokenLength': '3'} }],\n" +
             "'fields': [{'regex': '.+', 'analyzer': 'StdTok_max3'}] }\n");

@@ -36,7 +36,7 @@ import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
-import static org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP;
+import static org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder.LOGIN_CONFIG_PROP;
 
 /**
  * Command-line utility for implementing Spark applications; reduces

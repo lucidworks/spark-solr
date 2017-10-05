@@ -2,14 +2,11 @@ package com.lucidworks.spark.fusion;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.module.scala.DefaultScalaModule;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpException;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpRequestInterceptor;
-import org.apache.http.HttpResponse;
+import org.apache.http.*;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CookieStore;
 import org.apache.http.client.HttpClient;
@@ -32,27 +29,15 @@ import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.apache.solr.client.solrj.impl.HttpClientUtil;
-import org.apache.solr.client.solrj.impl.Krb5HttpClientConfigurer;
+import org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder;
+import org.apache.solr.client.solrj.impl.SolrHttpClientBuilder;
 import org.apache.solr.common.SolrException;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.module.scala.DefaultScalaModule;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -74,7 +59,8 @@ public class FusionPipelineClient {
     System.setProperty("sun.security.krb5.debug", "true");
     System.setProperty("java.security.auth.login.config", jassFile);
     System.setProperty("solr.kerberos.jaas.appname", appname);
-    HttpClientUtil.setConfigurer(new Krb5HttpClientConfigurer());
+    SolrHttpClientBuilder httpClientBuilder = new Krb5HttpClientBuilder().getBuilder();
+    HttpClientUtil.setHttpClientBuilder(httpClientBuilder);
   }
 
   // for basic auth to the pipeline service
@@ -143,8 +129,6 @@ public class FusionPipelineClient {
     if (lwwJaasFile != null && !lwwJaasFile.isEmpty()) {
       setSecurityConfig(lwwJaasFile);
       httpClient = HttpClientUtil.createClient(null);
-      HttpClientUtil.setMaxConnections(httpClient, 1000);
-      HttpClientUtil.setMaxConnectionsPerHost(httpClient, 1000);
       isKerberos = true;
     } else {
       globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.BEST_MATCH).setConnectTimeout(30*1000).setSocketTimeout(90*1000).build();
