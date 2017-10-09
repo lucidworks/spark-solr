@@ -87,7 +87,7 @@ public class LuceneTextAnalyzerTransformerTest {
         new TokenizerTestData("some-dashed-phrase", new String[]{"some", "dashed", "phrase"})));
 
     String analysisSchema2 = json("{\n" +
-        "'defaultLuceneMatchVersion': '5.0.0',\n" +
+        "'defaultLuceneMatchVersion': '6.0.0',\n" +
         "'analyzers': [{\n" +
         "  'name': 'StdTok_max3',\n" +
         "  'tokenizer': {\n" +

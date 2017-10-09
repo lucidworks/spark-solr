@@ -200,6 +200,14 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(timeQueryDF.count() == 1)
   }
 
+  test("Multiple WHERE clauses") {
+    val df: DataFrame = sparkSession.read.option("zkhost", zkHost).solr(collectionName)
+    df.createOrReplaceTempView("events")
+
+    val timeQueryDF = sparkSession.sql("SELECT * from events WHERE `status` == 200 OR `status` == 404 or `status` == 300 or `status` == 400")
+    assert(timeQueryDF.count() == 987)
+  }
+
   // Ignored since Spark is not passing timestamps filters to the buildScan method. Range timestamp filtering is being done at Spark layer
   ignore("Timestamp range filter queries") {
     val df: DataFrame = sparkSession.read.format("solr")

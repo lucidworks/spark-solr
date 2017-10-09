@@ -215,14 +215,49 @@ object SolrRelationUtil extends LazyLogging {
   def applyFilter(filter: Filter, solrQuery: SolrQuery, baseSchema: StructType) = {
    filter match {
      case f: And =>
-       solrQuery.addFilterQuery(fq(f.left, baseSchema))
-       solrQuery.addFilterQuery(fq(f.right, baseSchema))
+       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+       values.foreach(v => solrQuery.addFilterQuery(v))
      case f: Or =>
-       solrQuery.addFilterQuery("(" + fq(f.left, baseSchema) + " OR " + fq(f.right, baseSchema) + ")")
+       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+       val fqStringBuilder = new StringBuilder
+       for (i <- values.indices) {
+         if (i == 0) fqStringBuilder.append("(")
+         fqStringBuilder.append(values(i))
+         if (i != values.size-1) {
+           fqStringBuilder.append(" OR ")
+         } else {
+           fqStringBuilder.append(")")
+         }
+       }
+       if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
      case f: Not =>
        solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
      case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
    }
+  }
+
+  def getAllFilterValues(filter: Filter, baseSchema: StructType, values: ListBuffer[String]): List[String] = {
+    filter match {
+      case f: And =>
+        f.left match {
+          case l: And => getAllFilterValues(l, baseSchema, values)
+          case _ => values.+=(fq(f.left, baseSchema))
+        }
+        f.right match {
+          case r: And => getAllFilterValues(r, baseSchema, values)
+          case _ => values.+=(fq(f.right, baseSchema))
+        }
+      case f: Or =>
+        f.left match {
+          case l: Or => getAllFilterValues(l, baseSchema, values)
+          case _ => values.+=(fq(f.left, baseSchema))
+        }
+        f.right match {
+          case r: Or => getAllFilterValues(r, baseSchema, values)
+          case _ => values.+=(fq(f.right, baseSchema))
+        }
+    }
+    values.toList
   }
 
   def getFilterValue(attr: String, value: String, baseSchema: StructType) = {

@@ -43,7 +43,7 @@ class LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
 
     val stdTokMax3Schema = """
                              |{
-                             |  "defaultLuceneMatchVersion": "5.0.0",
+                             |  "defaultLuceneMatchVersion": "6.0.0",
                              |  "analyzers": [{
                              |    "name": "StdTok_max3",
                              |    "tokenizer": {
@@ -252,7 +252,7 @@ class LuceneTextAnalyzerSuite extends SparkSolrFunSuite {
 
     val stdTokMax3Schema = """
                              |{
-                             |  "defaultLuceneMatchVersion": "5.0.0",
+                             |  "defaultLuceneMatchVersion": "6.0.0",
                              |  "analyzers": [{
                              |    "name": "StdTok_max3",
                              |    "tokenizer": {

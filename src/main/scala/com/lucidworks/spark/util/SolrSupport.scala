@@ -96,30 +96,30 @@ object SolrSupport extends LazyLogging {
     None
   }
 
-  def setupKerberosIfNeeded(zkHost: String): Unit = synchronized {
-    val loginProp = System.getProperty(Krb5HttpClientConfigurer.LOGIN_CONFIG_PROP)
+  def isKerberosNeeded(zkHost: String): Boolean = synchronized {
+    val loginProp = System.getProperty(Krb5HttpClientBuilder.LOGIN_CONFIG_PROP)
     if (loginProp != null && loginProp.nonEmpty) {
-      HttpClientUtil.addConfigurer(new Krb5HttpClientConfigurer)
-      logger.info(s"Installed the Krb5HttpClientConfigurer for Solr security using config: $loginProp")
+      return true
     }
+    return false
   }
 
-  def readKerberosFile(path: String): Unit = {
-    logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
-  }
-
-  def setupBasicAuthIfNeeded(zkHost: String): Unit = synchronized {
-    val credentials = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_BASIC_AUTH_CREDENTIALS)
-    val configFile = System.getProperty(PreemptiveBasicAuthConfigurer.SYS_PROP_HTTP_CLIENT_CONFIG)
+  def isBasicAuthNeeded(zkHost: String): Boolean = synchronized {
+    val credentials = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS)
+    val configFile = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_HTTP_CLIENT_CONFIG)
     if (credentials != null || configFile != null) {
       if (configFile != null) {
         logger.debug("Basic auth configured with config file {}", configFile)
       } else {
         logger.debug("Basic auth configured with creds {}", credentials)
       }
-      HttpClientUtil.addConfigurer(new PreemptiveBasicAuthConfigurer)
-      logger.info(s"Installed the PreemptiveBasicAuthConfigurer for Solr basic auth")
+      return true
     }
+    return false
+  }
+
+  def readKerberosFile(path: String): Unit = {
+    logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
   }
 
   private def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
@@ -151,8 +151,6 @@ object SolrSupport extends LazyLogging {
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
-    setupKerberosIfNeeded(zkHost)
-    setupBasicAuthIfNeeded(zkHost)
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
@@ -160,9 +158,15 @@ object SolrSupport extends LazyLogging {
         new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
     }
     val params = new ModifiableSolrParams()
-    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 6000)
-    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 300)
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
+    if (isKerberosNeeded(zkHost)) {
+      val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
+      HttpClientUtil.setHttpClientBuilder(krb5HttpClientBuilder)
+    }
+    if (isBasicAuthNeeded(zkHost)) {
+      val basicAuthBuilder = new PreemptiveBasicAuthClientBuilderFactory().getHttpClientBuilder(java.util.Optional.empty())
+      HttpClientUtil.setHttpClientBuilder(basicAuthBuilder)
+    }
     val httpClient = HttpClientUtil.createClient(params)
     val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
     solrClient.connect()
@@ -594,7 +598,7 @@ object SolrSupport extends LazyLogging {
 
     val shards = new ListBuffer[SolrShard]()
     for (coll <- collections) {
-      for (slice: Slice <- clusterState.getSlices(coll)) {
+      for (slice: Slice <- clusterState.getCollection(coll).getSlices()) {
         var replicas  =  new ListBuffer[SolrReplica]()
         for (r: Replica <- slice.getReplicas) {
           if (r.getState == Replica.State.ACTIVE) {

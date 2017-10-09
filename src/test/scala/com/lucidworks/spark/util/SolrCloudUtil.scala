@@ -5,7 +5,7 @@ import java.io.File
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
-import org.apache.solr.client.solrj.request.{QueryRequest, UpdateRequest}
+import org.apache.solr.client.solrj.request.{CollectionAdminRequest, QueryRequest, UpdateRequest}
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.cloud.MiniSolrCloudCluster
 import org.apache.solr.common.SolrInputDocument
@@ -21,7 +21,7 @@ object SolrCloudUtil extends LazyLogging {
 
   def deleteCollection(collectionName: String, cluster: MiniSolrCloudCluster): Unit = {
     try {
-      cluster.deleteCollection(collectionName)
+      CollectionAdminRequest.deleteCollection(collectionName).process(cluster.getSolrClient)
     } catch {
       case e: Exception => logger.error("Failed to delete collection " + collectionName + " due to: " + e)
     }
@@ -74,7 +74,7 @@ object SolrCloudUtil extends LazyLogging {
     zkr.updateLiveNodes() // force the state to be fresh
 
     var cs: ClusterState = zkr.getClusterState
-    val slices: java.util.Collection[Slice] = cs.getActiveSlices(collectionName)
+    val slices: java.util.Collection[Slice] = cs.getCollection(collectionName).getActiveSlices
     assert(slices.size() == numShards)
     var allReplicasUp: Boolean = false
     var waitMs = 0L
@@ -90,7 +90,7 @@ object SolrCloudUtil extends LazyLogging {
       cs = cloudClient.getZkStateReader.getClusterState
       assertNotNull(cs)
       allReplicasUp = true // assume true
-      for (shard: Slice <- cs.getActiveSlices(collectionName)) {
+      for (shard: Slice <- cs.getCollection(collectionName).getActiveSlices) {
         val shardId: String = shard.getName
         assertNotNull("No Slice for " + shardId, shard)
         val replicas = shard.getReplicas
@@ -135,7 +135,7 @@ object SolrCloudUtil extends LazyLogging {
       cs = clusterState.getCollection(collectionName).toString
     } else {
       val map = Map.empty[String, DocCollection]
-      clusterState.getCollections.foreach(coll => {
+      clusterState.getCollectionsMap.keySet().foreach(coll => {
         map + (coll -> clusterState.getCollection(coll))
       })
       val out: CharArr = new CharArr()

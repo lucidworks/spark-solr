@@ -46,7 +46,7 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Su
 
     cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
       testWorkingDir.toPath, solrXmlContents, extraServlets, null /* extra filters */)
-    cloudClient = new CloudSolrClient(cluster.getZkServer.getZkAddress, true)
+    cloudClient = cluster.getSolrClient
     cloudClient.connect()
 
     assertTrue(!cloudClient.getZkStateReader.getClusterState.getLiveNodes.isEmpty)
