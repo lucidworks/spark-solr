@@ -598,7 +598,7 @@ object SolrSupport extends LazyLogging {
 
     val shards = new ListBuffer[SolrShard]()
     for (coll <- collections) {
-      for (slice: Slice <- clusterState.getCollectionOrNull(coll).getSlices()) {
+      for (slice: Slice <- clusterState.getCollection(coll).getSlices()) {
         var replicas  =  new ListBuffer[SolrReplica]()
         for (r: Replica <- slice.getReplicas) {
           if (r.getState == Replica.State.ACTIVE) {
