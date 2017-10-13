@@ -546,7 +546,7 @@ class SolrRelation(
         if (isFDV && isSDV) {
           qt = QT_EXPORT
           query.setRequestHandler(qt)
-          logger.info("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
+          logger.debug("Using the /export handler because docValues are enabled for all fields and no unsupported field types have been requested.")
         } else {
           logger.debug(s"Using requestHandler: $qt isFDV? $isFDV and isSDV? $isSDV")
         }
@@ -624,40 +624,6 @@ class SolrRelation(
     return rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
   }
 
-  def toSolrType(dataType: DataType): String = {
-    dataType match {
-      case bi: BinaryType => "binary"
-      case b: BooleanType => "boolean"
-      case dt: DateType => "tdate"
-      case db: DoubleType => "tdouble"
-      case dec: DecimalType => "tdouble"
-      case ft: FloatType => "tfloat"
-      case i: IntegerType => "tint"
-      case l: LongType => "tlong"
-      case s: ShortType => "tint"
-      case t: TimestampType => "tdate"
-      case _ => "string"
-    }
-  }
-
-  def toAddFieldMap(sf: StructField): Map[String,AnyRef] = {
-    val map = scala.collection.mutable.Map[String,AnyRef]()
-    map += ("name" -> sf.name)
-    map += ("indexed" -> "true")
-    map += ("stored" -> "true")
-    map += ("docValues" -> "true")
-    val dataType = sf.dataType
-    dataType match {
-      case at: ArrayType =>
-        map += ("multiValued" -> "true")
-        map += ("type" -> toSolrType(at.elementType))
-      case _ =>
-        map += ("multiValued" -> "false")
-        map += ("type" -> toSolrType(dataType))
-    }
-    map.toMap
-  }
-
   override def insert(df: DataFrame, overwrite: Boolean): Unit = {
 
     val zkHost = conf.getZkHost.get
@@ -677,18 +643,20 @@ class SolrRelation(
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
-            logger.info(s"adding new field: ${toAddFieldMap(ef).asJava}")
-            fieldsToAddToSolr += (ef.name -> new AddField(toAddFieldMap(ef).asJava))
+            val addFieldMap = SolrRelation.toAddFieldMap(ef)
+            logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
           })
         } else {
-          logger.info(s"adding new field: ${toAddFieldMap(f).asJava}")
-          fieldsToAddToSolr += (f.name -> new AddField(toAddFieldMap(f).asJava))
+          val addFieldMap = SolrRelation.toAddFieldMap(f)
+          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
         }
       }
     })
 
     if (fieldsToAddToSolr.nonEmpty) {
-      addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
+      SolrRelation.addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
@@ -847,46 +815,6 @@ class SolrRelation(
     initialQuery.set("collection", collection)
     collection
   }
-
-  private def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
-    logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
-    val solrParams = new ModifiableSolrParams()
-    solrParams.add("updateTimeoutSecs","30")
-    val updateList : java.util.ArrayList[Update] = new java.util.ArrayList[Update]
-    fieldsToAddToSolr.values.foreach(v => updateList.add(v))
-    val addFieldsUpdateRequest = new MultiUpdate(updateList, solrParams)
-
-    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
-      addFieldsUpdateRequest.process(cloudClient, collectionId)
-    if (updateResponse.getStatus >= 400) {
-      val errMsg = "Schema update request failed due to: "+updateResponse
-      logger.error(errMsg)
-      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
-    } else {
-      logger.info(s"Request to add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
-      val respNL = updateResponse.getResponse
-      if (respNL != null) {
-        val errors = respNL.get("errors")
-        if (errors != null) {
-          logger.error(s"Request to add ${fieldsToAddToSolr.size} fields failed with errors: ${errors}. Will re-try each add individually ...")
-          fieldsToAddToSolr.foreach((pair) => {
-            try {
-              val resp = pair._2.process(cloudClient, collectionId)
-              if (resp.getResponse.get("errors") != null) {
-                val e2 = resp.getResponse.get("errors")
-                logger.warn(s"Add field ${pair._1} failed due to: ${e2}")
-              } else {
-                logger.info(s"Add field ${pair._1} returned: $resp")
-              }
-            } catch {
-              case se: SolrServerException => logger.warn(s"Add schema field ${pair._1} failed due to: $se")
-              case ioe: IOException => logger.warn(s"Add schema field ${pair._1} failed due to: $ioe")
-            }
-          })
-        }
-      }
-    }
-  }
 }
 
 object SolrRelation extends LazyLogging {
@@ -998,6 +926,97 @@ object SolrRelation extends LazyLogging {
       }
     }
     sortClauses.toList
+  }
+
+  def addNewFieldsToSolrIfNeeded(dfSchema: StructType, zkHost: String, collectionId: String): Set[String] = {
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val solrFields : Map[String, SolrFieldMeta] =
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
+    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
+    dfSchema.fields.foreach(f => {
+      if (!solrFields.contains(f.name)) {
+        fieldsToAddToSolr += (f.name -> new AddField(SolrRelation.toAddFieldMap(f).asJava))
+      }
+    })
+    if (fieldsToAddToSolr.nonEmpty) {
+      SolrRelation.addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
+    }
+    fieldsToAddToSolr.keySet.toSet
+  }
+
+  def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
+    logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
+    val solrParams = new ModifiableSolrParams()
+    solrParams.add("updateTimeoutSecs","30")
+    val updateList : java.util.ArrayList[Update] = new java.util.ArrayList[Update]
+    fieldsToAddToSolr.values.foreach(v => updateList.add(v))
+    val addFieldsUpdateRequest = new MultiUpdate(updateList, solrParams)
+
+    val updateResponse : org.apache.solr.client.solrj.response.schema.SchemaResponse.UpdateResponse =
+      addFieldsUpdateRequest.process(cloudClient, collectionId)
+    if (updateResponse.getStatus >= 400) {
+      val errMsg = "Schema update request failed due to: "+updateResponse
+      logger.error(errMsg)
+      throw new SolrException(ErrorCode.getErrorCode(updateResponse.getStatus), errMsg)
+    } else {
+      logger.info(s"Request to add ${fieldsToAddToSolr.size} fields returned: ${updateResponse}")
+      val respNL = updateResponse.getResponse
+      if (respNL != null) {
+        val errors = respNL.get("errors")
+        if (errors != null) {
+          logger.error(s"Request to add ${fieldsToAddToSolr.size} fields failed with errors: ${errors}. Will re-try each add individually ...")
+          fieldsToAddToSolr.foreach((pair) => {
+            try {
+              val resp = pair._2.process(cloudClient, collectionId)
+              if (resp.getResponse.get("errors") != null) {
+                val e2 = resp.getResponse.get("errors")
+                logger.warn(s"Add field ${pair._1} failed due to: ${e2}")
+              } else {
+                logger.info(s"Add field ${pair._1} returned: $resp")
+              }
+            } catch {
+              case se: SolrServerException => logger.warn(s"Add schema field ${pair._1} failed due to: $se")
+              case ioe: IOException => logger.warn(s"Add schema field ${pair._1} failed due to: $ioe")
+            }
+          })
+        }
+      }
+    }
+  }
+
+  def toAddFieldMap(sf: StructField): Map[String,AnyRef] = {
+    val map = scala.collection.mutable.Map[String,AnyRef]()
+    map += ("name" -> sf.name)
+    map += ("indexed" -> "true")
+    map += ("stored" -> "true")
+    map += ("docValues" -> "true")
+    val dataType = sf.dataType
+    dataType match {
+      case at: ArrayType =>
+        map += ("multiValued" -> "true")
+        map += ("type" -> toSolrType(at.elementType))
+      case _ =>
+        map += ("multiValued" -> "false")
+        map += ("type" -> toSolrType(dataType))
+    }
+    map.toMap
+  }
+
+  def toSolrType(dataType: DataType): String = {
+    dataType match {
+      case bi: BinaryType => "binary"
+      case b: BooleanType => "boolean"
+      case dt: DateType => "tdate"
+      case db: DoubleType => "tdouble"
+      case dec: DecimalType => "tdouble"
+      case ft: FloatType => "tfloat"
+      case i: IntegerType => "tint"
+      case l: LongType => "tlong"
+      case s: ShortType => "tint"
+      case t: TimestampType => "tdate"
+      case _ => "string"
+    }
   }
 }
 
