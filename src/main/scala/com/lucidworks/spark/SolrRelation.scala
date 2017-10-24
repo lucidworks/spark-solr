@@ -2,21 +2,19 @@ package com.lucidworks.spark
 
 import java.io.IOException
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
-import com.lucidworks.spark.SolrRelation.logger
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.rdd.{SolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
-import org.apache.solr.client.solrj.{SolrQuery, SolrServerException}
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
+import org.apache.solr.client.solrj.{SolrQuery, SolrServerException}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}
@@ -26,8 +24,8 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
 
-import scala.collection.breakOut
 import scala.collection.JavaConverters._
+import scala.collection.breakOut
 import scala.collection.mutable.ListBuffer
 import scala.reflect.runtime.universe._
 import scala.util.control.Breaks._
@@ -1005,16 +1003,13 @@ object SolrRelation extends LazyLogging {
 
   def toSolrType(dataType: DataType): String = {
     dataType match {
-      case bi: BinaryType => "binary"
-      case b: BooleanType => "boolean"
-      case dt: DateType => "tdate"
-      case db: DoubleType => "tdouble"
-      case dec: DecimalType => "tdouble"
-      case ft: FloatType => "tfloat"
-      case i: IntegerType => "tint"
-      case l: LongType => "tlong"
-      case s: ShortType => "tint"
-      case t: TimestampType => "tdate"
+      case BinaryType => "binary"
+      case BooleanType => "boolean"
+      case DateType | TimestampType => "tdate"
+      case DoubleType | _: DecimalType => "tdouble"
+      case FloatType => "tfloat"
+      case IntegerType | ShortType => "tint"
+      case LongType => "tlong"
       case _ => "string"
     }
   }
