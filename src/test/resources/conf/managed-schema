@@ -45,7 +45,9 @@
 
   <uniqueKey>id</uniqueKey>
 
-  <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
+
+  <!-- Enable docValues after SOLR-11532 is fixed -->
+  <fieldType name="location" class="solr.LatLonPointSpatialField"/>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
   <fieldType class="solr.StrField" docValues="true" multiValued="true" name="strings" sortMissingLast="true"/>
 
