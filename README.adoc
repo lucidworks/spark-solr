@@ -62,10 +62,10 @@ val df = spark.read.format("solr")
 ==== via RDD
 
 [source,scala]
-import com.lucidworks.spark.rdd.SolrRDD
-val solrRDD = new SolrRDD(zkHost, collectionName, sc)
+import com.lucidworks.spark.rdd.SelectSolrRDD
+val solrRDD = new SelectSolrRDD(zkHost, collectionName, sc)
 
-SolrRDD is an RDD of https://lucene.apache.org/solr/api/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
+SelectSolrRDD is an RDD of https://lucene.apache.org/solr/api/solr-solrj/org/apache/solr/common/SolrDocument.html[SolrDocument]
 
 ==== via RDD (Java)
 
