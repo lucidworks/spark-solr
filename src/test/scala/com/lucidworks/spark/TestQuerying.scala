@@ -9,6 +9,14 @@ import org.apache.spark.sql.types._
 
 class TestQuerying extends TestSuiteBuilder {
 
+  test("Solr version") {
+    val solrVersion = SolrSupport.getSolrVersion(zkHost)
+    assert(solrVersion == "7.1.0")
+    assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 1, 0))
+    assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 0, 0))
+    assert(!SolrSupport.isSolrVersionAtleast(solrVersion, 8, 0, 0))
+  }
+
   test("vary queried columns") {
     val collectionName = "testQuerying-" + UUID.randomUUID().toString
     SolrCloudUtil.buildCollection(zkHost, collectionName, null, 1, cloudClient, sc)
