@@ -68,12 +68,19 @@ object SolrQuerySupport extends LazyLogging {
     "solr.StrField" -> DataTypes.StringType,
     "solr.TextField" -> DataTypes.StringType,
     "solr.BoolField" -> DataTypes.BooleanType,
+    "solr.BinaryField" -> DataTypes.BinaryType,
+
     "solr.TrieIntField" -> DataTypes.LongType,
     "solr.TrieLongField" -> DataTypes.LongType,
     "solr.TrieFloatField" -> DataTypes.DoubleType,
     "solr.TrieDoubleField" -> DataTypes.DoubleType,
     "solr.TrieDateField" -> DataTypes.TimestampType,
-    "solr.BinaryField" -> DataTypes.BinaryType
+
+    "solr.IntPointField" -> DataTypes.LongType,
+    "solr.LongPointField" -> DataTypes.LongType,
+    "solr.FloatPointField" -> DataTypes.DoubleType,
+    "solr.DoublePointField" -> DataTypes.DoubleType,
+    "solr.DatePointField" -> DataTypes.TimestampType
   )
 
   def getUniqueKey(zkHost: String, collection: String): String = {

@@ -289,6 +289,7 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(suffixes.contains("s_"))
     assert(suffixes.contains("random_"))
     assert(suffixes.contains("_l"))
+    assert(suffixes.contains("_dpf"))
   }
 
   test("Get documents with max_rows config") {

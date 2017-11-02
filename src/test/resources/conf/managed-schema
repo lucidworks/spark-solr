@@ -10,40 +10,88 @@
   <field name="user_id" indexed="true" stored="true" type="string" docValues="true"/>
   <field name="movie_id" indexed="true" stored="true" type="string" docValues="true"/>
   <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
-  <field name="rating_timestamp" indexed="true" stored="true" type="tdate" docValues="true"/>
+  <field name="rating_timestamp" indexed="true" stored="true" type="pdate" docValues="true"/>
   <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
 
   <field name="pickup_location" type="location" multiValued="false" indexed="true" stored="true"/>
   <field name="dropoff_location" type="location" multiValued="false" indexed="true" stored="true"/>
 
-  <dynamicField indexed="true" name="*_i" stored="true" type="int"/>
+  <dynamicField indexed="true" name="*_i" stored="true" type="pint"/>
+  <dynamicField indexed="true" name="*_ii" stored="true" type="pints"/>
+  <dynamicField indexed="true" name="s_*" stored="true" type="string"/>
   <dynamicField indexed="true" name="*_s" stored="true" type="string"/>
-   <dynamicField indexed="true" name="s_*" stored="true" type="string"/>
-  <dynamicField indexed="true" name="*_l" stored="true" type="long"/>
+  <dynamicField indexed="true" name="*_ss" stored="true" type="strings"/>
+  <dynamicField indexed="true" name="*_l" stored="true" type="plong"/>
+  <dynamicField indexed="true" name="*_ls" stored="true" type="plongs"/>
   <dynamicField indexed="true" name="*_b" stored="true" type="boolean"/>
-  <dynamicField indexed="true" name="*_f" stored="true" type="float"/>
-  <dynamicField indexed="true" name="*_d" stored="true" type="double"/>
-  <dynamicField indexed="true" name="*_tdt" stored="true" type="tdate"/>
-  <dynamicField indexed="true" name="*_tdts" stored="true" type="tdate" multiValued="true"/>
-  <dynamicField indexed="true" name="*_ss" stored="true" type="string" multiValued="true"/>
-  <dynamicField indexed="true" name="*_ii" stored="true" type="int" multiValued="true"/>
-  <dynamicField indexed="true" name="*_txt" stored="true" type="text_en" multiValued="true"/>
+  <dynamicField indexed="true" name="*_f" stored="true" type="pfloat"/>
+  <dynamicField indexed="true" name="*_fs" stored="true" type="pfloats"/>
+  <dynamicField indexed="true" name="*_d" stored="true" type="pdouble"/>
+  <dynamicField indexed="true" name="*_ds" stored="true" type="pdoubles"/>
+
+  <dynamicField indexed="true" name="*_dt" stored="true" type="pdate"/>
+  <dynamicField indexed="true" multiValued="true" name="*_tdts" stored="true" type="pdate"/>
+  <dynamicField indexed="true" multiValued="true" name="*_dts" stored="true" type="pdate"/>
+  <dynamicField indexed="true" name="*_p" stored="true" type="location"/>
+  <dynamicField indexed="true" name="*_srpt" stored="true" type="location_rpt"/>
+
+  <!-- payloaded dynamic fields -->
+  <dynamicField indexed="true" name="*_dpf" stored="true" type="delimited_payloads_float"/>
+  <dynamicField indexed="true" name="*_dpi" stored="true" type="delimited_payloads_int"/>
+  <dynamicField indexed="true" name="*_dps" stored="true" type="delimited_payloads_string"/>
+  <dynamicField indexed="true" name="*_txt" stored="true" multiValued="true" type="text_en"/>
   <dynamicField indexed="true" name="*_txt_en" stored="true" type="text_en" multiValued="true"/>
-  <dynamicField indexed="true" name="*_ls" stored="true" type="long" multiValued="true"/>
-  <dynamicField name="random_*" type="random"/>
+  <dynamicField name="random_*" type="random" />
+
   <uniqueKey>id</uniqueKey>
-  <fieldType name="location" class="solr.LatLonPointSpatialField" docValues="true"/>
+
+  <!-- SQL statement failing with pint fields. Works only with tint fields. Needed for 'rating' field -->
+  <fieldType name="tint" class="solr.IntPointField" docValues="true"/>
+
+  <!-- Enable docValues after SOLR-11532 is fixed -->
+  <fieldType name="location" class="solr.LatLonPointSpatialField"/>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
-  <fieldType name="long" class="solr.TrieLongField" precisionStep="6" docValues="true"/>
-  <fieldType name="tlong" class="solr.TrieLongField" precisionStep="6" docValues="true"/>
-  <fieldType name="int" class="solr.TrieIntField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tint" class="solr.TrieIntField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="float" class="solr.TrieFloatField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tfloat" class="solr.TrieFloatField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tdouble" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
+  <fieldType class="solr.StrField" docValues="true" multiValued="true" name="strings" sortMissingLast="true"/>
+
+  <fieldType name="long" class="solr.LongPointField" docValues="true"/>
+  <fieldType name="int" class="solr.IntPointField" docValues="true"/>
+  <fieldType name="float" class="solr.FloatPointField" docValues="true"/>
+  <fieldType name="double" class="solr.DoublePointField" docValues="true"/>
+
+  <fieldType class="solr.SpatialRecursivePrefixTreeFieldType" distErrPct="0.025" distanceUnits="kilometers" geo="true" maxDistErr="0.001" name="location_rpt"/>
+
+  <fieldType class="solr.IntPointField" docValues="true" name="pint"/>
+  <fieldType class="solr.FloatPointField" docValues="true" name="pfloat"/>
+  <fieldType class="solr.LongPointField" docValues="true" name="plong"/>
+  <fieldType class="solr.DoublePointField" docValues="true" name="pdouble"/>
+  <fieldType class="solr.IntPointField" docValues="true" multiValued="true" name="pints"/>
+  <fieldType class="solr.FloatPointField" docValues="true" multiValued="true" name="pfloats"/>
+  <fieldType class="solr.LongPointField" docValues="true" multiValued="true" name="plongs"/>
+  <fieldType class="solr.DoublePointField" docValues="true" multiValued="true" name="pdoubles"/>
+  <fieldType class="solr.DatePointField" docValues="true" name="pdate"/>
+  <fieldType class="solr.DatePointField" docValues="true" multiValued="true" name="pdates"/>
+
+  <!-- Payloaded field types -->
+  <fieldType class="solr.TextField" indexed="true" name="delimited_payloads_float" stored="false">
+    <analyzer>
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.DelimitedPayloadTokenFilterFactory" encoder="float"/>
+    </analyzer>
+  </fieldType>
+  <fieldType class="solr.TextField" indexed="true" name="delimited_payloads_int" stored="false">
+    <analyzer>
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.DelimitedPayloadTokenFilterFactory" encoder="integer"/>
+    </analyzer>
+  </fieldType>
+  <fieldType class="solr.TextField" indexed="true" name="delimited_payloads_string" stored="false">
+    <analyzer>
+      <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      <filter class="solr.DelimitedPayloadTokenFilterFactory" encoder="identity"/>
+    </analyzer>
+  </fieldType>
+
   <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
-  <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0" docValues="true"/>
   <fieldType name="binary" class="solr.BinaryField"/>
   <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
   <fieldType name="text_en" class="solr.TextField" positionIncrementGap="100">
