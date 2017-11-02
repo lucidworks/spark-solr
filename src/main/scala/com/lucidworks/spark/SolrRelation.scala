@@ -629,6 +629,7 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val solrVersion = SolrSupport.getSolrVersion(zkHost)
 
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
@@ -641,12 +642,12 @@ class SolrRelation(
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
-            val addFieldMap = SolrRelation.toAddFieldMap(ef)
+            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion)
             logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
             fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
           })
         } else {
-          val addFieldMap = SolrRelation.toAddFieldMap(f)
+          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion)
           logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
           fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
         }
@@ -926,7 +927,7 @@ object SolrRelation extends LazyLogging {
     sortClauses.toList
   }
 
-  def addNewFieldsToSolrIfNeeded(dfSchema: StructType, zkHost: String, collectionId: String): Set[String] = {
+  def addNewFieldsToSolrIfNeeded(dfSchema: StructType, zkHost: String, collectionId: String, solrVersion: String): Set[String] = {
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val solrFields : Map[String, SolrFieldMeta] =
@@ -934,7 +935,7 @@ object SolrRelation extends LazyLogging {
     val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
     dfSchema.fields.foreach(f => {
       if (!solrFields.contains(f.name)) {
-        fieldsToAddToSolr += (f.name -> new AddField(SolrRelation.toAddFieldMap(f).asJava))
+        fieldsToAddToSolr += (f.name -> new AddField(SolrRelation.toAddFieldMap(f, solrVersion).asJava))
       }
     })
     if (fieldsToAddToSolr.nonEmpty) {
@@ -983,7 +984,7 @@ object SolrRelation extends LazyLogging {
     }
   }
 
-  def toAddFieldMap(sf: StructField): Map[String,AnyRef] = {
+  def toAddFieldMap(sf: StructField, solrVersion: String): Map[String,AnyRef] = {
     val map = scala.collection.mutable.Map[String,AnyRef]()
     map += ("name" -> sf.name)
     map += ("indexed" -> "true")
@@ -993,15 +994,21 @@ object SolrRelation extends LazyLogging {
     dataType match {
       case at: ArrayType =>
         map += ("multiValued" -> "true")
-        map += ("type" -> toSolrType(at.elementType))
+        if (SolrSupport.isSolrVersionAtleast(solrVersion, 7, 0, 0))
+          map += ("type" -> toNewSolrType(at.elementType))
+        else
+          map += ("type" -> toOldSolrType(at.elementType))
       case _ =>
         map += ("multiValued" -> "false")
-        map += ("type" -> toSolrType(dataType))
+        if (SolrSupport.isSolrVersionAtleast(solrVersion, 7, 0, 0))
+          map += ("type" -> toNewSolrType(dataType))
+        else
+          map += ("type" -> toOldSolrType(dataType))
     }
     map.toMap
   }
 
-  def toSolrType(dataType: DataType): String = {
+  def toOldSolrType(dataType: DataType): String = {
     dataType match {
       case BinaryType => "binary"
       case BooleanType => "boolean"
@@ -1010,6 +1017,19 @@ object SolrRelation extends LazyLogging {
       case FloatType => "tfloat"
       case IntegerType | ShortType => "tint"
       case LongType => "tlong"
+      case _ => "string"
+    }
+  }
+
+  def toNewSolrType(dataType: DataType): String = {
+    dataType match {
+      case BinaryType => "binary"
+      case BooleanType => "boolean"
+      case DateType | TimestampType => "pdate"
+      case DoubleType | _: DecimalType => "pdouble"
+      case FloatType => "pfloat"
+      case IntegerType | ShortType => "pint"
+      case LongType => "plong"
       case _ => "string"
     }
   }

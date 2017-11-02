@@ -10,7 +10,7 @@
   <field name="user_id" indexed="true" stored="true" type="string" docValues="true"/>
   <field name="movie_id" indexed="true" stored="true" type="string" docValues="true"/>
   <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
-  <field name="rating_timestamp" indexed="true" stored="true" type="tdate" docValues="true"/>
+  <field name="rating_timestamp" indexed="true" stored="true" type="pdate" docValues="true"/>
   <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
 
   <field name="pickup_location" type="location" multiValued="false" indexed="true" stored="true"/>
@@ -30,7 +30,7 @@
   <dynamicField indexed="true" name="*_ds" stored="true" type="pdoubles"/>
 
   <dynamicField indexed="true" name="*_dt" stored="true" type="pdate"/>
-  <dynamicField indexed="true" multiValued="true" name="*_tdts" stored="true" type="tdate"/>
+  <dynamicField indexed="true" multiValued="true" name="*_tdts" stored="true" type="pdate"/>
   <dynamicField indexed="true" multiValued="true" name="*_dts" stored="true" type="pdate"/>
   <dynamicField indexed="true" name="*_p" stored="true" type="location"/>
   <dynamicField indexed="true" name="*_srpt" stored="true" type="location_rpt"/>
@@ -45,21 +45,18 @@
 
   <uniqueKey>id</uniqueKey>
 
+  <!-- SQL statement failing with pint fields. Works only with tint fields. Needed for 'rating' field -->
+  <fieldType name="tint" class="solr.IntPointField" docValues="true"/>
 
   <!-- Enable docValues after SOLR-11532 is fixed -->
   <fieldType name="location" class="solr.LatLonPointSpatialField"/>
   <fieldType name="string" class="solr.StrField" sortMissingLast="true" docValues="true"/>
   <fieldType class="solr.StrField" docValues="true" multiValued="true" name="strings" sortMissingLast="true"/>
 
-  <fieldType name="long" class="solr.TrieLongField" precisionStep="6" docValues="true"/>
-  <fieldType name="tlong" class="solr.TrieLongField" precisionStep="6" docValues="true"/>
-  <fieldType name="int" class="solr.TrieIntField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tint" class="solr.TrieIntField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="float" class="solr.TrieFloatField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tfloat" class="solr.TrieFloatField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tdouble" class="solr.TrieDoubleField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
-  <fieldType name="tdate" class="solr.TrieDateField" precisionStep="6" positionIncrementGap="0" docValues="true"/>
+  <fieldType name="long" class="solr.LongPointField" docValues="true"/>
+  <fieldType name="int" class="solr.IntPointField" docValues="true"/>
+  <fieldType name="float" class="solr.FloatPointField" docValues="true"/>
+  <fieldType name="double" class="solr.DoublePointField" docValues="true"/>
 
   <fieldType class="solr.SpatialRecursivePrefixTreeFieldType" distErrPct="0.025" distanceUnits="kilometers" geo="true" maxDistErr="0.001" name="location_rpt"/>
 

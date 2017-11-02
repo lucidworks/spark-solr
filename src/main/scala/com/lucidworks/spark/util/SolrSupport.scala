@@ -7,6 +7,7 @@ import java.nio.file.{Files, Paths}
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.regex.Pattern
 
 import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
@@ -22,6 +23,7 @@ import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.params.ModifiableSolrParams
+import org.apache.solr.common.util.SimpleOrderedMap
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
@@ -79,6 +81,49 @@ object CacheHttpSolrClient {
 object SolrSupport extends LazyLogging {
 
   val AUTH_CONFIGURER_CLASS = "auth.configurer.class"
+  val SOLR_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)(\\.(\\d+))?.*")
+
+  def getSolrVersion(zkHost: String): String = {
+    val sysQuery = new SolrQuery
+    sysQuery.setRequestHandler("/admin/info/system")
+
+    val baseUrl = getSolrBaseUrl(zkHost)
+    val httpSolrClient = getHttpSolrClient(baseUrl, zkHost)
+    val rsp = httpSolrClient.query(sysQuery)
+    String.valueOf(rsp.getResponse.get("lucene").asInstanceOf[SimpleOrderedMap[_]].get("solr-spec-version"))
+  }
+
+  def isSolrVersionAtleast(solrVersion: String, major: Int, minor: Int, trivial: Int): Boolean = {
+    val matcher = SOLR_VERSION_PATTERN.matcher(solrVersion)
+    if (matcher.matches()) {
+      val mj = Integer.parseInt(matcher.group(1))
+      val mn = Integer.parseInt(matcher.group(2))
+      val trStr = matcher.group(4)
+      var tr = 0
+      if (trStr != null) {
+        tr = Integer.parseInt(trStr)
+      }
+
+      if (mj > major) {
+        return true
+      }
+      if (mj < major) {
+        return false
+      }
+      if (mn > minor) {
+        return true
+      }
+      if (mn < minor) {
+        return false
+      }
+      if (tr >= trivial) {
+        return true
+      } else {
+        return false
+      }
+    }
+    false
+  }
 
   def getFusionAuthClass(propertyName: String): Option[Class[_ <: FusionAuthHttpClient]] = {
     val configClassProp = System.getProperty(propertyName)
