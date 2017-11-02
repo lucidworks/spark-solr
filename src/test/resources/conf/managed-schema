@@ -46,7 +46,7 @@
   <uniqueKey>id</uniqueKey>
 
   <!-- SQL statement failing with pint fields. Works only with tint fields. Needed for 'rating' field -->
-  <fieldType name="tint" class="solr.TrieIntField" precisionStep="0" positionIncrementGap="0" docValues="true"/>
+  <fieldType name="tint" class="solr.IntPointField" docValues="true"/>
 
   <!-- Enable docValues after SOLR-11532 is fixed -->
   <fieldType name="location" class="solr.LatLonPointSpatialField"/>
