@@ -85,6 +85,8 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getCollectionsForRangeQueries(rangeQueries: Array[String], partitions: List[String]): List[String] = {
+    if (rangeQueries.length > 2)
+      throw new IllegalArgumentException("Please consolidate date range filter criteria to at most 2 clauses!")
     if (rangeQueries.length == 2) {
       val query1Slice = getCollectionsForRangeQuery(rangeQueries(0), partitions)
       val query2Slice = getCollectionsForRangeQuery(rangeQueries(1), partitions)
