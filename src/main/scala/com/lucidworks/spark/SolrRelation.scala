@@ -56,7 +56,7 @@ class SolrRelation(
   if (unknownParams.nonEmpty)
     logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
 
-  lazy val initialQuery: SolrQuery = buildQuery
+  lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
@@ -733,7 +733,42 @@ class SolrRelation(
     logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }
 
-  private def buildQuery: SolrQuery = {
+  private def checkRequiredParams(): Unit = {
+    require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
+  }
+
+  private def resolveCollection(): String = {
+    var collection = conf.getCollection.getOrElse({
+      var coll = Option.empty[String]
+      if (conf.getSqlStmt.isDefined) {
+        val collectionFromSql = SolrRelation.findSolrCollectionNameInSql(conf.getSqlStmt.get)
+        if (collectionFromSql.isDefined) {
+          coll = collectionFromSql
+        }
+      }
+      if (coll.isDefined) {
+        logger.info(s"resolved collection option from sql to be ${coll.get}")
+        coll.get
+      } else {
+        throw new IllegalArgumentException("collection option is required!")
+      }
+    })
+    if (conf.partitionBy.isDefined && conf.partitionBy.get == "time") {
+      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
+      val allCollections = timePartitionQuery.getPartitionsForQuery()
+      logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
+      collection =  allCollections.mkString(",")
+    }
+    initialQuery.set("collection", collection)
+    collection
+  }
+}
+
+object SolrRelation extends LazyLogging {
+
+  val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
+
+  def buildQuery(conf: SolrConf): SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
     val solrParams = conf.getArbitrarySolrParams
 
@@ -784,41 +819,6 @@ class SolrRelation(
     query.add(solrParams)
     query
   }
-
-  private def checkRequiredParams(): Unit = {
-    require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
-  }
-
-  private def resolveCollection(): String = {
-    var collection = conf.getCollection.getOrElse({
-      var coll = Option.empty[String]
-      if (conf.getSqlStmt.isDefined) {
-        val collectionFromSql = SolrRelation.findSolrCollectionNameInSql(conf.getSqlStmt.get)
-        if (collectionFromSql.isDefined) {
-          coll = collectionFromSql
-        }
-      }
-      if (coll.isDefined) {
-        logger.info(s"resolved collection option from sql to be ${coll.get}")
-        coll.get
-      } else {
-        throw new IllegalArgumentException("collection option is required!")
-      }
-    })
-    if (conf.partitionBy.isDefined && conf.partitionBy.get == "time") {
-      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
-      val allCollections = timePartitionQuery.getPartitionsForQuery()
-      logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
-      collection =  allCollections.mkString(",")
-    }
-    initialQuery.set("collection", collection)
-    collection
-  }
-}
-
-object SolrRelation extends LazyLogging {
-
-  val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
 
   def findSolrCollectionNameInSql(sqlText: String): Option[String] = {
     val collectionIdMatcher = solrCollectionInSqlPattern.matcher(sqlText)
