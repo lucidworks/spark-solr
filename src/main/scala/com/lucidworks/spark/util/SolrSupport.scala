@@ -196,11 +196,17 @@ object SolrSupport extends LazyLogging {
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
+    logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
-      solrClientBuilder.withLBHttpSolrClientBuilder(
-        new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
+      if (authHttpClientBuilder.get != null) {
+        logger.info("Configured auth http client builder")
+        solrClientBuilder.withLBHttpSolrClientBuilder(
+          new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
+      } else {
+        logger.error("No custom builder found for configured zkhost")
+      }
     }
     val params = new ModifiableSolrParams()
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
@@ -215,6 +221,7 @@ object SolrSupport extends LazyLogging {
     val httpClient = HttpClientUtil.createClient(params)
     val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
     solrClient.connect()
+    logger.info(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
   }
 

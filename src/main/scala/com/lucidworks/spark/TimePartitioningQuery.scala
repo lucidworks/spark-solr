@@ -41,15 +41,16 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
       logger.warn(s"No filter query found in ${query}")
       return allPartitions
     }
-    val rangeQuery = query.getFilterQueries
+    val rangeQueries = query.getFilterQueries
+        .filter(fq => fq != null && !fq.isEmpty)
         .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
     // TODO: What to do if there are multiple filter queries
-    if (rangeQuery.isEmpty) {
+    if (rangeQueries.isEmpty) {
       logger.warn(s"No range queries found in filter queries. Returning all partitions: ${allPartitions}")
       return allPartitions
     }
     logger.debug(s"All partitions returned for query are: ${allPartitions}")
-    getCollectionsForRangeQuery(rangeQuery(0), allPartitions)
+    getCollectionsForRangeQueries(rangeQueries, allPartitions)
   }
 
   def getPartitions(activeOnly: Boolean): List[String] = {
@@ -82,6 +83,17 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
       }
     })
     partitionListBuffer.toList.sorted
+  }
+
+  def getCollectionsForRangeQueries(rangeQueries: Array[String], partitions: List[String]): List[String] = {
+    if (rangeQueries.length > 2)
+      throw new IllegalArgumentException("Please consolidate date range filter criteria to at most 2 clauses!")
+    if (rangeQueries.length == 2) {
+      val query1Slice = getCollectionsForRangeQuery(rangeQueries(0), partitions)
+      val query2Slice = getCollectionsForRangeQuery(rangeQueries(1), partitions)
+      return query1Slice.intersect(query2Slice)
+    }
+    getCollectionsForRangeQuery(rangeQueries(0), partitions)
   }
 
   def getCollectionsForRangeQuery(rangeQuery: String, partitions: List[String]): List[String] = {
