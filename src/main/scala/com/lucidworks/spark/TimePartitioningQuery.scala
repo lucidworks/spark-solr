@@ -42,6 +42,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
       return allPartitions
     }
     val rangeQueries = query.getFilterQueries
+        .filter(fq => fq != null && !fq.isEmpty)
         .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
     // TODO: What to do if there are multiple filter queries
     if (rangeQueries.isEmpty) {
