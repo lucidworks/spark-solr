@@ -37,7 +37,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
-    <spark.version>2.2.0</spark.version>
+    <spark.version>2.2.1</spark.version>
     <solr.version>7.1.0</solr.version>
     <fasterxml.version>2.4.0</fasterxml.version>
     <scala.version>2.11.8</scala.version>
@@ -46,6 +46,16 @@
     <fasterxml.version>2.4.0</fasterxml.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
+  <repositories>
+    <repository>
+      <id>Restlet Releases</id>
+      <name>Restlet Releases Repository</name>
+      <url>http://maven.restlet.com/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+    </repository>
+  </repositories>
   <profiles>
     <profile>
       <id>release</id>
