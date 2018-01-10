@@ -5,6 +5,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.scala.DefaultScalaModule;
+import org.apache.commons.httpclient.ConnectTimeoutException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.*;
@@ -38,7 +39,9 @@ import org.apache.solr.client.solrj.impl.SolrHttpClientBuilder;
 import org.apache.solr.common.SolrException;
 
 import java.io.*;
+import java.net.ConnectException;
 import java.net.MalformedURLException;
+import java.net.SocketException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -369,6 +372,16 @@ public class FusionPipelineClient {
     return httpClient;
   }
   public ObjectMapper getJsonObjectMapper() { return jsonObjectMapper; }
+
+  public static boolean checkCommunicationError(Exception exc) {
+    Throwable rootCause = SolrException.getRootCause(exc);
+    boolean wasCommError =
+        (rootCause instanceof ConnectException ||
+            rootCause instanceof ConnectTimeoutException ||
+            rootCause instanceof NoHttpResponseException ||
+            rootCause instanceof SocketException);
+    return wasCommError;
+  }
 
   public String getAvailableServer() {
     try {
@@ -729,14 +742,17 @@ public class FusionPipelineClient {
         // parse the JSON before closing the response
         respJson = jsonObjectMapper.readTree(resp.getContent());
       }
-    } catch (IOException ioExc) {
-      // if IO exception, reset and retry if there's another server available ...
+    } catch (Exception ioExc) {
+      if (!checkCommunicationError(ioExc)) {
+        throw ioExc;
+      }
+
+      // it's a communication exception, reset and retry if there's another server available ...
       String nextAvailableServer = getAvailableServer();
-      if (!nextAvailableServer.equals(availableServer)) {
+      if (nextAvailableServer != null && !nextAvailableServer.equals(availableServer)) {
         if (log.isDebugEnabled()) {
           log.debug("Send query to " + availableServer + " failed due to: " + ioExc + " ... retrying at " + nextAvailableServer);
         }
-
         builder = new URIBuilder(nextAvailableServer + pipelinePath);
         builder.addParameters(queryParams);
         builder.addParameter("wt","json");
