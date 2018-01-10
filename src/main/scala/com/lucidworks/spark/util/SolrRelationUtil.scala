@@ -3,14 +3,15 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.sql.Timestamp
 import java.util
-import java.util.{Collections, Date}
+import java.util.Date
 
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.GenericSolrRequest
+import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter
 import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.util.ContentStreamBase
+import org.apache.solr.common.params.CommonParams
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
@@ -578,8 +579,7 @@ object SolrRelationUtil extends LazyLogging {
 
     logger.info("POSTing: " + configJson + " to collection " + collection)
     val solrRequest = new GenericSolrRequest(SolrRequest.METHOD.POST, "/config", null)
-    val content = new ContentStreamBase.StringStream(configJson)
-    solrRequest.setContentStreams(Collections.singleton(content))
+    solrRequest.setContentWriter(new StringPayloadContentWriter(configJson, CommonParams.JSON_MIME))
 
     try {
       solrRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
