@@ -639,7 +639,11 @@ object SolrSupport extends LazyLogging {
       }
     else {
       val aliases: Aliases = zkStateReader.getAliases
-      collections = aliases.resolveAliases(col).toList.toArray
+      val aliasedCollections: String = aliases.getCollectionAliasMap.get(col)
+      if (aliasedCollections == null) {
+        throw new IllegalArgumentException("Collection " + col + " not found!")
+      }
+      collections = aliasedCollections.split(",")
       }
     }
     val liveNodes  = clusterState.getLiveNodes
