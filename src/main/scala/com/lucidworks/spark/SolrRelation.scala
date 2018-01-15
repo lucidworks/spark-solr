@@ -60,7 +60,7 @@ class SolrRelation(
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
-  lazy val collection = resolveCollection()
+  lazy val collection = initialQuery.get("collection")
 
   // loaded lazily to avoid going to Solr until it's necessary, mainly to assist with mocking this class for unit tests
   lazy val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
@@ -737,7 +737,13 @@ class SolrRelation(
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
   }
 
-  private def resolveCollection(): String = {
+}
+
+object SolrRelation extends LazyLogging {
+
+  val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
+
+  def resolveCollection(conf: SolrConf, initialQuery: SolrQuery): Unit = {
     var collection = conf.getCollection.getOrElse({
       var coll = Option.empty[String]
       if (conf.getSqlStmt.isDefined) {
@@ -760,13 +766,7 @@ class SolrRelation(
       collection =  allCollections.mkString(",")
     }
     initialQuery.set("collection", collection)
-    collection
   }
-}
-
-object SolrRelation extends LazyLogging {
-
-  val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
 
   def buildQuery(conf: SolrConf): SolrQuery = {
     val query = SolrQuerySupport.toQuery(conf.getQuery.getOrElse("*:*"))
@@ -817,6 +817,8 @@ object SolrRelation extends LazyLogging {
       }
     }
     query.add(solrParams)
+    // Resolve time series partitions
+    resolveCollection(conf, query)
     query
   }
 
