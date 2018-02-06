@@ -242,7 +242,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>2.3</version>
+        <version>3.1.0</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -347,6 +347,14 @@
                   <pattern>org.apache.commons.cli</pattern>
                   <shadedPattern>shaded.apache.commons.cli</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>com.typesafe.scalalogging</pattern>
+                  <shadedPattern>shaded.typesafe.scalalogging</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.http</pattern>
+                  <shadedPattern>shaded.apache.http</shadedPattern>
+		</relocation>
               </relocations>
             </configuration>
           </execution>
