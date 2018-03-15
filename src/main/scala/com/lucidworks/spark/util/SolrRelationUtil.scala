@@ -232,7 +232,10 @@ object SolrRelationUtil extends LazyLogging {
        }
        if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
      case f: Not =>
-       solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
+       f.child match {
+         case c : IsNull => solrQuery.addFilterQuery(fq(IsNotNull(c.attribute), baseSchema))
+         case _ => solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
+       }
      case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
    }
   }
