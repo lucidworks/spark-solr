@@ -2,11 +2,12 @@ package com.lucidworks.spark.rdd
 
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.SolrQuerySupport
+import com.lucidworks.spark.util.{CacheCloudSolrClient, CacheHttpSolrClient, SolrQuerySupport}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.scheduler.{SparkListenerApplicationEnd, SparkListenerEvent}
 
 import scala.reflect.ClassTag
 import scala.util.Random
@@ -25,6 +26,16 @@ abstract class SolrRDD[T: ClassTag](
     uKey: Option[String] = None)
   extends RDD[T](sc, Seq.empty)
   with LazyLogging {
+
+  sparkContext.addSparkListener(new SparkFirehoseListener() {
+    override def onEvent(event: SparkListenerEvent): Unit = event match {
+        case e: SparkListenerApplicationEnd =>
+          logger.debug(s"Invalidating cloud client and http client caches for event ${e}")
+          CacheCloudSolrClient.cache.invalidateAll()
+          CacheHttpSolrClient.cache.invalidateAll()
+        case _ =>
+    }
+  })
 
   val uniqueKey: String = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 

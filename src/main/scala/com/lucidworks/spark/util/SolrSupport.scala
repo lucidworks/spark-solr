@@ -75,9 +75,6 @@ object CacheHttpSolrClient {
     .build(loader)
 }
 
-/**
- * TODO: Use Solr schema API to index field names
- */
 object SolrSupport extends LazyLogging {
 
   val AUTH_CONFIGURER_CLASS = "auth.configurer.class"

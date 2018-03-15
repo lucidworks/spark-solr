@@ -18,7 +18,9 @@ import org.apache.solr.client.solrj.{SolrQuery, SolrServerException}
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}
+import org.apache.spark.SparkFirehoseListener
 import org.apache.spark.rdd.RDD
+import org.apache.spark.scheduler.{SparkListenerApplicationEnd, SparkListenerEvent}
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -44,6 +46,16 @@ class SolrRelation(
   with LazyLogging {
 
   override val sqlContext: SQLContext = sparkSession.sqlContext
+
+  sparkSession.sparkContext.addSparkListener(new SparkFirehoseListener() {
+    override def onEvent(event: SparkListenerEvent): Unit = event match {
+      case e: SparkListenerApplicationEnd =>
+        logger.debug(s"Invalidating cloud client and http client caches for event ${e}")
+        CacheCloudSolrClient.cache.invalidateAll()
+        CacheHttpSolrClient.cache.invalidateAll()
+      case _ =>
+    }
+  })
 
   def this(parameters: Map[String, String], sparkSession: SparkSession) {
     this(parameters, None, sparkSession)
