@@ -295,6 +295,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
       Dataset df = sparkSession.read().format("solr").options(options).load();
       df.show();
+      df.registerTempTable(testCollection);
       validateSchema(df);
       //df.show();
 
@@ -344,6 +345,10 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
       count = df.filter(df.col("field1_s").isNull()).count();
       assertCount(0, count, "field1_s IS NULL");
+
+      // SQL tests
+      count = sparkSession.sql("SELECT * FROM " + testCollection + " WHERE NOT ISNULL(field1_s)").count();
+      assertCount(4, count, "field1_s NOT ISNULl");
 
       // write to another collection to test writes
       String confName = "testConfig";
