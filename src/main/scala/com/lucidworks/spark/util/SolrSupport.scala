@@ -217,6 +217,8 @@ object SolrSupport extends LazyLogging {
     }
     val httpClient = HttpClientUtil.createClient(params)
     val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
+    solrClient.setZkClientTimeout(30000)
+    solrClient.setZkConnectTimeout(60000)
     solrClient.connect()
     logger.info(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
