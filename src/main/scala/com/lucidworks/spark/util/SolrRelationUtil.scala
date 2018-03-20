@@ -433,6 +433,7 @@ object SolrRelationUtil extends LazyLogging {
         fieldType match {
           case ft: FloatType => f
           case st: StringType => f.toString
+          case lt: LongType => new java.lang.Long(f.longValue())
           case dt: DoubleType => new java.lang.Double(f.doubleValue())
           case _ => throw new MatchError(s"Can't convert Float value ${f} to ${fieldType}")
         }
@@ -440,6 +441,7 @@ object SolrRelationUtil extends LazyLogging {
       case d: java.lang.Double => {
         fieldType match {
           case dt: DoubleType => d
+          case lt: LongType => new java.lang.Long(d.longValue())
           case st: StringType => d.toString
           case _ => throw new MatchError(s"Can't convert Double value ${d} to ${fieldType}")
         }
