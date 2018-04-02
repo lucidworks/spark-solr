@@ -90,7 +90,6 @@ public class FusionPipelineClient {
     Meter docsSentMeter = null;
 
     public String toString() {
-
       StringBuilder sb = new StringBuilder();
       sb.append(id);
       if (sessionEstablishedAt > 0) {
@@ -107,6 +106,8 @@ public class FusionPipelineClient {
   RequestConfig globalConfig;
   CookieStore cookieStore;
   CloseableHttpClient httpClient;
+  String trustedRealmHeader;
+  String[] trustedRealmGroups;
 
   Map<String, FusionSession> sessions;
   Random random;
@@ -123,10 +124,14 @@ public class FusionPipelineClient {
   static long maxNanosOfInactivity = TimeUnit.NANOSECONDS.convert(599, TimeUnit.SECONDS);
 
   public FusionPipelineClient(String fusionHostAndPortList) throws MalformedURLException {
-    this(fusionHostAndPortList, null, null, null);
+    this(fusionHostAndPortList, null, null, null, null, null);
   }
 
   public FusionPipelineClient(String fusionHostAndPortList, String fusionUser, String fusionPass, String fusionRealm) throws MalformedURLException {
+    this(fusionHostAndPortList, fusionUser, fusionPass, fusionRealm, null, null);
+  }
+
+  public FusionPipelineClient(String fusionHostAndPortList, String fusionUser, String fusionPass, String fusionRealm, String trustedRealmHeader, String[] trustedRealmGroups) throws MalformedURLException {
 
     this.fusionUser = fusionUser;
     this.fusionPass = fusionPass;
@@ -138,18 +143,29 @@ public class FusionPipelineClient {
       httpClient = HttpClientUtil.createClient(null);
       isKerberos = true;
     } else {
-      globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.BEST_MATCH).setConnectTimeout(30*1000).setSocketTimeout(90*1000).build();
-      cookieStore = new BasicCookieStore();
-
-      // build the HttpClient to be used for all requests
       HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
-      httpClientBuilder.setDefaultRequestConfig(globalConfig).setDefaultCookieStore(cookieStore);
       httpClientBuilder.setMaxConnPerRoute(1000);
       httpClientBuilder.setMaxConnTotal(1000);
 
-      if (fusionUser != null && fusionRealm == null)
-        httpClientBuilder.addInterceptorFirst(new PreEmptiveBasicAuthenticator(fusionUser, fusionPass));
+      if (trustedRealmHeader != null) {
+        this.trustedRealmHeader = trustedRealmHeader;
+        if (trustedRealmGroups != null) {
+          if (trustedRealmGroups.length != 2) {
+            throw new IllegalArgumentException("Expected 'trustedRealmGroups' array to contain 2 elements: group header name and group header value! Found "+
+                Arrays.asList(trustedRealmGroups)+" instead!");
+          }
+        }
+        this.trustedRealmGroups = trustedRealmGroups;
+      } else {
+        globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.BEST_MATCH).setConnectTimeout(30*1000).setSocketTimeout(90*1000).build();
+        cookieStore = new BasicCookieStore();
+        // build the HttpClient to be used for all requests
+        httpClientBuilder.setDefaultRequestConfig(globalConfig).setDefaultCookieStore(cookieStore);
 
+        if (fusionUser != null && fusionRealm == null) {
+          httpClientBuilder.addInterceptorFirst(new PreEmptiveBasicAuthenticator(fusionUser, fusionPass));
+        }
+      }
       httpClient = httpClientBuilder.build();
     }
 
@@ -232,10 +248,9 @@ public class FusionPipelineClient {
 
     FusionSession fusionSession = new FusionSession();
 
-    if (!isKerberos && realm != null) {
+    if (!isKerberos && trustedRealmHeader == null && realm != null) {
 
       String sessionApi = sessionKey + "/api/session?realmName=" + realm;
-      String jsonString = "{\"username\":\"" + user + "\", \"password\":\"" + password + "\"}";
       URL sessionApiUrl = new URL(sessionApi);
       String sessionHost = sessionApiUrl.getHost();
       try {
@@ -245,6 +260,7 @@ public class FusionPipelineClient {
       }
 
       HttpPost postRequest = new HttpPost(sessionApiUrl.toURI());
+      String jsonString = "{\"username\":\"" + user + "\", \"password\":\"" + password + "\"}";
       postRequest.setEntity(new StringEntity(jsonString, ContentType.create("application/json", StandardCharsets.UTF_8)));
 
       HttpClientContext context = HttpClientContext.create();
@@ -558,6 +574,13 @@ public class FusionPipelineClient {
     }
 
     HttpPost postRequest = new HttpPost(postUrl);
+    if (trustedRealmHeader != null) {
+      postRequest.setHeader(trustedRealmHeader, fusionUser);
+      if (trustedRealmGroups != null) {
+        postRequest.setHeader(trustedRealmGroups[0], trustedRealmGroups[1]);
+      }
+    }
+
     EntityTemplate et = new EntityTemplate(new JacksonContentProducer(jsonObjectMapper, docs));
     et.setContentType(contentType != null ? contentType : PIPELINE_DOC_CONTENT_TYPE);
     et.setContentEncoding(StandardCharsets.UTF_8.name());
@@ -733,7 +756,6 @@ public class FusionPipelineClient {
     builder.addParameters(queryParams);
     builder.addParameter("wt","json");
     HttpGet httpGet = new HttpGet(builder.build());
-
     JsonNode respJson = null;
     HttpEntity resp = null;
     try {
@@ -794,6 +816,13 @@ public class FusionPipelineClient {
 
     if (log.isDebugEnabled()) {
       log.debug("Sending "+httpRequest.getMethod()+" request to: "+endpoint);
+    }
+
+    if (trustedRealmHeader != null) {
+      httpRequest.setHeader(trustedRealmHeader, fusionUser);
+      if (trustedRealmGroups != null) {
+        httpRequest.setHeader(trustedRealmGroups[0], trustedRealmGroups[1]);
+      }
     }
 
     if (isKerberos) {
@@ -898,8 +927,7 @@ public class FusionPipelineClient {
         if (reader != null) {
           try {
             reader.close();
-          } catch (Exception ignore) {
-          }
+          } catch (Exception ignore) {}
         }
       }
     }
@@ -920,8 +948,6 @@ public class FusionPipelineClient {
       } finally {
         httpClient = null;
       }
-    } else {
-      log.error("Already shutdown.");
     }
   }
 }
