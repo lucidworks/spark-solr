@@ -74,6 +74,8 @@ class SolrRelation(
 
   lazy val collection = initialQuery.get("collection")
 
+  var optimizedPlan = false
+
   // loaded lazily to avoid going to Solr until it's necessary, mainly to assist with mocking this class for unit tests
   lazy val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
 
