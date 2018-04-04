@@ -74,6 +74,8 @@ class SolrRelation(
 
   lazy val collection = initialQuery.get("collection")
 
+  var optimizedPlan = false
+
   // loaded lazily to avoid going to Solr until it's necessary, mainly to assist with mocking this class for unit tests
   lazy val uniqueKey: String = SolrQuerySupport.getUniqueKey(conf.getZkHost.get, collection.split(",")(0))
 
@@ -486,7 +488,7 @@ class SolrRelation(
     // Clear all existing filters except the original filters set in the config.
     if (!filters.isEmpty) {
       query.setFilterQueries(queryFilters:_*)
-      filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, collectionBaseSchema))
+      filters.foreach(filter => SolrRelationUtil.applyFilter(filter, query, querySchema))
     } else {
       query.setFilterQueries(queryFilters:_*)
     }
@@ -546,7 +548,7 @@ class SolrRelation(
             SolrRelation.checkSortFieldsForDV(collectionBaseSchema, sortClauses.toList)
           else
             if (isFDV) {
-              SolrRelation.addSortField(baseSchema.get, scanSchema, query, uniqueKey)
+              SolrRelation.addSortField(querySchema, scanSchema, query, uniqueKey)
               logger.info("Added sort field '" + query.getSortField + "' to the query")
               true
             }
@@ -912,15 +914,16 @@ object SolrRelation extends LazyLogging {
     }
 
     querySchema.fields.foreach(field => {
+      val solrFieldName = if (field.metadata.contains("name")) field.metadata.getString("name") else field.name
       // The field only contains 'multiValued' in the schema if 'flattenMultivalued' is false (it is true by default)
       // Hence, this is not always reliable. It is possible a multiValued field ends up being a sort field
       if (field.metadata.contains("multiValued")) {
         if (!field.metadata.getBoolean("multiValued")) {
-          query.addSort(field.name, SolrQuery.ORDER.asc)
+          query.addSort(solrFieldName, SolrQuery.ORDER.asc)
           return
         }
       } else {
-        query.addSort(field.name, SolrQuery.ORDER.asc)
+        query.addSort(solrFieldName, SolrQuery.ORDER.asc)
         return
       }
     })
