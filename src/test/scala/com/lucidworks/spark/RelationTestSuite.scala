@@ -482,6 +482,13 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     assert(schema.fields(8).name == "tsms")
     assert(schema.fields(8).dataType == DoubleType)
     ratingsDF.collectAsList()
+
+    ratingsDF.createOrReplaceTempView(ratingsCollection)
+    sparkSession.sql(s"SELECT movie FROM $ratingsCollection WHERE user = '610'").collect()
+
+    sparkSession.sql(s"SELECT AVG(rating) FROM $ratingsCollection WHERE user = '610' GROUP BY rating").collect()
+
+    sparkSession.sql(s"SELECT movie FROM $ratingsCollection WHERE user = '610' ORDER BY movie DESC").collect()
   }
 
   test("Wildcard Handling in LIKE clause") {
