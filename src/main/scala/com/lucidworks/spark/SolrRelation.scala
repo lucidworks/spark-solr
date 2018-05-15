@@ -565,9 +565,9 @@ class SolrRelation(
       }
 
       // For DataFrame operations like count(), no fields are passed down but the export handler only works when fields are present
+      if (query.getFields == null)
+        query.setFields(uniqueKey)
       if (qt == QT_EXPORT) {
-        if (query.getFields == null)
-          query.setFields(uniqueKey)
         if (query.getSorts.isEmpty && (query.getParams(CommonParams.SORT) == null || query.getParams(CommonParams.SORT).isEmpty))
           query.setSort(uniqueKey, SolrQuery.ORDER.asc)
       }

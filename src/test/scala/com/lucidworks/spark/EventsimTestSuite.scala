@@ -63,6 +63,15 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(df.count() == eventSimCount)
   }
 
+  test("count query with select") {
+    val df: DataFrame = sparkSession.read.format("solr")
+        .option("zkHost", zkHost)
+        .option("collection", collectionName)
+        .option("request_handler", "/select")
+        .load()
+    assert(df.count() == eventSimCount)
+  }
+
   test("count query with custom accumulator name") {
     val acc_name = "custom_acc_name_records_read"
     val df: DataFrame = sparkSession.read.format("solr")
