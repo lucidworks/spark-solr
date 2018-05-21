@@ -3,12 +3,13 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.util
 
+import com.lucidworks.spark.JsonFacetUtil
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
-import org.apache.solr.client.solrj.impl.{CloudSolrClient, HttpSolrClient, InputStreamResponseParser, StreamingBinaryResponseParser}
+import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
@@ -20,7 +21,9 @@ import org.apache.solr.common.params.{ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
@@ -660,5 +663,38 @@ object SolrQuerySupport extends LazyLogging {
       return Some(max)
     }
     None
+  }
+
+  def getDataframeFromFacetQuery(solrQuery: SolrQuery, collection: String, zkhost: String, spark: SparkSession): DataFrame = {
+    implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
+
+    val solrClient: CloudSolrClient = SolrSupport.getCachedCloudClient(zkhost)
+    val cloneQuery = solrQuery.getCopy.set("rows", 0).set("wt", "json").set("distrib", "true")
+
+    val queryRequest: QueryRequest = new QueryRequest(cloneQuery)
+    queryRequest.setMethod(SolrRequest.METHOD.POST)
+
+    queryRequest.setResponseParser(new NoOpResponseParser("json"))
+    val namedList = solrClient.request(queryRequest, collection)
+
+    if (namedList.get("response") != null) {
+      namedList.get("response") match {
+        case rawString : String =>
+          val jsonResp = parse(rawString)
+          if ((jsonResp \ "responseHeader" \ "status") != JNothing) {
+            val status = (jsonResp \ "responseHeader" \ "status").extract[Integer]
+            if (status != 0) {
+              throw new RuntimeException("Solr request returned with status code '" + status + "'. Response: '" + rawString)
+            }
+          }
+          if ((jsonResp \ "facets") != JNothing) {
+            return JsonFacetUtil.parseFacetResponse(jsonResp \ "facets", spark)
+          }
+        case a: Any => logger.info(s"Response is not a String. Response type ${a.getClass}. Returning empty dataframe")
+      }
+      spark.emptyDataFrame
+    } else {
+      spark.emptyDataFrame
+    }
   }
 }
