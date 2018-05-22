@@ -6,7 +6,7 @@ import org.apache.spark.sql.types.DoubleType
 class MovieLensTestSuite extends MovielensBuilder {
 
   test("Score column in SQL statement pushdown to Solr") {
-    val sqlStmt = "SELECT movie_id,title,score from movielens_movies where _query_='title_txt_en:dog' order by score desc LIMIT 100"
+    val sqlStmt = s"SELECT movie_id,title,score from ${moviesColName} where _query_='title_txt_en:dog' order by score desc LIMIT 100"
     val opts = Map(
       "zkhost" -> zkHost,
       "collection" -> moviesColName,
@@ -22,7 +22,7 @@ class MovieLensTestSuite extends MovielensBuilder {
   }
 
   test("Provide SQL schema via config") {
-    val sqlStmt = "SELECT movie_id,title,score from movielens_movies where _query_='title_txt_en:dog' order by score desc LIMIT 100"
+    val sqlStmt = s"SELECT movie_id,title,score from ${moviesColName} where _query_='title_txt_en:dog' order by score desc LIMIT 100"
     val sqlSchema = "movie_id:string,title:string,score:double"
     val opts = Map(
       "zkhost" -> zkHost,

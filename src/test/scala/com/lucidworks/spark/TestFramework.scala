@@ -118,7 +118,7 @@ trait EventsimBuilder extends TestSuiteBuilder {
 
 trait MovielensBuilder extends TestSuiteBuilder with BeforeAndAfterAll with BeforeAndAfterEach {
 
-  val uuid = UUID.randomUUID().toString
+  val uuid = UUID.randomUUID().toString.replace("-", "_")
   val moviesColName: String = s"movielens_movies_$uuid"
   val ratingsColName: String = s"movielens_ratings_$uuid"
   val userColName: String = s"movielens_users_$uuid"
