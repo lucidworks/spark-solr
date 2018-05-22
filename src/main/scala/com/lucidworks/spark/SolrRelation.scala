@@ -63,11 +63,6 @@ class SolrRelation(
 
   checkRequiredParams()
 
-  // Warn about unknown parameters
-  val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
-  if (unknownParams.nonEmpty)
-    logger.warn(s"Unknown parameters passed to query: ${unknownParams.toString()}")
-
   lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
