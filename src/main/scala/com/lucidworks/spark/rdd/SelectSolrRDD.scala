@@ -7,6 +7,7 @@ import com.lucidworks.spark.{SelectSolrRDDPartition, SolrLimitPartition, SolrPar
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.SolrDocument
+import org.apache.solr.common.params.ShardParams
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
@@ -90,7 +91,12 @@ class SelectSolrRDD(
       return Array(SolrLimitPartition(0, zkHost, collection, maxRows.get, query))
     }
 
-    val shards = SolrSupport.buildShardList(zkHost, collection)
+    val shardsTolerant : Boolean =
+      if (query.get(ShardParams.SHARDS_TOLERANT) != null)
+        query.get(ShardParams.SHARDS_TOLERANT).toBoolean
+      else
+        false
+    val shards = SolrSupport.buildShardList(zkHost, collection, shardsTolerant)
     val numReplicas = shards.head.replicas.length
     val numSplits = splitsPerShard.getOrElse(calculateSplitsPerShard(query, shards.size, numReplicas))
 

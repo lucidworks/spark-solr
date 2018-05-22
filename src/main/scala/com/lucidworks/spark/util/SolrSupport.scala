@@ -627,7 +627,7 @@ object SolrSupport extends LazyLogging {
     })
   }
 
-  def buildShardList(zkHost: String, collection: String): List[SolrShard] = {
+  def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
     val solrClient = getCachedCloudClient(zkHost)
     val zkStateReader: ZkStateReader = solrClient.getZkStateReader
     val clusterState: ClusterState = zkStateReader.getClusterState
@@ -667,11 +667,14 @@ object SolrSupport extends LazyLogging {
           }
         }
         val numReplicas: Int = replicas.size
-        if (numReplicas == 0) {
+        if (!shardsTolerant && numReplicas == 0) {
           throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
         }
         shards += SolrShard(slice.getName, replicas.toList)
       }
+    }
+    if (shards.isEmpty) {
+      throw new IllegalStateException(s"No active shards in collections: ${collections}")
     }
     shards.toList
   }

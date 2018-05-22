@@ -6,6 +6,7 @@ import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner, SparkSolrAccumulator}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.common.params.ShardParams
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
@@ -111,7 +112,13 @@ class StreamingSolrRDD(
     }
     logger.info(s"Updated Solr query: ${query.toString}")
 
-    val shards = SolrSupport.buildShardList(zkHost, collection)
+    val shardsTolerant : Boolean =
+      if (query.get(ShardParams.SHARDS_TOLERANT) != null)
+        query.get(ShardParams.SHARDS_TOLERANT).toBoolean
+      else
+        false
+
+    val shards = SolrSupport.buildShardList(zkHost, collection, shardsTolerant)
     val numReplicas = shards.head.replicas.length
     val numSplits = splitsPerShard.getOrElse(calculateSplitsPerShard(query, shards.size, numReplicas, 100000))
     logger.debug(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
