@@ -667,11 +667,29 @@ object SolrQuerySupport extends LazyLogging {
   }
 
   def getDataframeFromFacetQuery(solrQuery: SolrQuery, collection: String, zkhost: String, spark: SparkSession): DataFrame = {
+    try {
+      getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+    } catch {
+      case sse : SolrServerException =>
+        logger.info(s"Retrying request due to ${sse.getMessage}")
+        getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+      case e: Exception =>
+        if (SolrSupport.shouldRetry(e)) {
+          logger.info(s"Retrying request due to ${e.getMessage}")
+          getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+        } else {
+          throw e
+        }
+      case e : Throwable => throw e
+    }
+  }
+
+  def getDataframeFromFacetQueryWithoutRetry(solrQuery: SolrQuery, collection: String, zkhost: String, spark: SparkSession): DataFrame = {
     implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
 
     val solrClient: CloudSolrClient = SolrSupport.getCachedCloudClient(zkhost)
     val cloneQuery = solrQuery.getCopy.set("rows", 0).set("wt", "json").set("distrib", "true")
-
+    logger.debug(s"Facet Query: ${cloneQuery}")
     val queryRequest: QueryRequest = new QueryRequest(cloneQuery)
     queryRequest.setMethod(SolrRequest.METHOD.POST)
 

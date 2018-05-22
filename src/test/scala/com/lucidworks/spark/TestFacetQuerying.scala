@@ -26,8 +26,8 @@ class TestFacetQuerying extends MovielensBuilder {
     assert(rows(0) == Row("drama", 531))
     assert(rows(rows.length - 1) == Row("fantasy", 1))
 
-//    dataFrame.printSchema()
-//    dataFrame.show(20)
+    // dataFrame.printSchema()
+    // dataFrame.show(20)
   }
 
 
@@ -47,8 +47,7 @@ class TestFacetQuerying extends MovielensBuilder {
         |         limit: 2
         |       }
         |     }
-        |   },
-        |   num_genres: "unique(genre)"
+        |   }
         | }
       """.stripMargin
     val queryString = s"q=*:*&json.facet=${facetQuery}"
@@ -89,6 +88,6 @@ class TestFacetQuerying extends MovielensBuilder {
 
     assert(data(0) == Row(10000, 922, 4.0, 1238, 3.5278))
     //    dataFrame.printSchema()
-//    dataFrame.show()
+    //    dataFrame.show()
   }
 }
