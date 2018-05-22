@@ -122,8 +122,8 @@ class SelectSolrRDD(
       SolrPartitioner.getShardPartitions(shards, query)
     }
 
-    if (logger.underlying.isDebugEnabled) {
-      logger.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    if (logger.underlying.isTraceEnabled()) {
+      logger.trace(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     } else {
       logger.info(s"Found ${partitions.length} partitions")
     }

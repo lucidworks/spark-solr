@@ -193,7 +193,7 @@ object SolrQuerySupport extends LazyLogging {
       }
     } catch {
       case e: Exception =>
-        logger.error("Query [" + solrQuery + "] failed due to: " + e)
+        logger.error(s"Query [$solrQuery] failed due to: $e")
 
         //re-try once in the event of a communications error with the server
         if (SolrSupport.shouldRetry(e)) {
@@ -211,10 +211,10 @@ object SolrQuerySupport extends LazyLogging {
             }
           } catch {
             case execOnRetry: SolrServerException =>
-              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry)
+              logger.error(s"Query on retry [$solrQuery] failed due to: $execOnRetry")
               throw execOnRetry
             case execOnRetry1: Exception =>
-              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry1)
+              logger.error(s"Query on retry [$solrQuery] failed due to: $execOnRetry1")
               throw new SolrServerException(execOnRetry1)
           }
         } else {
@@ -341,15 +341,15 @@ object SolrQuerySupport extends LazyLogging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              logger.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+              logger.debug(s"Can't retrieve an index only field: '$name'. Field info $payload")
           } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              logger.debug("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              logger.debug(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
-        case somethingElse: Any => logger.warn("Unknown class type '" + somethingElse.getClass.toString + "'")
+        case somethingElse: Any => logger.warn(s"Unknown class type '${somethingElse.getClass.toString}'")
       }
     }
 
@@ -423,7 +423,7 @@ object SolrQuerySupport extends LazyLogging {
       constructFieldInfoMap(asScalaBuffer(response.getFields).toList)
     } catch {
       case e: Exception =>
-        logger.error("Can't get field metadata from Solr using request due to exception " + e)
+        logger.error(s"Can't get field metadata from Solr using request due to exception $e")
         e match {
           case e1: RuntimeException => throw e1
           case e2: Exception => throw new RuntimeException(e2)
@@ -441,10 +441,10 @@ object SolrQuerySupport extends LazyLogging {
           if (fieldName.isDefined) {
             fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
           } else {
-            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
+            logger.info(s"value for key 'name' is not defined in the payload $fieldInfo")
           }
         } else {
-          logger.info("'name' is not defined in the payload " + fieldInfo)
+          logger.info(s"'name' is not defined in the payload $fieldInfo")
         }
       case m: util.Map[_, _] if mapAsScalaMap(m).keySet.forall(_.isInstanceOf[String]) =>
         val fieldInfo = mapAsScalaMap(m).toMap.asInstanceOf[Map[String, Any]]
@@ -453,10 +453,10 @@ object SolrQuerySupport extends LazyLogging {
           if (fieldName.isDefined) {
             fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
           } else {
-            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
+            logger.info(s"value for key 'name' is not defined in the payload $fieldInfo")
           }
         } else {
-          logger.info("'name' is not defined in the payload " + fieldInfo)
+          logger.info(s"'name' is not defined in the payload $fieldInfo")
         }
       case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass)
     }
@@ -499,7 +499,7 @@ object SolrQuerySupport extends LazyLogging {
       }
     } catch {
       case e: Any =>
-        logger.error("Error while validating query request: " + cloneQuery.toString)
+        logger.error(s"Error while validating query request: ${cloneQuery.toString}")
         throw e
     }
   }

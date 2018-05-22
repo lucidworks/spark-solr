@@ -1,10 +1,11 @@
 package com.lucidworks.spark.query;
 
-import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.io.Tuple;
 import org.apache.solr.client.solrj.io.stream.TupleStream;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.params.SolrParams;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -19,7 +20,7 @@ import java.util.NoSuchElementException;
  */
 public abstract class TupleStreamIterator extends ResultsIterator<Map> {
 
-  private static final Logger log = Logger.getLogger(TupleStreamIterator.class);
+  private static final Logger log = LoggerFactory.getLogger(TupleStreamIterator.class);
 
   protected TupleStream stream;
   protected long numDocs = 0;
@@ -62,12 +63,12 @@ public abstract class TupleStreamIterator extends ResultsIterator<Map> {
       }
 
       long diffMs = System.currentTimeMillis() - openedAt;
-      log.debug("Took " + diffMs + " (ms) to read " + numDocs + " from stream.");
+      log.debug("Took {} (ms) to read {} from stream", diffMs, numDocs);
 
       try {
         afterStreamClosed();
       } catch (Exception exc) {
-        log.warn(exc);
+        log.warn("Exception: {}", exc);
       }
     }
 

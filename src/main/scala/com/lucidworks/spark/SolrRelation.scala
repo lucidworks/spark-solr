@@ -66,7 +66,7 @@ class SolrRelation(
   // Warn about unknown parameters
   val unknownParams = SolrRelation.checkUnknownParams(parameters.keySet)
   if (unknownParams.nonEmpty)
-    logger.warn("Unknown parameters passed to query: " + unknownParams.toString())
+    logger.warn(s"Unknown parameters passed to query: ${unknownParams.toString()}")
 
   lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
@@ -164,7 +164,7 @@ class SolrRelation(
               // crazy hack here but Solr might return a long which we registered as a double in the schema
               if (!m.name.startsWith("count(")) {
                 val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
-                logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for metric " + metricName)
+                logger.info(s"Set ${Constants.PROMOTE_TO_DOUBLE} for metric $metricName")
                 fieldSet.add(StructField(metricName, DoubleType, metadata = metadata))
               } else {
                 fieldSet.add(StructField(metricName, m.dataType))
@@ -210,7 +210,7 @@ class SolrRelation(
               // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
               // based on the aggregation mode used to execute the SQL statement
               val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
-              logger.info(s"Set " + Constants.PROMOTE_TO_DOUBLE + " for col: " + column)
+              logger.info(s"Set ${Constants.PROMOTE_TO_DOUBLE} for col: $column")
               fieldSet.add(new StructField(column, DoubleType, metadata = metadata))
             }  else if (col.equals("score")) {
               fieldSet.add(new StructField(col, DoubleType))
@@ -549,7 +549,7 @@ class SolrRelation(
           else
             if (isFDV) {
               SolrRelation.addSortField(querySchema, scanSchema, query, uniqueKey)
-              logger.debug("Added sort field '" + query.getSortField + "' to the query")
+              logger.debug(s"Added sort field '${query.getSortField}' to the query")
               true
             }
             else
@@ -894,7 +894,7 @@ object SolrRelation extends LazyLogging {
           if (sortFieldMetadata.contains("docValues") && !sortFieldMetadata.getBoolean("docValues"))
             return false
         } else {
-          logger.warn("The sort field '" + sortField + "' does not exist in the base schema")
+          logger.warn(s"The sort field '${sortField}' does not exist in the base schema")
           return false
         }
       }
