@@ -62,7 +62,7 @@ public abstract class TupleStreamIterator extends ResultsIterator<Map> {
       }
 
       long diffMs = System.currentTimeMillis() - openedAt;
-      log.info("Took " + diffMs + " (ms) to read " + numDocs + " from stream.");
+      log.debug("Took " + diffMs + " (ms) to read " + numDocs + " from stream.");
 
       try {
         afterStreamClosed();

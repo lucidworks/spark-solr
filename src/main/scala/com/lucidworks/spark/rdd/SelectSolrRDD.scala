@@ -91,23 +91,25 @@ class SelectSolrRDD(
     }
 
     val shards = SolrSupport.buildShardList(zkHost, collection)
-    logger.info(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
+    val numReplicas = shards.head.replicas.length
+    val numSplits = splitsPerShard.getOrElse(calculateSplitsPerShard(query, shards.size, numReplicas))
+
+    logger.debug(s"rq = $rq, setting query defaults for query = $query uniqueKey = $uniqueKey")
     SolrQuerySupport.setQueryDefaultsForShards(query, uniqueKey)
     // Freeze the index by adding a filter query on _version_ field
     val max = SolrQuerySupport.getMaxVersion(SolrSupport.getCachedCloudClient(zkHost), collection, query, DEFAULT_SPLIT_FIELD)
     if (max.isDefined) {
       val rangeFilter = DEFAULT_SPLIT_FIELD + ":[* TO " + max.get + "]"
-      logger.info("Range filter added to the query: " + rangeFilter)
+      logger.debug("Range filter added to the query: " + rangeFilter)
       query.addFilterQuery(rangeFilter)
     }
 
-    val numReplicas = shards.head.replicas.length
-    val numSplits = splitsPerShard.getOrElse(4 * numReplicas)
-    logger.info(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
+    logger.debug(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
 
+    logger.info(s"Updated Solr query: ${query.toString}")
     val partitions : Array[Partition] = if (numSplits > 1) {
       val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
-      logger.info(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
+      logger.debug(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
       SolrPartitioner.getSplitPartitions(shards, query, splitFieldName, numSplits)
     } else {
       // no explicit split field and only one replica || splits_per_shard was explicitly set to 1, no intra-shard splitting needed
@@ -117,7 +119,7 @@ class SelectSolrRDD(
     if (logger.underlying.isDebugEnabled) {
       logger.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     } else {
-      logger.info(s"Found ${partitions.length} partitions.")
+      logger.info(s"Found ${partitions.length} partitions")
     }
     partitions
   }

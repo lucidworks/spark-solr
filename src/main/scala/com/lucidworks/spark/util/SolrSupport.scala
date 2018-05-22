@@ -193,7 +193,7 @@ object SolrSupport extends LazyLogging {
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
-    logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
+    logger.debug(s"Creating a new SolrCloudClient for zkhost $zkHost")
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
@@ -220,7 +220,7 @@ object SolrSupport extends LazyLogging {
     solrClient.setZkClientTimeout(30000)
     solrClient.setZkConnectTimeout(60000)
     solrClient.connect()
-    logger.info(s"Created new SolrCloudClient for zkhost $zkHost")
+    logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
   }
 

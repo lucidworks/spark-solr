@@ -549,7 +549,7 @@ class SolrRelation(
           else
             if (isFDV) {
               SolrRelation.addSortField(querySchema, scanSchema, query, uniqueKey)
-              logger.info("Added sort field '" + query.getSortField + "' to the query")
+              logger.debug("Added sort field '" + query.getSortField + "' to the query")
               true
             }
             else

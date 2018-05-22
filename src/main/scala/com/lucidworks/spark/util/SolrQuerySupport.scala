@@ -16,7 +16,7 @@ import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.params.{ModifiableSolrParams, SolrParams}
+import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
@@ -134,14 +134,14 @@ object SolrQuerySupport extends LazyLogging {
     if (rows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
 
-    logger.info(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
+    logger.debug(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
     solrQuery
   }
 
   def addDefaultSort(solrQuery: SolrQuery, uniqueKey: String): Unit = {
     if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty) {
       solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey))
-      logger.info(s"Added default sort clause on uniqueKey field $uniqueKey to query $solrQuery")
+      logger.debug(s"Added default sort clause on uniqueKey field $uniqueKey to query $solrQuery")
     }
   }
 
@@ -415,7 +415,7 @@ object SolrQuerySupport extends LazyLogging {
       val schemaRequest = new SchemaRequest.Fields(params)
       val response: SchemaResponse.FieldsResponse = schemaRequest.process(cloudSolrClient, collection)
 
-      logger.debug("Schema response from Solr: {}", response.getFields)
+      logger.trace("Schema response from Solr: {}", response.getFields)
       if (response.getStatus != 0) {
         throw new RuntimeException(
           "Solr request returned with status code '" + response.getStatus + "'. Response: '" + response.getResponse.toString)
@@ -508,9 +508,10 @@ object SolrQuerySupport extends LazyLogging {
     val solrQuery = if (query.isDefined) query.get else new SolrQuery().setQuery("*:*")
     val cloneQuery = solrQuery.getCopy
     cloneQuery.set("distrib", "true")
+    cloneQuery.set(CommonParams.QT, "/select")
     cloneQuery.setRows(0)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val response = cloudClient.query(collection, cloneQuery)
+    val response = cloudClient.query(collection, cloneQuery, SolrRequest.METHOD.POST)
     response.getResults.getNumFound
   }
 
