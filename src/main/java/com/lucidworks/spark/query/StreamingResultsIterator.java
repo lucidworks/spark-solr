@@ -1,7 +1,6 @@
 package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.util.SolrQuerySupport;
-import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -10,6 +9,8 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.Option;
 
 import java.util.Iterator;
@@ -23,7 +24,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
 
-  private static Logger log = Logger.getLogger(StreamingResultsIterator.class);
+  private static Logger log = LoggerFactory.getLogger(StreamingResultsIterator.class);
 
   protected SolrClient solrServer;
   protected SolrQuery solrQuery;
@@ -81,8 +82,8 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
       try {
         hasNext = fetchNextPage();
       } catch (Exception e) {
-        log.error("Fetch next page ("+iterPos+") from Solr "+solrId+" using query ["+solrQuery+
-                "], cursorMarks? "+usingCursors+", cursorMarkOfCurrentPage="+cursorMarkOfCurrentPage+" failed due to: "+e);
+        log.error("Fetch next page ({}) from Solr {} using query [{}], cursorMarks? {}, " +
+            "cursorMarkOfCurrentPage={} failed due to: {}", iterPos, solrId, solrQuery, usingCursors, cursorMarkOfCurrentPage, e);
         if (e instanceof RuntimeException) {
           throw (RuntimeException)e;
         } else {
@@ -180,8 +181,8 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
       if (doc != null) {
         queue.offer(doc);
       } else {
-        log.warn("Received null SolrDocument from "+solrId+" callback while processing cursorMark="+
-          cursorMarkOfCurrentPage+", read "+numDocs+" of "+totalDocs+" so far.");
+        log.warn("Received null SolrDocument from {} callback while processing cursorMark={}," +
+            " read {} of {} so far.", solrId, cursorMarkOfCurrentPage, numDocs, totalDocs);
       }
     }
 
@@ -196,7 +197,7 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
           if (samplePctParam != null) {
             float pct = Float.parseFloat(samplePctParam);
             maxSampleDocs = Math.round((float)numFound * pct);
-            log.info("Sampling "+maxSampleDocs+" ("+pct+" of "+numFound+") from "+solrId);
+            log.info("Sampling {} ({} of {}) from {}", maxSampleDocs, pct, numFound, solrId);
           } else {
             maxSampleDocs = -1; // no sampling
           }

@@ -77,7 +77,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
       stream.setStreamContext(getStreamContext());
       stream.open();
       long diffMs = (System.currentTimeMillis() - startMs);
-      log.info("Open stream to "+url+" took "+diffMs+" (ms)");
+      log.debug("Open stream to "+url+" took "+diffMs+" (ms)");
     } catch (Exception e) {
       log.error("Failed to execute request ["+solrParams+"] due to: "+e, e);
       if (e instanceof RuntimeException) {

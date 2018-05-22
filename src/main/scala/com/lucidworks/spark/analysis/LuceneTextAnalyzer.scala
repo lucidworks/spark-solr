@@ -92,7 +92,7 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   def analyze(field: String, o: Any): Seq[String] = {
     o match {
       case s: String => analyze(field, s)
-      case as: mutable.WrappedArray[String] => analyzeMV(field, as)
+      case as: mutable.WrappedArray[String] @unchecked => analyzeMV(field, as)
       case a: Any => analyze(field, a.toString)
       case _ => Seq.empty[String]
     }
