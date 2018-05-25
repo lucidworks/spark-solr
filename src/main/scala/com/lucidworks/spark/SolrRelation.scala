@@ -254,7 +254,7 @@ class SolrRelation(
     if (excludeFields.isEmpty)
       return querySchema
 
-    logger.info(s"Found field name exclusion patterns: ${excludeFields}")
+    logger.debug(s"Found field name exclusion patterns: ${excludeFields}")
     val excludePatterns = excludeFields.split(",").map(pat => {
       var namePattern = pat.trim()
       val len = namePattern.length()

@@ -90,4 +90,12 @@ class TestFacetQuerying extends MovielensBuilder {
     //    dataFrame.printSchema()
     //    dataFrame.show()
   }
+
+
+  test("Test cores") {
+    val response = SolrQuerySupport.getSolrCores(cloudClient)
+    assert(response.responseHeader.status == 0)
+    assert(response.status.nonEmpty)
+  }
+
 }
