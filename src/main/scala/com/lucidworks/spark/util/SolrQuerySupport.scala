@@ -12,12 +12,12 @@ import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
-import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
-import org.apache.solr.client.solrj.response.QueryResponse
+import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
+import org.apache.solr.client.solrj.response.{CoreAdminResponse, QueryResponse}
 import org.apache.solr.client.solrj.response.schema.SchemaResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams, SolrParams}
+import org.apache.solr.common.params.{CommonParams, CoreAdminParams, ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
@@ -344,11 +344,11 @@ object SolrQuerySupport extends LazyLogging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              logger.debug(s"Can't retrieve an index only field: '$name'. Field info $payload")
+              logger.trace(s"Can't retrieve an index only field: '$name'. Field info $payload")
           } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              logger.debug(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
+              logger.trace(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
@@ -715,5 +715,18 @@ object SolrQuerySupport extends LazyLogging {
     } else {
       spark.emptyDataFrame
     }
+  }
+
+  case class ResponseHeader(status: Int, QTime: Int)
+  case class SolrCoreAdminResponse(responseHeader: ResponseHeader, initFailures: Map[_, _], status: Map[String, Map[String, _]])
+
+  def getSolrCores(cloudSolrClient: CloudSolrClient): SolrCoreAdminResponse = {
+    implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
+    val coreAdminRequest = new CoreAdminRequest()
+    coreAdminRequest.setAction(CoreAdminParams.CoreAdminAction.STATUS)
+    coreAdminRequest.setResponseParser(new NoOpResponseParser("json"))
+    val coreAdminResponse : CoreAdminResponse = coreAdminRequest.process(cloudSolrClient)
+    val rawString : String = coreAdminResponse.getResponse.get("response").asInstanceOf[String]
+    parse(rawString).extract[SolrCoreAdminResponse]
   }
 }
