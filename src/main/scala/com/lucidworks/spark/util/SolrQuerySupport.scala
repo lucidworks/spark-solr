@@ -3,24 +3,27 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.util
 
+import com.lucidworks.spark.JsonFacetUtil
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
-import org.apache.solr.client.solrj.impl.{CloudSolrClient, HttpSolrClient, InputStreamResponseParser, StreamingBinaryResponseParser}
+import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
-import org.apache.solr.client.solrj.request.{LukeRequest, QueryRequest}
-import org.apache.solr.client.solrj.response.QueryResponse
+import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
+import org.apache.solr.client.solrj.response.{CoreAdminResponse, QueryResponse}
 import org.apache.solr.client.solrj.response.schema.SchemaResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.params.{ModifiableSolrParams, SolrParams}
+import org.apache.solr.common.params.{CommonParams, CoreAdminParams, ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.json4s._
+import org.json4s.jackson.JsonMethods._
 
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
@@ -134,14 +137,14 @@ object SolrQuerySupport extends LazyLogging {
     if (rows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
 
-    logger.info(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
+    logger.debug(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
     solrQuery
   }
 
   def addDefaultSort(solrQuery: SolrQuery, uniqueKey: String): Unit = {
     if (solrQuery.getSortField == null || solrQuery.getSortField.isEmpty) {
       solrQuery.addSort(SolrQuery.SortClause.asc(uniqueKey))
-      logger.info(s"Added default sort clause on uniqueKey field $uniqueKey to query $solrQuery")
+      logger.debug(s"Added default sort clause on uniqueKey field $uniqueKey to query $solrQuery")
     }
   }
 
@@ -193,7 +196,7 @@ object SolrQuerySupport extends LazyLogging {
       }
     } catch {
       case e: Exception =>
-        logger.error("Query [" + solrQuery + "] failed due to: " + e)
+        logger.error(s"Query [$solrQuery] failed due to: $e")
 
         //re-try once in the event of a communications error with the server
         if (SolrSupport.shouldRetry(e)) {
@@ -211,10 +214,10 @@ object SolrQuerySupport extends LazyLogging {
             }
           } catch {
             case execOnRetry: SolrServerException =>
-              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry)
+              logger.error(s"Query on retry [$solrQuery] failed due to: $execOnRetry")
               throw execOnRetry
             case execOnRetry1: Exception =>
-              logger.error("Query on retry [" + solrQuery + "] failed due to: " + execOnRetry1)
+              logger.error(s"Query on retry [$solrQuery] failed due to: $execOnRetry1")
               throw new SolrServerException(execOnRetry1)
           }
         } else {
@@ -341,15 +344,15 @@ object SolrQuerySupport extends LazyLogging {
 
           if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              logger.debug("Can't retrieve an index only field: '" + name + "'. Field info " + payload)
+              logger.trace(s"Can't retrieve an index only field: '$name'. Field info $payload")
           } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
             (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
             (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              logger.debug("Can't retrieve a non-stored multiValued docValues field: '" + name + "'. The payload info is " + payload)
+              logger.trace(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
           } else {
             fieldTypeMap.put(name, solrFieldMeta)
           }
-        case somethingElse: Any => logger.warn("Unknown class type '" + somethingElse.getClass.toString + "'")
+        case somethingElse: Any => logger.warn(s"Unknown class type '${somethingElse.getClass.toString}'")
       }
     }
 
@@ -415,7 +418,7 @@ object SolrQuerySupport extends LazyLogging {
       val schemaRequest = new SchemaRequest.Fields(params)
       val response: SchemaResponse.FieldsResponse = schemaRequest.process(cloudSolrClient, collection)
 
-      logger.debug("Schema response from Solr: {}", response.getFields)
+      logger.trace("Schema response from Solr: {}", response.getFields)
       if (response.getStatus != 0) {
         throw new RuntimeException(
           "Solr request returned with status code '" + response.getStatus + "'. Response: '" + response.getResponse.toString)
@@ -423,7 +426,7 @@ object SolrQuerySupport extends LazyLogging {
       constructFieldInfoMap(asScalaBuffer(response.getFields).toList)
     } catch {
       case e: Exception =>
-        logger.error("Can't get field metadata from Solr using request due to exception " + e)
+        logger.error(s"Can't get field metadata from Solr using request due to exception $e")
         e match {
           case e1: RuntimeException => throw e1
           case e2: Exception => throw new RuntimeException(e2)
@@ -441,10 +444,10 @@ object SolrQuerySupport extends LazyLogging {
           if (fieldName.isDefined) {
             fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
           } else {
-            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
+            logger.info(s"value for key 'name' is not defined in the payload $fieldInfo")
           }
         } else {
-          logger.info("'name' is not defined in the payload " + fieldInfo)
+          logger.info(s"'name' is not defined in the payload $fieldInfo")
         }
       case m: util.Map[_, _] if mapAsScalaMap(m).keySet.forall(_.isInstanceOf[String]) =>
         val fieldInfo = mapAsScalaMap(m).toMap.asInstanceOf[Map[String, Any]]
@@ -453,10 +456,10 @@ object SolrQuerySupport extends LazyLogging {
           if (fieldName.isDefined) {
             fieldInfoMap.put(fieldName.get.asInstanceOf[String], fieldInfo)
           } else {
-            logger.info("value for key 'name' is not defined in the payload " + fieldInfo)
+            logger.info(s"value for key 'name' is not defined in the payload $fieldInfo")
           }
         } else {
-          logger.info("'name' is not defined in the payload " + fieldInfo)
+          logger.info(s"'name' is not defined in the payload $fieldInfo")
         }
       case somethingElse: Any => throw new Exception("Unknown type '" + somethingElse.getClass)
     }
@@ -464,7 +467,7 @@ object SolrQuerySupport extends LazyLogging {
   }
 
   def getFieldsFromLuke(zkHost: String, collection: String): Set[String] = {
-    val shardList = SolrSupport.buildShardList(zkHost, collection)
+    val shardList = SolrSupport.buildShardList(zkHost, collection, false)
     val fieldSetBuffer: ListBuffer[String] = ListBuffer.empty[String]
     shardList.foreach(shard => {
       val randomReplica = SolrRDD.randomReplica(shard)
@@ -499,7 +502,7 @@ object SolrQuerySupport extends LazyLogging {
       }
     } catch {
       case e: Any =>
-        logger.error("Error while validating query request: " + cloneQuery.toString)
+        logger.error(s"Error while validating query request: ${cloneQuery.toString}")
         throw e
     }
   }
@@ -508,9 +511,10 @@ object SolrQuerySupport extends LazyLogging {
     val solrQuery = if (query.isDefined) query.get else new SolrQuery().setQuery("*:*")
     val cloneQuery = solrQuery.getCopy
     cloneQuery.set("distrib", "true")
+    cloneQuery.set(CommonParams.QT, "/select")
     cloneQuery.setRows(0)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val response = cloudClient.query(collection, cloneQuery)
+    val response = cloudClient.query(collection, cloneQuery, SolrRequest.METHOD.POST)
     response.getResults.getNumFound
   }
 
@@ -660,5 +664,69 @@ object SolrQuerySupport extends LazyLogging {
       return Some(max)
     }
     None
+  }
+
+  def getDataframeFromFacetQuery(solrQuery: SolrQuery, collection: String, zkhost: String, spark: SparkSession): DataFrame = {
+    try {
+      getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+    } catch {
+      case sse : SolrServerException =>
+        logger.info(s"Retrying request due to ${sse.getMessage}")
+        getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+      case e: Exception =>
+        if (SolrSupport.shouldRetry(e)) {
+          logger.info(s"Retrying request due to ${e.getMessage}")
+          getDataframeFromFacetQueryWithoutRetry(solrQuery, collection, zkhost, spark)
+        } else {
+          throw e
+        }
+      case e : Throwable => throw e
+    }
+  }
+
+  def getDataframeFromFacetQueryWithoutRetry(solrQuery: SolrQuery, collection: String, zkhost: String, spark: SparkSession): DataFrame = {
+    implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
+
+    val solrClient: CloudSolrClient = SolrSupport.getCachedCloudClient(zkhost)
+    val cloneQuery = solrQuery.getCopy.set("rows", 0).set("wt", "json").set("distrib", "true")
+    logger.debug(s"Facet Query: ${cloneQuery}")
+    val queryRequest: QueryRequest = new QueryRequest(cloneQuery)
+    queryRequest.setMethod(SolrRequest.METHOD.POST)
+
+    queryRequest.setResponseParser(new NoOpResponseParser("json"))
+    val namedList = solrClient.request(queryRequest, collection)
+
+    if (namedList.get("response") != null) {
+      namedList.get("response") match {
+        case rawString : String =>
+          val jsonResp = parse(rawString)
+          if ((jsonResp \ "responseHeader" \ "status") != JNothing) {
+            val status = (jsonResp \ "responseHeader" \ "status").extract[Integer]
+            if (status != 0) {
+              throw new RuntimeException("Solr request returned with status code '" + status + "'. Response: '" + rawString)
+            }
+          }
+          if ((jsonResp \ "facets") != JNothing) {
+            return JsonFacetUtil.parseFacetResponse(jsonResp \ "facets", spark)
+          }
+        case a: Any => logger.info(s"Response is not a String. Response type ${a.getClass}. Returning empty dataframe")
+      }
+      spark.emptyDataFrame
+    } else {
+      spark.emptyDataFrame
+    }
+  }
+
+  case class ResponseHeader(status: Int, QTime: Int)
+  case class SolrCoreAdminResponse(responseHeader: ResponseHeader, initFailures: Map[_, _], status: Map[String, Map[String, _]])
+
+  def getSolrCores(cloudSolrClient: CloudSolrClient): SolrCoreAdminResponse = {
+    implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
+    val coreAdminRequest = new CoreAdminRequest()
+    coreAdminRequest.setAction(CoreAdminParams.CoreAdminAction.STATUS)
+    coreAdminRequest.setResponseParser(new NoOpResponseParser("json"))
+    val coreAdminResponse : CoreAdminResponse = coreAdminRequest.process(cloudSolrClient)
+    val rawString : String = coreAdminResponse.getResponse.get("response").asInstanceOf[String]
+    parse(rawString).extract[SolrCoreAdminResponse]
   }
 }

@@ -193,7 +193,7 @@ object SolrSupport extends LazyLogging {
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
-    logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
+    logger.debug(s"Creating a new SolrCloudClient for zkhost $zkHost")
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
@@ -220,7 +220,7 @@ object SolrSupport extends LazyLogging {
     solrClient.setZkClientTimeout(30000)
     solrClient.setZkConnectTimeout(60000)
     solrClient.connect()
-    logger.info(s"Created new SolrCloudClient for zkhost $zkHost")
+    logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
   }
 
@@ -627,7 +627,7 @@ object SolrSupport extends LazyLogging {
     })
   }
 
-  def buildShardList(zkHost: String, collection: String): List[SolrShard] = {
+  def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
     val solrClient = getCachedCloudClient(zkHost)
     val zkStateReader: ZkStateReader = solrClient.getZkStateReader
     val clusterState: ClusterState = zkStateReader.getClusterState
@@ -667,11 +667,14 @@ object SolrSupport extends LazyLogging {
           }
         }
         val numReplicas: Int = replicas.size
-        if (numReplicas == 0) {
+        if (!shardsTolerant && numReplicas == 0) {
           throw new IllegalStateException("Shard " + slice.getName + " in collection " + coll + " does not have any active replicas!")
         }
         shards += SolrShard(slice.getName, replicas.toList)
       }
+    }
+    if (shards.isEmpty) {
+      throw new IllegalStateException(s"No active shards in collections: ${collections}")
     }
     shards.toList
   }

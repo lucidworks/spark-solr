@@ -87,6 +87,19 @@ abstract class SolrRDD[T: ClassTag](
     }
   }
 
+  def calculateSplitsPerShard(solrQuery: SolrQuery, shardSize: Int, replicaSize: Int, docsPerTask: Int = 10000, maxRows: Option[Int] = None): Int = {
+    val minSplitSize = 2 * replicaSize
+    if (maxRows.isDefined) return minSplitSize
+    val noOfDocs = SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, Some(solrQuery))
+    val splits = noOfDocs / (docsPerTask * shardSize)
+    val splitsPerShard = if (splits > minSplitSize) {
+      splits.toInt
+    } else {
+      minSplitSize
+    }
+    logger.debug(s"Suggested split size: ${splitsPerShard} for collection size: ${noOfDocs} using query: ${solrQuery}")
+    splitsPerShard
+  }
 }
 
 object SolrRDD {
@@ -133,5 +146,6 @@ object SolrRDD {
   def requiresStreamingRDD(rq: String): Boolean = {
     rq == QT_EXPORT || rq == QT_STREAM || rq == QT_SQL
   }
+
 }
 

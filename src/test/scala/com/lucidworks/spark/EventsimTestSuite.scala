@@ -20,7 +20,7 @@ class EventsimTestSuite extends EventsimBuilder {
       .query("*:*")
       .rows(10)
       .select(Array("id"))
-    assert(solrRDD.getNumPartitions == numShards*4)
+    assert(solrRDD.getNumPartitions == numShards*2)
     testCommons(solrRDD)
   }
 
@@ -63,6 +63,15 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(df.count() == eventSimCount)
   }
 
+  test("count query with select") {
+    val df: DataFrame = sparkSession.read.format("solr")
+        .option("zkHost", zkHost)
+        .option("collection", collectionName)
+        .option("request_handler", "/select")
+        .load()
+    assert(df.count() == eventSimCount)
+  }
+
   test("count query with custom accumulator name") {
     val acc_name = "custom_acc_name_records_read"
     val df: DataFrame = sparkSession.read.format("solr")
@@ -86,7 +95,7 @@ class EventsimTestSuite extends EventsimBuilder {
     )
     val df: DataFrame = sparkSession.read.format("solr").options(options).load()
     assert(df.rdd.getNumPartitions > numShards)
-    assert(df.rdd.getNumPartitions == 8)
+    assert(df.rdd.getNumPartitions == 4)
   }
 
   test("SQL query splits with export handler") {

@@ -15,7 +15,7 @@ import org.apache.spark.sql.functions.udf
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
 import org.restlet.ext.servlet.ServerServlet
-import org.scalatest.{BeforeAndAfterAll, Suite}
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 
 trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Suite =>
 
@@ -116,16 +116,17 @@ trait EventsimBuilder extends TestSuiteBuilder {
   def numShards: Int = 2
 }
 
-trait MovielensBuilder extends TestSuiteBuilder {
+trait MovielensBuilder extends TestSuiteBuilder with BeforeAndAfterAll with BeforeAndAfterEach {
 
-  val moviesColName: String = "movielens_movies"
-  val ratingsColName: String = "movielens_ratings"
-  val userColName: String = "movielens_users"
+  val uuid = UUID.randomUUID().toString.replace("-", "_")
+  val moviesColName: String = s"movielens_movies_$uuid"
+  val ratingsColName: String = s"movielens_ratings_$uuid"
+  val userColName: String = s"movielens_users_$uuid"
 
   override def beforeAll(): Unit = {
     super.beforeAll()
     createCollections()
-    MovieLensUtil.indexMovieLensDataset(sparkSession, zkHost)
+    MovieLensUtil.indexMovieLensDataset(sparkSession, zkHost, uuid)
     SolrSupport.getCachedCloudClient(zkHost).commit(moviesColName)
     SolrSupport.getCachedCloudClient(zkHost).commit(ratingsColName)
   }
@@ -151,12 +152,12 @@ trait MovielensBuilder extends TestSuiteBuilder {
 object MovieLensUtil {
   val dataDir: String = "src/test/resources/ml-100k"
 
-  def indexMovieLensDataset(sparkSession: SparkSession, zkhost: String): Unit = {
+  def indexMovieLensDataset(sparkSession: SparkSession, zkhost: String, uuid: String): Unit = {
     //    val userDF = sqlContext.read.json(dataDir + "/movielens_users.json")
     //    userDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_users", "batch_size" -> "10000")).save
 
     val moviesDF = sparkSession.read.json(dataDir + "/movielens_movies.json")
-    moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> "movielens_movies", "batch_size" -> "10000")).save
+    moviesDF.write.format("solr").options(Map("zkhost" -> zkhost, "collection" -> s"movielens_movies_$uuid", "batch_size" -> "10000")).save
 
     val ratingsDF = sparkSession.read.json(dataDir + "/movielens_ratings_10k.json")
     val dateUDF = udf(DateConverter.toISO8601(_: String))
@@ -167,7 +168,7 @@ object MovieLensUtil {
       .limit(10000)
       .write
       .format("solr")
-      .options(Map("zkhost" -> zkhost, "collection" -> "movielens_ratings", "batch_size" -> "10000"))
+      .options(Map("zkhost" -> zkhost, "collection" -> s"movielens_ratings_$uuid", "batch_size" -> "10000"))
       .save
   }
 }

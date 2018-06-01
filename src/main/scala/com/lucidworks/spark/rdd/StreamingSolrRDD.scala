@@ -6,6 +6,7 @@ import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner, SparkSolrAccumulator}
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.common.params.ShardParams
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.{Partition, SparkContext, TaskContext}
 
@@ -109,15 +110,22 @@ class StreamingSolrRDD(
       logger.info(s"Using SolrCloud stream partitioning scheme to process request to $rq for collection $collection using query: $query")
       return Array(CloudStreamPartition(0, zkHost, collection, query))
     }
+    logger.info(s"Updated Solr query: ${query.toString}")
 
-    val shards = SolrSupport.buildShardList(zkHost, collection)
+    val shardsTolerant : Boolean =
+      if (query.get(ShardParams.SHARDS_TOLERANT) != null)
+        query.get(ShardParams.SHARDS_TOLERANT).toBoolean
+      else
+        false
+
+    val shards = SolrSupport.buildShardList(zkHost, collection, shardsTolerant)
     val numReplicas = shards.head.replicas.length
-    val numSplits = splitsPerShard.getOrElse(4 * numReplicas)
-    logger.info(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
+    val numSplits = splitsPerShard.getOrElse(calculateSplitsPerShard(query, shards.size, numReplicas, 100000))
+    logger.debug(s"Using splitField=$splitField, splitsPerShard=$splitsPerShard, and numReplicas=$numReplicas for computing partitions.")
 
     val partitions : Array[Partition] = if (numSplits > 1) {
       val splitFieldName = splitField.getOrElse(DEFAULT_SPLIT_FIELD)
-      logger.info(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
+      logger.debug(s"Applied $numSplits intra-shard splits on the $splitFieldName field for $collection to better utilize all active replicas. Set the 'split_field' option to override this behavior or set the 'splits_per_shard' option = 1 to disable splits per shard.")
       query.set("partitionKeys", splitFieldName)
       // Workaround for SOLR-10490. TODO: Replace with SolrPartitioner#getSplitPartitions once SOLR-10490 is resolved
       SolrPartitioner.getExportHandlerPartitions(shards, query, splitFieldName, numSplits)
@@ -126,8 +134,8 @@ class StreamingSolrRDD(
       SolrPartitioner.getExportHandlerPartitions(shards, query)
     }
 
-    if (logger.underlying.isDebugEnabled) {
-      logger.debug(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
+    if (logger.underlying.isTraceEnabled()) {
+      logger.trace(s"Found ${partitions.length} partitions: ${partitions.mkString(",")}")
     } else {
       logger.info(s"Found ${partitions.length} partitions.")
     }

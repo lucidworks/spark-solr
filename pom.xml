@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>3.5.0-SNAPSHOT</version>
+  <version>3.6.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -101,7 +101,7 @@
           <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
-            <version>0.7.4.201502262128</version>
+            <version>0.7.5.201505241946</version>
             <configuration>
               <excludes>
               <exclude>com/lucidworks/spark/example/**</exclude>

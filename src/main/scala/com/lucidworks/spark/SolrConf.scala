@@ -146,6 +146,11 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     solrParams
   }
 
+  def getExtraOptions: Map[String, String] = {
+    val extraParams = SolrRelation.checkUnknownParams(config.keySet)
+    config.filter(c => extraParams.contains(c._1))
+  }
+
   override def toString = {
     val sb = new StringBuilder
     sb ++= "SolrConf("

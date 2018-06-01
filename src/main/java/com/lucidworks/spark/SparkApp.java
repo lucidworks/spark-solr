@@ -32,10 +32,12 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import static org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder.LOGIN_CONFIG_PROP;
 
 /**
@@ -108,7 +110,7 @@ public class SparkApp implements Serializable {
     public abstract void setup(JavaStreamingContext jssc, CommandLine cli) throws Exception;
   }
 
-  public static Logger log = Logger.getLogger(SparkApp.class);
+  public static Logger log = LoggerFactory.getLogger(SparkApp.class);
 
   /**
    * Runs a stream processor implementation.
@@ -181,7 +183,7 @@ public class SparkApp implements Serializable {
     sparkConf.set(sparkExecutorExtraJavaOptionsParam, sparkExecutorExtraJavaOptions);
     System.setProperty(LOGIN_CONFIG_PROP, solrJaasAuthConfig);
     System.setProperty("solr.kerberos.jaas.appname", solrJaasAppName);
-    log.info("Added " + solrJaasOpts + " to " + sparkExecutorExtraJavaOptionsParam + " for authenticating to Solr.");
+    log.info("Added {} to {} for authenticating to Solr", solrJaasOpts, sparkExecutorExtraJavaOptionsParam);
   }
 
   /**
