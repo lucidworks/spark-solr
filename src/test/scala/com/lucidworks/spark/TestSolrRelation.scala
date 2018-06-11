@@ -35,4 +35,12 @@ class TestSolrRelation extends SparkSolrFunSuite with SparkSolrContextBuilder {
     assert(fq(0) === """((gender:"F" AND artist:"Bernadette Peters") OR (gender:"M" AND artist:"Girl Talk"))""")
   }
 
+  test("custom field types option") {
+    val fieldTypeOption = "a:b,c,d:e"
+    val fieldTypes = SolrRelation.parseUserSuppliedFieldTypes(fieldTypeOption)
+    assert(fieldTypes.size ===  2)
+    assert(fieldTypes.keySet === Set("a", "d"))
+    assert(fieldTypes("a") === "b")
+    assert(fieldTypes("d") === "e")
+  }
 }

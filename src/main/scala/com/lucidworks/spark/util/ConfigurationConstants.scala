@@ -30,6 +30,7 @@ object ConfigurationConstants {
   val GENERATE_UNIQUE_CHILD_KEY: String = "gen_uniq_child_key"
   val COMMIT_WITHIN_MILLI_SECS: String = "commit_within"
   val CHILD_DOC_FIELDNAME: String = "child_doc_fieldname"
+  val SOLR_FIELD_TYPES: String = "solr_field_types"
 
   val SAMPLE_SEED: String = "sample_seed"
   val SAMPLE_PCT: String = "sample_pct"
