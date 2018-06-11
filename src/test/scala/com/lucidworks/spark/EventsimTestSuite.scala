@@ -208,6 +208,44 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(timeQueryDF.count() == 987)
   }
 
+  test("Nested SQL Filter queries with OR/AND") {
+    val df: DataFrame = sparkSession.read.option("zkhost", zkHost).solr(collectionName)
+    df.createOrReplaceTempView("events")
+
+    val sqlQuery =
+      """
+        | SELECT userId, sessionId, page, lastName, firstName, method, level, gender, artist
+        |   FROM events
+        | WHERE page IN ('NextSong')
+        |       AND (
+        |         (gender = 'F' AND artist = 'Bernadette Peters')
+        |         OR
+        |         (gender = 'M' AND artist = 'Girl Talk')
+        |       )
+      """.stripMargin
+    val queryResults = sparkSession.sql(sqlQuery).collectAsList()
+    assert(queryResults.size == 3)
+  }
+
+  test("Nested SQL Filter queries with And/OR") {
+    val df: DataFrame = sparkSession.read.option("zkhost", zkHost).solr(collectionName)
+    df.createOrReplaceTempView("events")
+
+    val sqlQuery =
+      """
+        | SELECT userId, sessionId, page, lastName, firstName, method, level, gender, artist
+        |   FROM events
+        | WHERE page IN ('NextSong')
+        |       AND (
+        |         (method = 'PUT' OR method = 'GET')
+        |         AND
+        |         (artist = 'Gorillaz' OR artist = 'Girl Talk')
+        |       )
+      """.stripMargin
+    val queryResults = sparkSession.sql(sqlQuery).collectAsList()
+    assert(queryResults.size == 3)
+  }
+
   // Ignored since Spark is not passing timestamps filters to the buildScan method. Range timestamp filtering is being done at Spark layer
   ignore("Timestamp range filter queries") {
     val df: DataFrame = sparkSession.read.format("solr")
