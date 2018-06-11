@@ -252,7 +252,7 @@ class EventsimTestSuite extends EventsimBuilder {
         |       )
       """.stripMargin
     val queryResults = sparkSession.sql(sqlQuery).collectAsList()
-    assert(queryResults.size == 3)
+    assert(queryResults.size == 4)
   }
 
   // Ignored since Spark is not passing timestamps filters to the buildScan method. Range timestamp filtering is being done at Spark layer
