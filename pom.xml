@@ -303,6 +303,7 @@
                   <exclude>com.sun.xml.bind:jaxb-impl</exclude>
                   <exclude>com.sun.jersey:jersey-client</exclude>
                   <exclude>org.mortbay.jetty:jetty-util</exclude>
+                  <exclude>org.spire-math</exclude>
                 </excludes>
               </artifactSet>
               <relocations>
