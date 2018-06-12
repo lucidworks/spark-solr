@@ -304,6 +304,7 @@
                   <exclude>com.sun.jersey:jersey-client</exclude>
                   <exclude>org.mortbay.jetty:jetty-util</exclude>
                   <exclude>org.spire-math</exclude>
+                  <exclude>com.chuusai:shapeless_2.11</exclude>
                 </excludes>
               </artifactSet>
               <relocations>
