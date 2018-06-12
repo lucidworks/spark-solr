@@ -213,7 +213,7 @@ object SolrRelationUtil extends LazyLogging {
     solrQuery.setFields(fieldList.toList:_*)
   }
 
-  def applyFilter(filter: Filter, solrQuery: SolrQuery, baseSchema: StructType) = {
+  def applyFilter(filter: Filter, solrQuery: SolrQuery, baseSchema: StructType): Unit = {
    filter match {
      case f: And =>
        val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
@@ -245,19 +245,35 @@ object SolrRelationUtil extends LazyLogging {
       case f: And =>
         f.left match {
           case l: And => getAllFilterValues(l, baseSchema, values)
+          case l: Or =>
+            val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
+            val singleFq = s"(${nestedFqs.mkString(" OR ")})"
+            values.+=(singleFq)
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
           case r: And => getAllFilterValues(r, baseSchema, values)
+          case r: Or =>
+            val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
+            val singleFq = s"(${nestedFqs.mkString(" OR ")})"
+            values.+=(singleFq)
           case _ => values.+=(fq(f.right, baseSchema))
         }
       case f: Or =>
         f.left match {
           case l: Or => getAllFilterValues(l, baseSchema, values)
+          case l: And =>
+            val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
+            val singleFq = s"(${nestedFqs.mkString(" AND ")})"
+            values.+=(singleFq)
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
           case r: Or => getAllFilterValues(r, baseSchema, values)
+          case r: And =>
+            val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
+            val singleFq = s"(${nestedFqs.mkString(" AND ")})"
+            values.+=(singleFq)
           case _ => values.+=(fq(f.right, baseSchema))
         }
     }

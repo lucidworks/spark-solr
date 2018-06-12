@@ -47,7 +47,12 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
 
   @AfterClass
   public static void stopSparkSession() {
-    sparkSession.stop();
+    try {
+      sparkSession.stop();
+    } finally {
+      SparkSession.clearActiveSession();
+      SparkSession.clearDefaultSession();
+    }
   }
 
   protected void buildCollection(String zkHost, String collection) throws Exception {

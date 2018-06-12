@@ -10,6 +10,7 @@ import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
+import org.apache.commons.lang.StringUtils
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
@@ -644,6 +645,12 @@ class SolrRelation(
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
+    val customFieldTypes =
+      if (conf.getSolrFieldTypes.isDefined)
+        SolrRelation.parseUserSuppliedFieldTypes(conf.getSolrFieldTypes.get)
+      else
+        Map.empty[String, String]
+
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
     dfSchema.fields.foreach(f => {
@@ -651,12 +658,12 @@ class SolrRelation(
         if(f.name == fieldNameForChildDocuments) {
           val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
           e.foreach(ef => {
-            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion)
+            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
             logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
             fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
           })
         } else {
-          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion)
+          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
           logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
           fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
         }
@@ -996,26 +1003,28 @@ object SolrRelation extends LazyLogging {
     }
   }
 
-  def toAddFieldMap(sf: StructField, solrVersion: String): Map[String,AnyRef] = {
+  def toAddFieldMap(sf: StructField, solrVersion: String, solrType: Option[String] = None): Map[String,AnyRef] = {
     val map = scala.collection.mutable.Map[String,AnyRef]()
     map += ("name" -> sf.name)
     map += ("indexed" -> "true")
     map += ("stored" -> "true")
-    map += ("docValues" -> "true")
+    if (solrType.isEmpty) {
+      map += ("docValues" -> "true")
+    }
     val dataType = sf.dataType
     dataType match {
       case at: ArrayType =>
         map += ("multiValued" -> "true")
         if (SolrSupport.isSolrVersionAtleast(solrVersion, 7, 0, 0))
-          map += ("type" -> toNewSolrType(at.elementType))
+          map += ("type" -> solrType.getOrElse(toNewSolrType(at.elementType)))
         else
-          map += ("type" -> toOldSolrType(at.elementType))
+          map += ("type" -> solrType.getOrElse(toOldSolrType(at.elementType)))
       case _ =>
         map += ("multiValued" -> "false")
         if (SolrSupport.isSolrVersionAtleast(solrVersion, 7, 0, 0))
-          map += ("type" -> toNewSolrType(dataType))
+          map += ("type" -> solrType.getOrElse(toNewSolrType(dataType)))
         else
-          map += ("type" -> toOldSolrType(dataType))
+          map += ("type" -> solrType.getOrElse(toOldSolrType(dataType)))
     }
     map.toMap
   }
@@ -1044,6 +1053,24 @@ object SolrRelation extends LazyLogging {
       case LongType => "plong"
       case _ => "string"
     }
+  }
+
+  def parseUserSuppliedFieldTypes(solrFieldTypes: String): Map[String, String] = {
+    val fieldTypeMapBuffer = scala.collection.mutable.Map.empty[String, String]
+    if (solrFieldTypes != null) {
+      solrFieldTypes.split(",").foreach(f => {
+          val nameAndType = f.split(":")
+          if (nameAndType.length == 2) {
+            val fieldName = nameAndType(0).trim
+            val fieldType = nameAndType(1).trim
+            if (StringUtils.isNotEmpty(fieldName) && StringUtils.isNotEmpty(fieldType)) {
+              fieldTypeMapBuffer.put(fieldName, fieldType)
+            }
+          }
+        }
+      )
+    }
+    fieldTypeMapBuffer.toMap
   }
 }
 

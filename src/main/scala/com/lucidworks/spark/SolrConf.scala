@@ -129,6 +129,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     None
   }
 
+  def getSolrFieldTypes: Option[String] = config.get(SOLR_FIELD_TYPES)
+
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
     if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
@@ -223,6 +225,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
       sb ++= s", ${SOLR_SQL_SCHEMA}=${getSolrSQLSchema.get}"
     }
 
+    sb ++= s", extraOptions=${getExtraOptions}"
+
     // time-based partitioning options
     if (partitionBy.isDefined) {
       sb ++= s", ${PARTITION_BY}=${partitionBy.get}"
@@ -260,7 +264,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
       sb ++= s", ${CHILD_DOC_FIELDNAME}=${getChildDocFieldName.get}"
     }
     if (getAccumulatorName.isDefined) {
-    sb ++= s", ${ACCUMULATOR_NAME}=${getAccumulatorName.get}"
+      sb ++= s", ${ACCUMULATOR_NAME}=${getAccumulatorName.get}"
+    }
+    if (getSolrFieldTypes.isDefined) {
+      sb ++= s", ${SOLR_FIELD_TYPES}=${getSolrFieldTypes.get}"
     }
     sb ++= ")"
     sb.toString
