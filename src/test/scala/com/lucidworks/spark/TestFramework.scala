@@ -84,7 +84,12 @@ trait SparkSolrContextBuilder extends BeforeAndAfterAll { this: Suite =>
   }
 
   override def afterAll(): Unit = {
-    sparkSession.stop()
+    try {
+      sparkSession.stop()
+    } finally {
+      SparkSession.clearDefaultSession()
+      SparkSession.clearActiveSession()
+    }
     super.afterAll()
   }
 }
