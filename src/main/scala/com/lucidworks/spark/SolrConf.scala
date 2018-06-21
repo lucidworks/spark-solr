@@ -1,9 +1,10 @@
 package com.lucidworks.spark
 
+import com.lucidworks.spark.util.ConfigurationConstants._
+import com.lucidworks.spark.util.QueryConstants._
+import com.lucidworks.spark.util.SolrRelationUtil
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.common.params.ModifiableSolrParams
-import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.ConfigurationConstants._
 
 class SolrConf(config: Map[String, String]) extends Serializable with LazyLogging {
 
@@ -33,8 +34,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def getFields: Array[String] =
     if (config.get(SOLR_FIELD_PARAM).isDefined) config(SOLR_FIELD_PARAM).split(",").map(_.trim) else Array.empty
 
-  def getFilters: Array[String] =
-    if (config.get(SOLR_FILTERS_PARAM).isDefined) config(SOLR_FILTERS_PARAM).split(",").map(_.trim) else Array.empty
+  def getFilters: List[String] =
+    if (config.get(SOLR_FILTERS_PARAM).isDefined)
+      SolrRelationUtil.parseFiltersAsList(config(SOLR_FILTERS_PARAM))
+    else List.empty
 
   def partitionBy: Option[String] = config.get(PARTITION_BY)
 
