@@ -134,7 +134,6 @@ object SolrQuerySupport extends LazyLogging {
     if (rows == null)
       solrQuery.setRows(QueryConstants.DEFAULT_PAGE_SIZE)
 
-    logger.info(s"Constructed SolrQuery: $solrQuery from user-supplied query param: $queryString")
     solrQuery
   }
 

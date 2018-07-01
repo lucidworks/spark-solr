@@ -798,13 +798,8 @@ object SolrRelation extends LazyLogging {
       query.setRequestHandler(DEFAULT_REQUEST_HANDLER)
     }
 
-    if (conf.getFields.nonEmpty) {
-      query.setFields(conf.getFields:_*)
-    }
-
-    if (conf.getFilters.nonEmpty) {
-      query.setFilterQueries(conf.getFilters:_*)
-    }
+    query.setFields(conf.getFields:_*)
+    query.setFilterQueries(conf.getFilters:_*)
 
     val fqParams = solrParams.remove("fq")
     if (fqParams != null && fqParams.nonEmpty) {

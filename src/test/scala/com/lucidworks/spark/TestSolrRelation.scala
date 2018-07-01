@@ -35,4 +35,11 @@ class TestSolrRelation extends SparkSolrFunSuite with SparkSolrContextBuilder {
     assert(fq(0) === """((gender:"F" AND artist:"Bernadette Peters") OR (gender:"M" AND artist:"Girl Talk"))""")
   }
 
+  test("test commas in filter values") {
+    val fieldValues = """a:"c,d e",f:g,h:"1, 35, 2""""
+    val parsedFilters = SolrRelationUtil.parseFiltersAsList(fieldValues)
+    assert(parsedFilters.head === """a:"c,d e"""")
+    assert(parsedFilters(1) === "f:g")
+    assert(parsedFilters(2) === """h:"1, 35, 2"""")
+  }
 }
