@@ -608,4 +608,20 @@ object SolrRelationUtil extends LazyLogging {
       case e: Exception => logger.error("Error setting softAutoCommit.maxTime. Exception: {}", e.getMessage)
     }
   }
+
+  // Deal with commas inside quotes like filters=a:"b, c",d:"e",c:"e, g,h"
+  def parseFiltersAsList(filters: String): List[String] = {
+    val filterList = ListBuffer.empty[String]
+    var start = 0
+    var inQuotes = false
+    for ((c, i) <- filters.zipWithIndex) {
+      if (c == '\"') inQuotes = !inQuotes
+      else if (c == ',' && !inQuotes) {
+        filterList.+=(filters.substring(start, i).trim)
+        start = i + 1
+      }
+      if (i == filters.length-1) filterList.+=(filters.substring(start).trim)
+    }
+    filterList.toList
+  }
 }
