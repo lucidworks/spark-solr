@@ -55,7 +55,7 @@ object JsonFacetUtil extends LazyLogging {
       case bd : BigDecimal =>
         (DataTypes.DoubleType, bd.toDouble)
       case bi: BigInt =>
-        (DataTypes.IntegerType, bi.toInt)
+        (DataTypes.LongType, bi.toLong)
       case jd : java.lang.Double =>
         (DataTypes.DoubleType, jd.toDouble)
       case s : String =>
