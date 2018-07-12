@@ -108,6 +108,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def samplePct: Option[Float] =
     if (config.get(SAMPLE_PCT).isDefined) Some(config(SAMPLE_PCT).toFloat) else None
 
+  def updateSchema: Option[Boolean] =
+    if (config.get(UPDATE_SCHEMA).isDefined) Some(config(UPDATE_SCHEMA).toBoolean) else None
+
   def requestHandler: Option[String] = {
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
@@ -268,6 +271,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (getSolrFieldTypes.isDefined) {
       sb ++= s", ${SOLR_FIELD_TYPES}=${getSolrFieldTypes.get}"
+    }
+    if (updateSchema.isDefined) {
+      sb ++= s", ${UPDATE_SCHEMA}=${updateSchema.get}"
     }
     sb ++= ")"
     sb.toString

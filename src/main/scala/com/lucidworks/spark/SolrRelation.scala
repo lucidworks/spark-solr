@@ -651,27 +651,29 @@ class SolrRelation(
       else
         Map.empty[String, String]
 
-    // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
-    dfSchema.fields.foreach(f => {
-      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
-        if(f.name == fieldNameForChildDocuments) {
-          val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
-          e.foreach(ef => {
-            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
+    if (conf.updateSchema.getOrElse(true)) {
+      // build up a list of updates to send to the Solr Schema API
+      val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
+      dfSchema.fields.foreach(f => {
+        if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
+          if(f.name == fieldNameForChildDocuments) {
+            val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
+            e.foreach(ef => {
+              val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
+              logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+              fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
+            })
+          } else {
+            val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
             logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
-          })
-        } else {
-          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
-          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
+            fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
+          }
         }
-      }
-    })
+      })
 
-    if (fieldsToAddToSolr.nonEmpty) {
-      SolrRelation.addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
+      if (fieldsToAddToSolr.nonEmpty) {
+        SolrRelation.addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
+      }
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
