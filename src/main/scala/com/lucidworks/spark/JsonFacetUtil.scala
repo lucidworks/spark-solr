@@ -2,8 +2,8 @@ package com.lucidworks.spark
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.json4s.{JObject, JValue}
 
 import scala.collection.mutable.ArrayBuffer
@@ -24,7 +24,8 @@ object JsonFacetUtil extends LazyLogging {
                 // process facet values into dataframe
                 fjo("buckets") match {
                   case buckets: List[Map[String, _]] @unchecked =>
-                    val schema : StructType = StructType(formSchema(nestedFacetKeys.head, buckets.head, Array.empty[StructField]))
+                    val schema : StructType = StructType(formSchema(nestedFacetKeys.head, buckets.head, ArrayBuffer.empty[StructField]))
+                    logger.debug(s"Dataframe schema for JSON facet query:  ${schema.mkString(",")}")
                     val data = convertFacetBucketsToDataFrame(buckets, schema)
                     val rows: RDD[Row] = spark.sparkContext.parallelize(data, 1)
                     return spark.createDataFrame(rows, schema)
@@ -73,28 +74,32 @@ object JsonFacetUtil extends LazyLogging {
     false
   }
 
-  private def formSchema(key: String, head: Map[String, _], schema: Array[StructField]) : Array[StructField] = {
-    val buffer = ArrayBuffer.empty[StructField]
-    buffer.++=(schema)
+  private def formSchema(key: String, head: Map[String, _], schemaBuffer: ArrayBuffer[StructField]) : Array[StructField] = {
     if (head.contains("val")) {
       val dv = getDataTypeAndValue(head("val"))
-      buffer.+=(StructField(key, dv._1))
+      schemaBuffer.+=(StructField(key, dv._1))
     }
     if (head.contains("count")) {
-      buffer.+=(StructField(s"${key}_count", DataTypes.LongType))
+      schemaBuffer.+=(StructField(s"${key}_count", DataTypes.LongType))
     }
     for ((k, v) <- head.filter(p => p._1 != "count" && p._1 != "val")) {
       v match {
+        case _: java.lang.Number =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
+        case _ : String =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
         case jo : Map[String, _] @unchecked=>
           if (jo.contains("buckets")) {
             jo("buckets") match {
-              case ja: List[Map[String, _]] @unchecked => return formSchema(k, ja.head, buffer.toArray)
+              case ja: List[Map[String, _]] @unchecked => formSchema(k, ja.head, schemaBuffer)
             }
           }
         case _ => //
       }
     }
-    buffer.toArray
+    schemaBuffer.toArray
   }
 
   private def convertFacetBucketsToDataFrame(value: List[Map[String, _]], schema: StructType) : Array[Row] = {
@@ -112,12 +117,18 @@ object JsonFacetUtil extends LazyLogging {
       if (bucket.contains("count")) {
         buffer.+=(bucket("count").asInstanceOf[BigInt].toLong)
       }
-      if (buffer.length == schema.fieldNames.length) {
-        val row = Row.fromSeq(buffer)
-        rows.+=(row)
-      }
       for ((_, v) <- bucket.filter(p => p._1 != "count" && p._1 != "val")) {
+        if (buffer.length == schema.fieldNames.length) {
+          val row = Row.fromSeq(buffer)
+          rows.+=(row)
+        }
         v match {
+          case _ : java.lang.Number =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
+          case _ : String =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
           case jo : Map[String, _] @unchecked =>
             if (jo.contains("buckets")) {
               jo("buckets") match {
@@ -125,6 +136,10 @@ object JsonFacetUtil extends LazyLogging {
               }
             }
         }
+      }
+      if (buffer.length == schema.fieldNames.length) {
+        val row = Row.fromSeq(buffer)
+        rows.+=(row)
       }
     }
     rows.toArray

@@ -13,9 +13,9 @@ import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
-import org.apache.solr.client.solrj.response.{CoreAdminResponse, QueryResponse}
 import org.apache.solr.client.solrj.response.schema.SchemaResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
+import org.apache.solr.client.solrj.response.{CoreAdminResponse, QueryResponse}
 import org.apache.solr.common.SolrDocument
 import org.apache.solr.common.params.{CommonParams, CoreAdminParams, ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
@@ -696,6 +696,7 @@ object SolrQuerySupport extends LazyLogging {
     val namedList = solrClient.request(queryRequest, collection)
 
     if (namedList.get("response") != null) {
+      logger.trace(s"Query response for JSON facet query: ${namedList}")
       namedList.get("response") match {
         case rawString : String =>
           val jsonResp = parse(rawString)
