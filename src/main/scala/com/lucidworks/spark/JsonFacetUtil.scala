@@ -2,10 +2,11 @@ package com.lucidworks.spark
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.json4s.{JObject, JValue}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object JsonFacetUtil extends LazyLogging {
@@ -32,7 +33,7 @@ object JsonFacetUtil extends LazyLogging {
                   case a: Any => logger.info(s"Unknown type ${a.getClass}")
                 }
               }
-            case a: Any => logger.info(s"Unknown type ${a.getClass}")
+            case a: Any => logger.info(s"Unknown type in facet buckets ${a.getClass}")
           }
         } else {
           // no nested fields, just parse the keys and values
@@ -61,7 +62,24 @@ object JsonFacetUtil extends LazyLogging {
         (DataTypes.DoubleType, jd.toDouble)
       case s : String =>
         (DataTypes.StringType, s)
-      case a: Any => throw new Exception(s"Non compatible type: ${a.getClass}")
+      case it: Seq[_] =>
+        val dataType = it.head match {
+          case _ : BigDecimal => DataTypes.createArrayType(DoubleType)
+          case _: BigInt => DataTypes.createArrayType(LongType)
+          case _: java.lang.Double => DataTypes.createArrayType(DoubleType)
+          case _: String => DataTypes.createArrayType(StringType)
+          case _: Any => throw new Exception(s"Non supported data type : ${a.getClass}")
+        }
+        val values = ArrayBuffer.empty[Any]
+        it.iterator.foreach {
+          case bd : BigDecimal => values.+=(bd.toDouble)
+          case bi: BigInt => values.+=(bi.toLong)
+          case jd: java.lang.Double => values.+=(jd.toDouble)
+          case s: String => values.+=(s)
+          case a: Any => throw new Exception(s"Non supported data type : ${a.getClass}")
+        }
+        (dataType, mutable.WrappedArray.make(values.toArray))
+      case a: Any => throw new Exception(s"Non supported type: ${a.getClass}")
     }
   }
 
@@ -90,13 +108,16 @@ object JsonFacetUtil extends LazyLogging {
         case _ : String =>
           val dv = getDataTypeAndValue(v)
           schemaBuffer.+=(StructField(s"${k}", dv._1))
+        case _: Seq[_] =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
         case jo : Map[String, _] @unchecked=>
           if (jo.contains("buckets")) {
             jo("buckets") match {
               case ja: List[Map[String, _]] @unchecked => formSchema(k, ja.head, schemaBuffer)
             }
           }
-        case _ => //
+        case a => throw new Exception(s"Non supported type: ${a.getClass}")
       }
     }
     schemaBuffer.toArray
@@ -129,12 +150,16 @@ object JsonFacetUtil extends LazyLogging {
           case _ : String =>
             val dv = getDataTypeAndValue(v)
             buffer.+=(dv._2)
+          case _: Seq[_] =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
           case jo : Map[String, _] @unchecked =>
             if (jo.contains("buckets")) {
               jo("buckets") match {
                 case ja: List[Map[String, _]] @unchecked => convertFacetBucketsToDataFrame(ja, rows, buffer.toArray, schema)
               }
             }
+          case a => throw new Exception(s"Non supported type: ${a.getClass}")
         }
       }
       if (buffer.length == schema.fieldNames.length) {
