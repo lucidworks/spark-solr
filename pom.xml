@@ -38,7 +38,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
     <spark.version>2.3.1</spark.version>
-    <solr.version>7.3.1</solr.version>
+    <solr.version>7.4.0</solr.version>
     <fasterxml.version>2.4.0</fasterxml.version>
     <scala.version>2.11.8</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
@@ -383,6 +383,8 @@
         <configuration>
           <serverId>ossrh</serverId>
           <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+          <stagingProgressTimeoutMinutes>15</stagingProgressTimeoutMinutes>
+          <stagingProgressPauseDurationSeconds>10</stagingProgressPauseDurationSeconds>
           <autoReleaseAfterClose>true</autoReleaseAfterClose>
         </configuration>
       </plugin>

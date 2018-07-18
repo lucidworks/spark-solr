@@ -2,10 +2,11 @@ package com.lucidworks.spark
 
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
-import org.apache.spark.sql.types.{DataType, DataTypes, StructField, StructType}
 import org.json4s.{JObject, JValue}
 
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 object JsonFacetUtil extends LazyLogging {
@@ -24,14 +25,15 @@ object JsonFacetUtil extends LazyLogging {
                 // process facet values into dataframe
                 fjo("buckets") match {
                   case buckets: List[Map[String, _]] @unchecked =>
-                    val schema : StructType = StructType(formSchema(nestedFacetKeys.head, buckets.head, Array.empty[StructField]))
+                    val schema : StructType = StructType(formSchema(nestedFacetKeys.head, buckets.head, ArrayBuffer.empty[StructField]))
+                    logger.debug(s"Dataframe schema for JSON facet query:  ${schema.mkString(",")}")
                     val data = convertFacetBucketsToDataFrame(buckets, schema)
                     val rows: RDD[Row] = spark.sparkContext.parallelize(data, 1)
                     return spark.createDataFrame(rows, schema)
                   case a: Any => logger.info(s"Unknown type ${a.getClass}")
                 }
               }
-            case a: Any => logger.info(s"Unknown type ${a.getClass}")
+            case a: Any => logger.info(s"Unknown type in facet buckets ${a.getClass}")
           }
         } else {
           // no nested fields, just parse the keys and values
@@ -55,12 +57,29 @@ object JsonFacetUtil extends LazyLogging {
       case bd : BigDecimal =>
         (DataTypes.DoubleType, bd.toDouble)
       case bi: BigInt =>
-        (DataTypes.IntegerType, bi.toInt)
+        (DataTypes.LongType, bi.toLong)
       case jd : java.lang.Double =>
         (DataTypes.DoubleType, jd.toDouble)
       case s : String =>
         (DataTypes.StringType, s)
-      case a: Any => throw new Exception(s"Non compatible type: ${a.getClass}")
+      case it: Seq[_] =>
+        val dataType = it.head match {
+          case _ : BigDecimal => DataTypes.createArrayType(DoubleType)
+          case _: BigInt => DataTypes.createArrayType(LongType)
+          case _: java.lang.Double => DataTypes.createArrayType(DoubleType)
+          case _: String => DataTypes.createArrayType(StringType)
+          case _: Any => throw new Exception(s"Non supported data type : ${a.getClass}")
+        }
+        val values = ArrayBuffer.empty[Any]
+        it.iterator.foreach {
+          case bd : BigDecimal => values.+=(bd.toDouble)
+          case bi: BigInt => values.+=(bi.toLong)
+          case jd: java.lang.Double => values.+=(jd.toDouble)
+          case s: String => values.+=(s)
+          case a: Any => throw new Exception(s"Non supported data type : ${a.getClass}")
+        }
+        (dataType, mutable.WrappedArray.make(values.toArray))
+      case a: Any => throw new Exception(s"Non supported type: ${a.getClass}")
     }
   }
 
@@ -73,28 +92,35 @@ object JsonFacetUtil extends LazyLogging {
     false
   }
 
-  private def formSchema(key: String, head: Map[String, _], schema: Array[StructField]) : Array[StructField] = {
-    val buffer = ArrayBuffer.empty[StructField]
-    buffer.++=(schema)
+  private def formSchema(key: String, head: Map[String, _], schemaBuffer: ArrayBuffer[StructField]) : Array[StructField] = {
     if (head.contains("val")) {
       val dv = getDataTypeAndValue(head("val"))
-      buffer.+=(StructField(key, dv._1))
+      schemaBuffer.+=(StructField(key, dv._1))
     }
     if (head.contains("count")) {
-      buffer.+=(StructField(s"${key}_count", DataTypes.LongType))
+      schemaBuffer.+=(StructField(s"${key}_count", DataTypes.LongType))
     }
     for ((k, v) <- head.filter(p => p._1 != "count" && p._1 != "val")) {
       v match {
+        case _: java.lang.Number =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
+        case _ : String =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
+        case _: Seq[_] =>
+          val dv = getDataTypeAndValue(v)
+          schemaBuffer.+=(StructField(s"${k}", dv._1))
         case jo : Map[String, _] @unchecked=>
           if (jo.contains("buckets")) {
             jo("buckets") match {
-              case ja: List[Map[String, _]] @unchecked => return formSchema(k, ja.head, buffer.toArray)
+              case ja: List[Map[String, _]] @unchecked => formSchema(k, ja.head, schemaBuffer)
             }
           }
-        case _ => //
+        case a => throw new Exception(s"Non supported type: ${a.getClass}")
       }
     }
-    buffer.toArray
+    schemaBuffer.toArray
   }
 
   private def convertFacetBucketsToDataFrame(value: List[Map[String, _]], schema: StructType) : Array[Row] = {
@@ -112,19 +138,33 @@ object JsonFacetUtil extends LazyLogging {
       if (bucket.contains("count")) {
         buffer.+=(bucket("count").asInstanceOf[BigInt].toLong)
       }
-      if (buffer.length == schema.fieldNames.length) {
-        val row = Row.fromSeq(buffer)
-        rows.+=(row)
-      }
       for ((_, v) <- bucket.filter(p => p._1 != "count" && p._1 != "val")) {
+        if (buffer.length == schema.fieldNames.length) {
+          val row = Row.fromSeq(buffer)
+          rows.+=(row)
+        }
         v match {
+          case _ : java.lang.Number =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
+          case _ : String =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
+          case _: Seq[_] =>
+            val dv = getDataTypeAndValue(v)
+            buffer.+=(dv._2)
           case jo : Map[String, _] @unchecked =>
             if (jo.contains("buckets")) {
               jo("buckets") match {
                 case ja: List[Map[String, _]] @unchecked => convertFacetBucketsToDataFrame(ja, rows, buffer.toArray, schema)
               }
             }
+          case a => throw new Exception(s"Non supported type: ${a.getClass}")
         }
+      }
+      if (buffer.length == schema.fieldNames.length) {
+        val row = Row.fromSeq(buffer)
+        rows.+=(row)
       }
     }
     rows.toArray
