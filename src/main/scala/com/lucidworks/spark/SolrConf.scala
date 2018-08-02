@@ -36,7 +36,7 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def getFilters: List[String] =
     if (config.get(SOLR_FILTERS_PARAM).isDefined)
-      SolrRelationUtil.parseFiltersAsList(config(SOLR_FILTERS_PARAM))
+      SolrRelationUtil.parseCommaSeparatedValuesToList(config(SOLR_FILTERS_PARAM))
     else List.empty
 
   def partitionBy: Option[String] = config.get(PARTITION_BY)

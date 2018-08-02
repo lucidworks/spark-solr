@@ -419,7 +419,7 @@ object SolrRelationUtil extends LazyLogging {
     }
   }
 
-  def processFieldValue(fieldValue: Object, fieldType: DataType, multiValued: Boolean): Any = {
+  def processFieldValue(fieldValue: Any, fieldType: DataType, multiValued: Boolean): Any = {
     fieldValue match {
       case d: Date => new Timestamp(d.getTime)
       case s: String =>
@@ -512,6 +512,42 @@ object SolrRelationUtil extends LazyLogging {
         else {
           if (iterArray.nonEmpty) iterArray(0) else null
         }
+      case i: Int => {
+        fieldType match {
+          case _: IntegerType => i
+          case _: LongType => new java.lang.Long(i.longValue())
+          case _: StringType => i.toString
+          case _: FloatType => new java.lang.Float(i.floatValue())
+          case _: DoubleType => new java.lang.Double(i.doubleValue())
+          case _: ShortType => new java.lang.Short(i.shortValue())
+          case _ => throw new MatchError(s"Can't convert Integer value ${i} to ${fieldType}")
+        }
+      }
+      case l: Long => {
+        fieldType match {
+          case _: LongType => l
+          case _: StringType => l.toString
+          case _: DoubleType => new java.lang.Double(l.doubleValue())
+          case _ => throw new MatchError(s"Can't convert Long value ${l} to ${fieldType}")
+        }
+      }
+      case f: Float => {
+        fieldType match {
+          case _: FloatType => f
+          case _: StringType => f.toString
+          case _: LongType => new java.lang.Long(f.longValue())
+          case _: DoubleType => new java.lang.Double(f.doubleValue())
+          case _ => throw new MatchError(s"Can't convert Float value ${f} to ${fieldType}")
+        }
+      }
+      case d: Double => {
+        fieldType match {
+          case _: DoubleType => d
+          case _: LongType => new java.lang.Long(d.longValue())
+          case _: StringType => d.toString
+          case _ => throw new MatchError(s"Can't convert Double value ${d} to ${fieldType}")
+        }
+      }
       case a => a
     }
   }
@@ -610,7 +646,7 @@ object SolrRelationUtil extends LazyLogging {
   }
 
   // Deal with commas inside quotes like filters=a:"b, c",d:"e",c:"e, g,h"
-  def parseFiltersAsList(filters: String): List[String] = {
+  def parseCommaSeparatedValuesToList(filters: String): List[String] = {
     val filterList = ListBuffer.empty[String]
     var start = 0
     var inQuotes = false
