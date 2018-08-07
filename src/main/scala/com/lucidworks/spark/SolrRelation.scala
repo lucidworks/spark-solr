@@ -733,7 +733,7 @@ class SolrRelation(
     val solrVersion = SolrSupport.getSolrVersion(zkHost)
 
     val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     val customFieldTypes =
