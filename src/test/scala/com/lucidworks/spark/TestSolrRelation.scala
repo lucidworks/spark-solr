@@ -1,11 +1,28 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.util.SolrRelationUtil
+import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.sources.{And, EqualTo, Or}
-import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
+import org.apache.spark.sql.types._
 
 class TestSolrRelation extends SparkSolrFunSuite with SparkSolrContextBuilder {
+
+  test("Streaming expr schema") {
+    val arrayJson = StringEscapeUtils.escapeJson(ArrayType(StringType).json)
+    val longJson = StringEscapeUtils.escapeJson(LongType.json)
+    val exprSchema = s"""arrayField:"${arrayJson}",longField:long"""
+    val structFields = SolrRelation.parseSchemaExprSchemaToStructFields(exprSchema)
+    assert(structFields.size == 2)
+    logger.info(s"Parsed fields: ${structFields}")
+    val arrayStructField = structFields.head
+    val longStructField = structFields.last
+    assert(arrayStructField.name === "arrayField")
+    assert(arrayStructField.dataType === ArrayType(StringType))
+    assert(arrayStructField.metadata.getBoolean("multiValued"))
+    assert(longStructField.name  === "longField")
+    assert(longStructField.dataType === LongType)
+  }
 
   test("empty solr relation") {
     intercept[IllegalArgumentException] {
@@ -46,7 +63,7 @@ class TestSolrRelation extends SparkSolrFunSuite with SparkSolrContextBuilder {
 
   test("test commas in filter values") {
     val fieldValues = """a:"c,d e",f:g,h:"1, 35, 2""""
-    val parsedFilters = SolrRelationUtil.parseFiltersAsList(fieldValues)
+    val parsedFilters = SolrRelationUtil.parseCommaSeparatedValuesToList(fieldValues)
     assert(parsedFilters.head === """a:"c,d e"""")
     assert(parsedFilters(1) === "f:g")
     assert(parsedFilters(2) === """h:"1, 35, 2"""")

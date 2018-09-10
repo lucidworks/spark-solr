@@ -5,6 +5,7 @@ import java.util.UUID
 import com.lucidworks.spark.util.SolrDataFrameImplicits._
 import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrQuerySupport, SolrSupport}
 import org.apache.spark.sql.functions.{concat, lit}
+import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 
 class TestIndexing extends TestSuiteBuilder {
 
@@ -64,4 +65,25 @@ class TestIndexing extends TestSuiteBuilder {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
     }
   }
+
+
+  test("Field additions") {
+    val insertSchema = StructType(Array(
+      StructField("index_only_field", DataTypes.StringType, nullable = true),
+      StructField("store_only_field", DataTypes.BooleanType, nullable = true),
+      StructField("a_s", DataTypes.StringType, nullable = true),
+      StructField("s_b", DataTypes.StringType, nullable = true)
+    ))
+    val collection = "testFieldAdditions" + UUID.randomUUID().toString.replace("-", "_")
+    try {
+      SolrCloudUtil.buildCollection(zkHost, collection, null, 2, cloudClient, sc)
+      val opts = Map("zkhost" -> zkHost, "collection" -> collection)
+      val solrRelation = new SolrRelation(opts, sparkSession)
+      val fieldsToAdd = solrRelation.getFieldsToAdd(insertSchema)
+      assert(fieldsToAdd.isEmpty)
+    } finally {
+      SolrCloudUtil.deleteCollection(collection, cluster)
+    }
+  }
+
 }

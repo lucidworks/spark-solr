@@ -262,7 +262,8 @@ object SolrQuerySupport extends LazyLogging {
       solrUrl: String,
       cloudClient: CloudSolrClient,
       collection: String,
-      skipDynamicExtensions: Boolean=true): Map[String, SolrFieldMeta] = {
+      skipDynamicExtensions: Boolean=true,
+      skipFieldCheck: Boolean = false): Map[String, SolrFieldMeta] = {
     val fieldTypeMap = new mutable.HashMap[String, SolrFieldMeta]()
     val fieldTypeToClassMap = getFieldTypeToClassMap(cloudClient, collection)
     logger.debug("Get field types for fields: {} ", fields.mkString(","))
@@ -341,15 +342,19 @@ object SolrQuerySupport extends LazyLogging {
 
           val solrFieldMeta = SolrFieldMeta(fieldType, dynamicBase, isRequired, isMultiValued, isDocValues, isStored, fieldClassType)
 
-          if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
-            (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
-              logger.trace(s"Can't retrieve an index only field: '$name'. Field info $payload")
-          } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
-            (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
-            (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
-              logger.trace(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
-          } else {
+          if (skipFieldCheck) {
             fieldTypeMap.put(name, solrFieldMeta)
+          } else {
+            if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
+                (solrFieldMeta.isDocValues.isDefined && !solrFieldMeta.isDocValues.get)) {
+              logger.trace(s"Can't retrieve an index only field: '$name'. Field info $payload")
+            } else if ((solrFieldMeta.isStored.isDefined && !solrFieldMeta.isStored.get) &&
+                (solrFieldMeta.isMultiValued.isDefined && solrFieldMeta.isMultiValued.get) &&
+                (solrFieldMeta.isDocValues.isDefined && solrFieldMeta.isDocValues.get)) {
+              logger.trace(s"Can't retrieve a non-stored multiValued docValues field: '$name'. The payload info is $payload")
+            } else {
+              fieldTypeMap.put(name, solrFieldMeta)
+            }
           }
         case somethingElse: Any => logger.warn(s"Unknown class type '${somethingElse.getClass.toString}'")
       }

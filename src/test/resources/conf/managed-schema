@@ -12,6 +12,8 @@
   <field name="rating" indexed="true" stored="true" type="tint" docValues="true"/>
   <field name="rating_timestamp" indexed="true" stored="true" type="pdate" docValues="true"/>
   <field name="title" indexed="true" stored="true" type="string" docValues="true"/>
+  <field name="index_only_field" indexed="true" stored="false" type="string" docValues="false"/>
+  <field name="store_only_field" indexed="false" stored="true" type="string" docValues="false"/>
 
   <field name="pickup_location" type="location" multiValued="false" indexed="true" stored="true"/>
   <field name="dropoff_location" type="location" multiValued="false" indexed="true" stored="true"/>

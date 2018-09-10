@@ -11,6 +11,7 @@ import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.lang.StringUtils
+import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
@@ -118,11 +119,7 @@ class SolrRelation(
         var streamingExpr = StreamExpressionParser.parse(initialQuery.get(SOLR_STREAMING_EXPR))
         if (conf.getStreamingExpressionSchema.isDefined) {
           // the user is telling us the schema of the expression
-          var streamingExprSchema = conf.getStreamingExpressionSchema.get
-          streamingExprSchema.split(',').foreach(f => {
-            val pair : Array[String] = f.split(':')
-            fieldSet.add(new StructField(pair.apply(0), DataType.fromJson("\""+pair.apply(1)+"\"")))
-          })
+          fieldSet.++=(SolrRelation.parseSchemaExprSchemaToStructFields(conf.getStreamingExpressionSchema.get))
         } else {
           // we have to figure out the schema of the streaming expression
           var streamOutputFields = new ListBuffer[StreamFields]
@@ -640,38 +637,13 @@ class SolrRelation(
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val solrVersion = SolrSupport.getSolrVersion(zkHost)
-
-    val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
-    val customFieldTypes =
-      if (conf.getSolrFieldTypes.isDefined)
-        SolrRelation.parseUserSuppliedFieldTypes(conf.getSolrFieldTypes.get)
-      else
-        Map.empty[String, String]
-
     // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
-    dfSchema.fields.foreach(f => {
-      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
-        if(f.name == fieldNameForChildDocuments) {
-          val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
-          e.foreach(ef => {
-            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
-            logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
-          })
-        } else {
-          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
-          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
-        }
-      }
-    })
+    val fieldsToAddToSolr = getFieldsToAdd(dfSchema)
 
     if (fieldsToAddToSolr.nonEmpty) {
-      SolrRelation.addFieldsForInsert(fieldsToAddToSolr.toMap, collectionId, cloudClient)
+      SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collectionId, cloudClient)
     }
 
     if (conf.softAutoCommitSecs.isDefined) {
@@ -753,11 +725,73 @@ class SolrRelation(
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
   }
 
+  def getFieldsToAdd(dfSchema: StructType): Map[String, AddField] = {
+    val zkHost = conf.getZkHost.get
+    val collectionId = conf.getCollection.get
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+    val solrVersion = SolrSupport.getSolrVersion(zkHost)
+
+    val solrFields : Map[String, SolrFieldMeta] =
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
+    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
+
+    val customFieldTypes =
+      if (conf.getSolrFieldTypes.isDefined)
+        SolrRelation.parseUserSuppliedFieldTypes(conf.getSolrFieldTypes.get)
+      else
+        Map.empty[String, String]
+
+    // build up a list of updates to send to the Solr Schema API
+    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
+    dfSchema.fields.foreach(f => {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
+        if(f.name == fieldNameForChildDocuments) {
+          val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
+          e.foreach(ef => {
+            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
+            logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
+          })
+        } else {
+          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
+          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
+        }
+      }
+    })
+    fieldsToAddToSolr.toMap
+  }
 }
 
 object SolrRelation extends LazyLogging {
 
   val solrCollectionInSqlPattern = Pattern.compile("\\sfrom\\s([\\w\\-\\.]+)\\s?", Pattern.CASE_INSENSITIVE)
+
+  def parseSchemaExprSchemaToStructFields(streamingExprSchema: String): Set[StructField] = {
+    var fieldBuffer = ListBuffer.empty[StructField]
+    SolrRelationUtil.parseCommaSeparatedValuesToList(streamingExprSchema).foreach(f => {
+      val colonIndex = f.indexOf(":")
+      if (colonIndex != -1) { 
+        val fieldName = f.substring(0, colonIndex)
+        var fieldValue = StringEscapeUtils.unescapeJson(f.substring(colonIndex+1))
+        if (fieldValue.startsWith("\"{") && fieldValue.endsWith("}\"")) {
+          fieldValue = fieldValue.substring(1, fieldValue.length-1)
+        } else if (!fieldValue.startsWith("\"") || !fieldValue.endsWith("\"")){
+          fieldValue = s""""${fieldValue}""""
+        }
+        val dataType = DataType.fromJson(fieldValue)
+        dataType match {
+          case _ : ArrayType =>
+            val metadataBuilder = new MetadataBuilder
+            metadataBuilder.putBoolean("multiValued",  true)
+            fieldBuffer.+=(StructField(fieldName, dataType, metadata=metadataBuilder.build()))
+          case _ => fieldBuffer.+=(StructField(fieldName, DataType.fromJson(fieldValue)))
+        }
+      }
+    })
+    fieldBuffer.toSet
+  }
 
   def resolveCollection(conf: SolrConf, initialQuery: SolrQuery): Unit = {
     var collection = conf.getCollection.getOrElse({
