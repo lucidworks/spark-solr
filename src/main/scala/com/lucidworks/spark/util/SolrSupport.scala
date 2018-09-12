@@ -171,7 +171,7 @@ object SolrSupport extends LazyLogging {
       if (authHttpClientBuilder.isDefined) {
         logger.info("Custom http client defined: {}", authHttpClientBuilder)
         return authHttpClientBuilder.get
-          .withHttpClient(getSolrCloudClient(zkHost).getHttpClient)
+          .withHttpClient(getSolrCloudClient(zkHost, None).getHttpClient)
           .withBaseSolrUrl(shardUrl).build()
       }
     }
@@ -191,10 +191,9 @@ object SolrSupport extends LazyLogging {
     CacheHttpSolrClient.cache.get(ShardInfo(shardUrl, zkHost))
   }
 
-  // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
-  private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
+  private def getSolrCloudClient(zkHost: String, zkChroot: Option[String]): CloudSolrClient =  {
     logger.debug(s"Creating a new SolrCloudClient for zkhost $zkHost")
-    val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
+    var solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost).withZkChroot(zkChroot.orNull)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
       if (authHttpClientBuilder.get != null) {
@@ -237,8 +236,13 @@ object SolrSupport extends LazyLogging {
   }
 
   // Use this only if you want a new SolrCloudClient instance. This new instance should be closed by the methods downstream
+  @deprecated("Use getNewSolrCloudClient(zkHost: String, zkChroot: Option[String])", "3.5.5")
   def getNewSolrCloudClient(zkHost: String): CloudSolrClient = {
-    getSolrCloudClient(zkHost)
+    getSolrCloudClient(zkHost, None)
+  }
+
+  def getNewSolrCloudClient(zkHost: String, zkChroot: Option[String]): CloudSolrClient = {
+    getSolrCloudClient(zkHost, zkChroot)
   }
 
   def getCachedCloudClient(zkHost: String): CloudSolrClient = {
