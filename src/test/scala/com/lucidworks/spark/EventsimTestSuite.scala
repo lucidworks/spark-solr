@@ -305,6 +305,18 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(values(0)(0) == 3)
   }
 
+  test("Test if * in field config works") {
+    val options = Map(
+      SOLR_ZK_HOST_PARAM -> zkHost,
+      SOLR_COLLECTION_PARAM -> collectionName,
+      SOLR_FIELD_PARAM -> "*"
+    )
+    val solrRelation = new SolrRelation(options, None, sparkSession)
+    assert(solrRelation.conf.getFields.isEmpty)
+    assert(solrRelation.initialQuery.getFields === null)
+    assert(solrRelation.schema.nonEmpty)
+  }
+
   test("Test if auto check streaming feature works") {
     val options = Map(
       SOLR_ZK_HOST_PARAM -> zkHost,
