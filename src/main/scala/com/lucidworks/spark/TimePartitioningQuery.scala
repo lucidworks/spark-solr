@@ -5,7 +5,6 @@ import java.util.{Date, TimeZone}
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 
 import scala.collection.JavaConverters._

@@ -3,7 +3,6 @@ package com.lucidworks.spark
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrRelationUtil
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.common.params.ModifiableSolrParams
 
 class SolrConf(config: Map[String, String]) extends Serializable with LazyLogging {

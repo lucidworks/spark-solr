@@ -3,8 +3,7 @@ package com.lucidworks.spark.rdd
 import com.lucidworks.spark.query.{SolrStreamIterator, StreamingExpressionResultIterator, TupleStreamIterator}
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
-import com.lucidworks.spark.{CloudStreamPartition, ExportHandlerPartition, SolrPartitioner, SparkSolrAccumulator}
-import com.typesafe.scalalogging.LazyLogging
+import com.lucidworks.spark._
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.common.params.ShardParams
 import org.apache.spark.annotation.DeveloperApi

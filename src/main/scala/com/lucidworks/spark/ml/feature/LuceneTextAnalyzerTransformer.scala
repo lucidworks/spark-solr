@@ -19,8 +19,8 @@ package com.lucidworks.spark.ml.feature
 
 import java.io.{PrintWriter, StringWriter}
 
+import com.lucidworks.spark.LazyLogging
 import com.lucidworks.spark.analysis.LuceneTextAnalyzer
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute
 import org.apache.spark.annotation.Experimental
 import org.apache.spark.ml.param.{Param, _}
@@ -158,7 +158,7 @@ class LuceneTextAnalyzerTransformer(override val uid: String) extends HasInputCo
       buildReferencedAnalyzers()
     }
     require(analyzer.exists(_.isValid),
-      analyzer.map(_.invalidMessages).getOrElse(analyzerInitFailure.get))
+      analyzer.map(_.invalidMessages).getOrElse(analyzerInitFailure.getOrElse(s"Invalid analyzer ${analyzer}")))
   }
 
   private def buildReferencedAnalyzers(): Unit = {

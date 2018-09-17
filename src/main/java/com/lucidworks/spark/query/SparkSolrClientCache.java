@@ -14,8 +14,6 @@ import java.lang.invoke.MethodHandles;
  */
 public class SparkSolrClientCache extends SolrClientCache {
 
-  private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
-
   private final CloudSolrClient solrClient;
   private final HttpSolrClient httpSolrClient;
 

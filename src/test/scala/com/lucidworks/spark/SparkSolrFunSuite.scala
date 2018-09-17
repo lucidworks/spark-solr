@@ -17,7 +17,6 @@
 
 package com.lucidworks.spark
 
-import com.typesafe.scalalogging.LazyLogging
 import org.scalatest.{FunSuite, Outcome}
 
 /**

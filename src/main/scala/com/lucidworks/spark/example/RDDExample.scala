@@ -1,9 +1,8 @@
 package com.lucidworks.spark.example
 
-import com.lucidworks.spark.SparkApp
+import com.lucidworks.spark.{LazyLogging, SparkApp}
 import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.SolrSupport
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
 import org.apache.spark.{SparkConf, SparkContext}

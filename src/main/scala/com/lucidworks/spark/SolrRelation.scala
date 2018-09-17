@@ -9,7 +9,6 @@ import com.lucidworks.spark.rdd.{SolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.lang.StringUtils
 import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.solr.client.solrj.SolrQuery.SortClause

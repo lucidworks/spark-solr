@@ -6,7 +6,6 @@ import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrCloudUtil
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 
 class RDDTestSuite extends TestSuiteBuilder with LazyLogging {

@@ -3,10 +3,9 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.util
 
-import com.lucidworks.spark.JsonFacetUtil
+import com.lucidworks.spark.{JsonFacetUtil, LazyLogging}
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl._
