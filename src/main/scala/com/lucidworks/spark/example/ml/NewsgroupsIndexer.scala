@@ -3,11 +3,10 @@ package com.lucidworks.spark.example.ml
 import java.net.URI
 import java.util.Locale
 
-import com.lucidworks.spark.SparkApp
+import com.lucidworks.spark.{LazyLogging, SparkApp}
 import com.lucidworks.spark.util.SolrSupport
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.commons.cli.CommandLine
-import org.apache.commons.cli.Option.{builder => OptionBuilder} // Avoid clash with Scala Option
+import org.apache.commons.cli.Option.{builder => OptionBuilder}
 import org.apache.solr.common.SolrInputDocument
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.input.PortableDataStream

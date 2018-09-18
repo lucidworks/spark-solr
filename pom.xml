@@ -350,10 +350,6 @@
                   <shadedPattern>shaded.apache.commons.cli</shadedPattern>
                 </relocation>
                 <relocation>
-                  <pattern>com.typesafe.scalalogging</pattern>
-                  <shadedPattern>shaded.typesafe.scalalogging</shadedPattern>
-                </relocation>
-                <relocation>
                   <pattern>org.apache.http</pattern>
                   <shadedPattern>shaded.apache.http</shadedPattern>
 		</relocation>
@@ -608,11 +604,6 @@
       <groupId>org.joda</groupId>
       <artifactId>joda-convert</artifactId>
       <version>1.2</version>
-    </dependency>
-    <dependency>
-      <groupId>com.typesafe.scala-logging</groupId>
-      <artifactId>scala-logging_${scala.binary.version}</artifactId>
-      <version>3.4.0</version>
     </dependency>
     <dependency>
       <groupId>com.github.tomakehurst</groupId>

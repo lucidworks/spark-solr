@@ -5,8 +5,8 @@ import java.sql.Timestamp
 import java.util
 import java.util.Date
 
+import com.lucidworks.spark.LazyLogging
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.GenericSolrRequest
 import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter
 import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}

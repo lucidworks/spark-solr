@@ -3,7 +3,6 @@ package com.lucidworks.spark.rdd
 import com.lucidworks.spark._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{CacheCloudSolrClient, CacheHttpSolrClient, SolrQuerySupport}
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark._
 import org.apache.spark.rdd.RDD

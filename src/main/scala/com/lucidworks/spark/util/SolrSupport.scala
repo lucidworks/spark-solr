@@ -13,8 +13,7 @@ import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.ShardInfo
-import com.lucidworks.spark.{SolrReplica, SolrShard, SparkSolrAccumulator}
-import com.typesafe.scalalogging.LazyLogging
+import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.UpdateRequest
