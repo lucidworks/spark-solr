@@ -3,6 +3,7 @@ package com.lucidworks.spark
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.SolrRelationUtil
+import org.apache.commons.lang3.StringUtils
 import org.apache.solr.common.params.ModifiableSolrParams
 
 class SolrConf(config: Map[String, String]) extends Serializable with LazyLogging {
@@ -31,7 +32,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def getSplitField: Option[String] = config.get(SOLR_SPLIT_FIELD_PARAM)
 
   def getFields: Array[String] =
-    if (config.get(SOLR_FIELD_PARAM).isDefined) config(SOLR_FIELD_PARAM).split(",").map(_.trim) else Array.empty
+    if (config.get(SOLR_FIELD_PARAM).isDefined && !StringUtils.equals(config(SOLR_FIELD_PARAM), "*"))
+      config(SOLR_FIELD_PARAM).split(",").map(_.trim)
+    else
+      Array.empty
 
   def getFilters: List[String] =
     if (config.get(SOLR_FILTERS_PARAM).isDefined)
