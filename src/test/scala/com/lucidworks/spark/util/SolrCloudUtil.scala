@@ -2,7 +2,7 @@ package com.lucidworks.spark.util
 
 import java.io.File
 
-import com.typesafe.scalalogging.LazyLogging
+import com.lucidworks.spark.LazyLogging
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.request.{CollectionAdminRequest, QueryRequest, UpdateRequest}

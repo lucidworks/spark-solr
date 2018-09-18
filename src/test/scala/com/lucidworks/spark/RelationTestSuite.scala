@@ -4,7 +4,6 @@ import java.util.UUID
 
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrQuerySupport}
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.solr.client.solrj.request.{CollectionAdminRequest, UpdateRequest}
 import org.apache.solr.common.SolrInputDocument
 import org.apache.spark.sql.types.{DoubleType, LongType, StringType, TimestampType}
