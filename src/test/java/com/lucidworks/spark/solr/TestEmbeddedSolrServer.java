@@ -12,13 +12,17 @@ public class TestEmbeddedSolrServer extends RDDProcessorTestBase {
   @Test
   public void testEmbeddedSolrServer() throws Exception {
     String testCollection = "testEmbeddedSolrServer";
+    EmbeddedSolrServer embeddedSolrServer = null;
     try {
       String zkHost = cluster.getZkServer().getZkAddress();
       buildCollection(zkHost, testCollection, 10, 1);
-      EmbeddedSolrServer embeddedSolrServer = EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, testCollection);
+      embeddedSolrServer = EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, testCollection);
       QueryResponse queryResponse = embeddedSolrServer.query(new SolrQuery("*:*"));
       assert(queryResponse.getStatus() == 0);
     } finally {
+      if (embeddedSolrServer != null) {
+        embeddedSolrServer.close();
+      }
       deleteCollection(testCollection);
     }
   }
@@ -26,13 +30,17 @@ public class TestEmbeddedSolrServer extends RDDProcessorTestBase {
   @Test
   public void testEmbeddedSolrServerCustomConfig() throws Exception {
     String testCollection = "testEmbeddedSolrServerConfig";
+    EmbeddedSolrServer embeddedSolrServer = null;
     try {
       String zkHost = cluster.getZkServer().getZkAddress();
       buildCollection(zkHost, testCollection, 10, 1);
-      EmbeddedSolrServer embeddedSolrServer = EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, testCollection, "custom-solrconfig.xml", null);
+      embeddedSolrServer = EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, testCollection, "custom-solrconfig.xml", null);
       QueryResponse queryResponse = embeddedSolrServer.query(new SolrQuery("*:*"));
       assert(queryResponse.getStatus() == 0);
     } finally {
+      if (embeddedSolrServer != null) {
+        embeddedSolrServer.close();
+      }
       deleteCollection(testCollection);
     }
   }
