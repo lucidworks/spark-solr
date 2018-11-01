@@ -26,6 +26,7 @@
   <dynamicField indexed="true" name="*_l" stored="true" type="plong"/>
   <dynamicField indexed="true" name="*_ls" stored="true" type="plongs"/>
   <dynamicField indexed="true" name="*_b" stored="true" type="boolean"/>
+  <dynamicField indexed="true" name="*_bs" stored="true" type="booleans"/>
   <dynamicField indexed="true" name="*_f" stored="true" type="pfloat"/>
   <dynamicField indexed="true" name="*_fs" stored="true" type="pfloats"/>
   <dynamicField indexed="true" name="*_d" stored="true" type="pdouble"/>
@@ -94,6 +95,7 @@
   </fieldType>
 
   <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true"/>
+  <fieldType class="solr.BoolField" multiValued="true" name="booleans" sortMissingLast="true"/>
   <fieldType name="binary" class="solr.BinaryField"/>
   <fieldType name="random" class="solr.RandomSortField" indexed="true"/>
   <fieldType name="text_en" class="solr.TextField" positionIncrementGap="100">
