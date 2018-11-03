@@ -11,8 +11,8 @@ class TestQuerying extends TestSuiteBuilder {
 
   test("Solr version") {
     val solrVersion = SolrSupport.getSolrVersion(zkHost)
-    assert(solrVersion == "7.4.0")
-    assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 4, 0))
+    assert(solrVersion == "7.5.0")
+    assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 5, 0))
     assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 3, 0))
     assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 1, 0))
     assert(!SolrSupport.isSolrVersionAtleast(solrVersion, 8, 0, 0))

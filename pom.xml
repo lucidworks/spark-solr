@@ -37,8 +37,8 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
-    <spark.version>2.3.1</spark.version>
-    <solr.version>7.4.0</solr.version>
+    <spark.version>2.3.2</spark.version>
+    <solr.version>7.5.0</solr.version>
     <fasterxml.version>2.4.0</fasterxml.version>
     <scala.version>2.11.8</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
@@ -445,7 +445,7 @@
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
-      <version>2.3</version>
+      <version>2.5</version>
     </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>
