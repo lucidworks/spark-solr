@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<config>
+    <luceneMatchVersion>7.5.0</luceneMatchVersion>
+    <dataDir>${solr.data.dir:}</dataDir>
+    <directoryFactory name="DirectoryFactory" class="solr.RAMDirectoryFactory"/>
+    <codecFactory class="solr.SchemaCodecFactory"/>
+    <indexConfig>
+        <lockType>single</lockType>
+        <infoStream file="INFOSTREAM.txt">false</infoStream>
+    </indexConfig>
+    <updateHandler class="solr.DirectUpdateHandler2">
+        <updateLog>
+            <str name="dir">${solr.ulog.dir:}</str>
+            <int name="numVersionBuckets">${solr.ulog.numVersionBuckets:65536}</int>
+        </updateLog>
+        <autoCommit>
+            <maxTime>${solr.autoCommit.maxTime:15000}</maxTime>
+            <openSearcher>false</openSearcher>
+        </autoCommit>
+        <autoSoftCommit>
+            <maxTime>-1</maxTime>
+        </autoSoftCommit>
+    </updateHandler>
+    <query>
+        <maxBooleanClauses>1024</maxBooleanClauses>
+        <filterCache class="solr.FastLRUCache"
+                     size="512"
+                     initialSize="512"
+                     autowarmCount="0"/>
+        <queryResultCache class="solr.LRUCache"
+                          size="512"
+                          initialSize="512"
+                          autowarmCount="0"/>
+        <documentCache class="solr.LRUCache"
+                       size="512"
+                       initialSize="512"
+                       autowarmCount="0"/>
+
+        <cache name="perSegFilter"
+               class="solr.search.LRUCache"
+               size="10"
+               initialSize="0"
+               autowarmCount="10"
+               regenerator="solr.NoOpRegenerator" />
+
+        <enableLazyFieldLoading>true</enableLazyFieldLoading>
+        <queryResultWindowSize>20</queryResultWindowSize>
+        <queryResultMaxDocsCached>100</queryResultMaxDocsCached>
+
+        <listener event="newSearcher" class="solr.QuerySenderListener">
+            <arr name="queries">
+                <!--
+                   <lst><str name="q">solr</str><str name="sort">price asc</str></lst>
+                   <lst><str name="q">rocks</str><str name="sort">weight asc</str></lst>
+                  -->
+            </arr>
+        </listener>
+        <listener event="firstSearcher" class="solr.QuerySenderListener">
+            <arr name="queries">
+                <!--
+                <lst>
+                  <str name="q">static firstSearcher warming in solrconfig.xml</str>
+                </lst>
+                -->
+            </arr>
+        </listener>
+        <useColdSearcher>true</useColdSearcher>
+    </query>
+
+    <requestDispatcher>
+        <httpCaching never304="true" />
+    </requestDispatcher>
+
+    <requestHandler name="/tag" class="solr.TaggerRequestHandler">
+        <lst name="defaults">
+            <int name="tagsLimit">5000</int>
+            <str name="field">tagger_text</str>
+            <str name="overlaps">LONGEST_DOMINANT_RIGHT</str>
+            <str name="wt">json</str>
+        </lst>
+    </requestHandler>
+
+    <requestHandler name="/select" class="solr.SearchHandler">
+        <lst name="defaults">
+            <str name="echoParams">explicit</str>
+            <int name="rows">10</int>
+        </lst>
+    </requestHandler>
+
+    <requestHandler name="/query" class="solr.SearchHandler">
+        <lst name="defaults">
+            <str name="echoParams">explicit</str>
+            <str name="wt">json</str>
+            <str name="indent">true</str>
+        </lst>
+    </requestHandler>
+
+    <initParams path="/update/**,/query,/select,/tvrh,/elevate,/spell,/browse">
+        <lst name="defaults">
+            <str name="df">_text_</str>
+        </lst>
+    </initParams>
+
+    <searchComponent name="elevator" class="solr.QueryElevationComponent" >
+        <!-- pick a fieldType to analyze queries -->
+        <str name="queryFieldType">string</str>
+    </searchComponent>
+
+    <!-- A request handler for demonstrating the elevator component -->
+    <requestHandler name="/elevate" class="solr.SearchHandler" startup="lazy">
+        <lst name="defaults">
+            <str name="echoParams">explicit</str>
+        </lst>
+        <arr name="last-components">
+            <str>elevator</str>
+        </arr>
+    </requestHandler>
+
+    <updateProcessor class="solr.UUIDUpdateProcessorFactory" name="uuid"/>
+    <updateProcessor class="solr.RemoveBlankFieldUpdateProcessorFactory" name="remove-blank"/>
+    <updateProcessor class="solr.FieldNameMutatingUpdateProcessorFactory" name="field-name-mutating">
+        <str name="pattern">[^\w-\.]</str>
+        <str name="replacement">_</str>
+    </updateProcessor>
+    <updateProcessor class="solr.ParseBooleanFieldUpdateProcessorFactory" name="parse-boolean"/>
+    <updateProcessor class="solr.ParseLongFieldUpdateProcessorFactory" name="parse-long"/>
+    <updateProcessor class="solr.ParseDoubleFieldUpdateProcessorFactory" name="parse-double"/>
+    <updateProcessor class="solr.ParseDateFieldUpdateProcessorFactory" name="parse-date">
+        <arr name="format">
+            <str>yyyy-MM-dd'T'HH:mm:ss.SSSZ</str>
+            <str>yyyy-MM-dd'T'HH:mm:ss,SSSZ</str>
+            <str>yyyy-MM-dd'T'HH:mm:ss.SSS</str>
+            <str>yyyy-MM-dd'T'HH:mm:ss,SSS</str>
+            <str>yyyy-MM-dd'T'HH:mm:ssZ</str>
+            <str>yyyy-MM-dd'T'HH:mm:ss</str>
+            <str>yyyy-MM-dd'T'HH:mmZ</str>
+            <str>yyyy-MM-dd'T'HH:mm</str>
+            <str>yyyy-MM-dd HH:mm:ss.SSSZ</str>
+            <str>yyyy-MM-dd HH:mm:ss,SSSZ</str>
+            <str>yyyy-MM-dd HH:mm:ss.SSS</str>
+            <str>yyyy-MM-dd HH:mm:ss,SSS</str>
+            <str>yyyy-MM-dd HH:mm:ssZ</str>
+            <str>yyyy-MM-dd HH:mm:ss</str>
+            <str>yyyy-MM-dd HH:mmZ</str>
+            <str>yyyy-MM-dd HH:mm</str>
+            <str>yyyy-MM-dd</str>
+        </arr>
+    </updateProcessor>
+    <updateProcessor class="solr.AddSchemaFieldsUpdateProcessorFactory" name="add-schema-fields">
+        <lst name="typeMapping">
+            <str name="valueClass">java.lang.String</str>
+            <str name="fieldType">string</str>
+            <bool name="default">true</bool>
+        </lst>
+        <lst name="typeMapping">
+            <str name="valueClass">java.lang.Boolean</str>
+            <str name="fieldType">booleans</str>
+        </lst>
+        <lst name="typeMapping">
+            <str name="valueClass">java.util.Date</str>
+            <str name="fieldType">pdates</str>
+        </lst>
+        <lst name="typeMapping">
+            <str name="valueClass">java.lang.Long</str>
+            <str name="valueClass">java.lang.Integer</str>
+            <str name="fieldType">plongs</str>
+        </lst>
+        <lst name="typeMapping">
+            <str name="valueClass">java.lang.Number</str>
+            <str name="fieldType">pdoubles</str>
+        </lst>
+    </updateProcessor>
+
+    <!-- The update.autoCreateFields property can be turned to false to disable schemaless mode -->
+    <updateRequestProcessorChain name="add-unknown-fields-to-the-schema" default="${update.autoCreateFields:true}"
+                                 processor="uuid,remove-blank,field-name-mutating,parse-boolean,parse-long,parse-double,parse-date,add-schema-fields">
+        <processor class="solr.LogUpdateProcessorFactory"/>
+        <processor class="solr.DistributedUpdateProcessorFactory"/>
+        <processor class="solr.RunUpdateProcessorFactory"/>
+    </updateRequestProcessorChain>
+
+    <queryResponseWriter name="json" class="solr.JSONResponseWriter">
+        <str name="content-type">text/plain; charset=UTF-8</str>
+    </queryResponseWriter>
+</config>

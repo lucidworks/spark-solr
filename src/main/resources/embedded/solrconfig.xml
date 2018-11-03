@@ -4,11 +4,9 @@
     <dataDir>${solr.data.dir:}</dataDir>
     <directoryFactory name="DirectoryFactory" class="solr.RAMDirectoryFactory"/>
     <codecFactory class="solr.SchemaCodecFactory"/>
-    <schemaFactory class="ClassicIndexSchemaFactory"/>
     <indexConfig>
         <lockType>single</lockType>
         <infoStream>false</infoStream>
-        <checkIntegrityAtMerge>false</checkIntegrityAtMerge>
     </indexConfig>
     <updateHandler class="solr.DirectUpdateHandler2">
         <autoCommit>
@@ -75,10 +73,6 @@
 
     <requestHandler name="/update" class="solr.UpdateRequestHandler">
     </requestHandler>
-
-    <requestHandler name="/admin/"
-                    class="solr.admin.AdminHandlers"/>
-
 
     <queryResponseWriter name="json" class="solr.JSONResponseWriter">
         <str name="content-type">text/plain; charset=UTF-8</str>
