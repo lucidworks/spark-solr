@@ -112,7 +112,15 @@ class SolrRelation(
       if (userRequestedFields.isDefined) {
         // filter out any function query invocations from the base schema list
         val baseSchemaFields = userRequestedFields.get.filter(!_.funcReturnType.isDefined).map(_.name) ++ Array(uniqueKey)
-        baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
+        if (conf.schema.isEmpty) {
+          baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
+        } else {
+          val fieldSet = SolrRelation.parseSchemaExprSchemaToStructFields(conf.schema.get)
+          if (fieldSet.isEmpty) {
+            throw new IllegalStateException(s"Failed to extract schema fields from schema config ${schema}")
+          }
+          baseSchema = Some(new StructType(fieldSet.toArray.sortBy(f => f.name)))
+        }
         SolrRelationUtil.deriveQuerySchema(userRequestedFields.get, baseSchema.get)
       } else if (initialQuery.getRequestHandler == QT_STREAM) {
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
