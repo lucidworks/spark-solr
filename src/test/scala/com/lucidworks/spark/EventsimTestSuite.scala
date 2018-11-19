@@ -34,6 +34,18 @@ class EventsimTestSuite extends EventsimBuilder {
     testCommons(solrRDD)
   }
 
+  test("User requested fields with schema") {
+    val df = sparkSession.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "userId, ts")
+      .option(SOLR_QUERY_PARAM, "userId:93")
+      .option(SCHEMA, "userId:string,ts:timestamp")
+      .load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+  }
+
   test("SQL fields option") {
     val df = sparkSession.read.format("solr")
       .option(SOLR_ZK_HOST_PARAM, zkHost)
