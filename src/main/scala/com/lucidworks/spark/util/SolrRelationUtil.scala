@@ -167,7 +167,7 @@ object SolrRelationUtil extends LazyLogging {
     for (structField <- schema.fields) fieldMap.put(structField.name, structField)
 
     val listOfFields = new ListBuffer[StructField]
-    for (field <- fields) {
+    for (field <- fields.distinct) {
       if (field.funcReturnType.isDefined) {
         listOfFields.add(DataTypes.createStructField(field.alias.get, field.funcReturnType.get, false, Metadata.empty))
       } else {

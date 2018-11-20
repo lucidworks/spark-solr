@@ -971,7 +971,7 @@ object SolrRelation extends LazyLogging {
   def parseSortParamFromString(sortParam: String):  List[SortClause] = {
     val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
     for (pair <- sortParam.split(",")) {
-      val sortStringParams = pair.split(" ")
+      val sortStringParams = pair.trim.split(" ")
       if (sortStringParams.nonEmpty) {
         if (sortStringParams.size == 2) {
           sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))

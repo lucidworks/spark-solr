@@ -46,6 +46,45 @@ class EventsimTestSuite extends EventsimBuilder {
     assert(singleRow.length == 2)
   }
 
+  test("Sort by two fields") {
+    val df = sparkSession.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "userId, ts")
+      .option(SOLR_QUERY_PARAM, "userId:93")
+      .option(SORT_PARAM, "userId asc, ts asc")
+      .load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+    assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
+  }
+
+  test("Alias and Sort by field") {
+    val df = sparkSession.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "user:userId,userId")
+      .option(SCHEMA, """userId:\"string\"""")
+      .load()
+    df.printSchema()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+  }
+
+  test("Sort by score") {
+    val df = sparkSession.read.format("solr")
+      .option(SOLR_ZK_HOST_PARAM, zkHost)
+      .option(SOLR_COLLECTION_PARAM, collectionName)
+      .option(SOLR_FIELD_PARAM, "userId, ts")
+      .option(SOLR_QUERY_PARAM, "userId:93")
+      .option(SORT_PARAM, "score asc")
+      .option(MAX_ROWS, "5")
+      .load()
+    val singleRow = df.take(1)(0)
+    assert(singleRow.length == 2)
+    assert(singleRow(df.schema.fieldIndex("userId")).toString.toInt == 93)
+  }
+
   test("SQL fields option") {
     val df = sparkSession.read.format("solr")
       .option(SOLR_ZK_HOST_PARAM, zkHost)
