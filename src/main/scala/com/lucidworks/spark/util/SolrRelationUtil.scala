@@ -84,24 +84,25 @@ object SolrRelationUtil extends LazyLogging {
     if (SolrQuerySupport.getNumDocsFromSolr(collection, zkHost, None) == 0)
       return new StructType()
 
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val solrUrl = solrBaseUrl + collection + "/"
-    val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
-    logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
-    if (fieldsFromLuke.isEmpty)
-      return new StructType()
-
-    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
     val fieldTypeMap =
-      if (fields.isEmpty)
-        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, cloudClient, collection)
-      else
+      if (fields.isEmpty) {
+        val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
+        logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
+        if (fieldsFromLuke.isEmpty)
+          return new StructType()
+        SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, cloudClient, collection).filterKeys(fieldsFromLuke.contains)
+      } else {
         SolrQuerySupport.getFieldTypes(fields, solrUrl, cloudClient, collection)
+      }
+
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
     // Retain the keys that are present in the Luke handler
-    fieldTypeMap.filterKeys(f => fieldsFromLuke.contains(f)).foreach{ case(fieldName, fieldMeta) =>
+    fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
         if (fieldMeta.fieldTypeClass.isDefined) {
@@ -166,7 +167,7 @@ object SolrRelationUtil extends LazyLogging {
     for (structField <- schema.fields) fieldMap.put(structField.name, structField)
 
     val listOfFields = new ListBuffer[StructField]
-    for (field <- fields) {
+    for (field <- fields.distinct) {
       if (field.funcReturnType.isDefined) {
         listOfFields.add(DataTypes.createStructField(field.alias.get, field.funcReturnType.get, false, Metadata.empty))
       } else {
