@@ -118,6 +118,33 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     assert(selectedPartitions.toSet == Set("events_2017_09_09", "events_2017_09_10", "events_2017_09_11", "events_2017_09_13"))
   }
 
+  test("Test range query filtering") {
+    val rangeQuery = "ts:{2016-06-18T00:00:00.00Z TO *]"
+    val solrQuery = new SolrQuery()
+    solrQuery.addFilterQuery(rangeQuery)
+
+    val dfParams = Map(
+      PARTITION_BY -> "time",
+      TIMESTAMP_FIELD_NAME -> "ts",
+      TIME_PERIOD -> "1DAYS",
+      DATETIME_PATTERN -> "yyyy_MM_dd",
+      TIMEZONE_ID -> "UTC",
+      "collection" -> "eventsim"
+    )
+    val solrConf = new SolrConf(dfParams)
+
+    val timePartitioningQuery = new TimePartitioningQuery(solrConf, solrQuery)
+    val filterQueries = timePartitioningQuery.filterRangeQueries(solrQuery.getFilterQueries, "ts:")
+    assert(filterQueries(0) === "ts:{2016-06-18T00:00:00.00Z TO *]")
+    val aps = "eventsim_2016_06_10,eventsim_2016_06_11,eventsim_2016_06_12,eventsim_2016_06_13," +
+      "eventsim_2016_06_14,eventsim_2016_06_15,eventsim_2016_06_16,eventsim_2016_06_17,eventsim_2016_06_18," +
+      "eventsim_2016_06_19,eventsim_2016_06_20,eventsim_2016_06_21,eventsim_2016_06_22,eventsim_2016_06_23," +
+      "eventsim_2016_06_24,eventsim_2016_06_25"
+    val selectedPartitions = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, aps.split(",").toList)
+    val sps = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, selectedPartitions.mkString(",").split(",").toList)
+    assert(sps.length === 8)
+  }
+
   test("Test partition selection upper bound") {
     val rangeQuery = "timestamp:[* TO 2017-09-09T00:00:00.00Z}"
     val solrQuery = new SolrQuery()

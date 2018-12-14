@@ -18,7 +18,7 @@ import org.apache.solr.util.DateMathParser
 
 import scala.collection.mutable.ListBuffer
 
-class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLogging {
+class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Option[List[String]] = None) extends LazyLogging {
 
   val dateTimePattern: String = getDateTimePattern
   val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
@@ -34,22 +34,26 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     val timestampFilterPrefix = s"$timestampField:"
 
     // Get all partitions from cluster state
-    val allPartitions: List[String] = getPartitions(true)
+    val allPartitions: List[String] = partitions.getOrElse(getPartitions(true))
 
-    if (query.getFilterQueries == null) {
+    if (query.getFilterQueries == null && query.getFilterQueries.isEmpty) {
       logger.warn(s"No filter query found in ${query}")
       return allPartitions
     }
-    val rangeQueries = query.getFilterQueries
-        .filter(fq => fq != null && !fq.isEmpty)
-        .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
+    val rangeQueries = filterRangeQueries(query.getFilterQueries, timestampFilterPrefix)
     // TODO: What to do if there are multiple filter queries
     if (rangeQueries.isEmpty) {
-      logger.warn(s"No range queries found in filter queries. Returning all partitions: ${allPartitions}")
+      logger.warn(s"No range queries found for filter queries ${query.getFilterQueries.mkString(",")}. Returning all partitions: ${allPartitions}")
       return allPartitions
     }
     logger.debug(s"All partitions returned for query are: ${allPartitions}")
     getCollectionsForRangeQueries(rangeQueries, allPartitions)
+  }
+
+  def filterRangeQueries(filterQueries: Array[String], timestampFilterPrefix: String): Array[String] = {
+    filterQueries
+      .filter(fq => fq != null && !fq.isEmpty)
+      .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
   }
 
   def getPartitions(activeOnly: Boolean): List[String] = {
@@ -169,7 +173,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getCollectionNameForDate(date: Date): String = {
-    solrConf.getCollection.get + "_" + dateFormatter.get().format(date)
+    solrConf.getCollectionAlias.getOrElse(solrConf.getCollection.get) + "_" + dateFormatter.get().format(date)
   }
 }
 
