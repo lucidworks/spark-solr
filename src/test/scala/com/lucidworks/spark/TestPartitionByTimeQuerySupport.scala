@@ -3,8 +3,9 @@ package com.lucidworks.spark
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.SaveMode._
-
 import com.lucidworks.spark.util.ConfigurationConstants._
+import org.apache.solr.client.solrj.request.CollectionAdminRequest
+import org.apache.solr.client.solrj.request.CollectionAdminRequest.{CreateAlias, DeleteAlias}
 /**
  This class is used to test the PartitionByTimeQuerySupport class
   */
@@ -191,4 +192,37 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     assert(selectedPartitions.toSet == Set("events_2017_09_07", "events_2017_09_09"))
   }
 
+  test("Test alias query") {
+    val aliasName = "testAlias"
+    val solrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val collection1Name = aliasName + "_2011_04_10"
+    val collection2Name = aliasName + "_2011_04_11"
+    SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
+    try {
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      aliasCreateRequest.process(solrClient)
+      val dfParams = Map(
+        PARTITION_BY -> "time",
+        TIMESTAMP_FIELD_NAME -> "timestamp",
+        TIME_PERIOD -> "1DAYS",
+        DATETIME_PATTERN -> "yyyy_MM_dd",
+        TIMEZONE_ID -> "UTC",
+        "collection" -> aliasName,
+        COLLECTION_ALIAS -> aliasName,
+        SOLR_ZK_HOST_PARAM -> zkHost
+      )
+      val solrConf = new SolrConf(dfParams)
+      val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
+      val allPartitions = timePartitioningQuery.findAllPartitions
+      val aliases = timePartitioningQuery.getPartitions(true)
+      assert(allPartitions.size == 2)
+      assert(aliases.size == 2)
+    } finally {
+      val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
+      deleteAlias.process(solrClient)
+      SolrCloudUtil.deleteCollection(collection1Name, cluster)
+      SolrCloudUtil.deleteCollection(collection2Name, cluster)
+    }
+  }
 }
