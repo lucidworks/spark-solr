@@ -9,7 +9,7 @@ import org.apache.solr.client.solrj.SolrQuery
 
 import scala.collection.JavaConverters._
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrSupport}
+import com.lucidworks.spark.util.{ConfigurationConstants, SolrQuerySupport, SolrSupport}
 import TimePartitioningQuery._
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
@@ -57,6 +57,12 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def getPartitions(activeOnly: Boolean): List[String] = {
+    if (solrConf.getCollectionAlias.isDefined) {
+      val aliasList : Option[List[String]] = SolrQuerySupport.getCollectionsForAlias(solrConf.getZkHost.get, solrConf.getCollectionAlias.get)
+      if (aliasList.isDefined) {
+        return aliasList.get
+      }
+    }
     val partitions: List[String] = findAllPartitions
     if (activeOnly) {
       if (solrConf.getMaxActivePartitions.isDefined) {

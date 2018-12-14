@@ -825,13 +825,7 @@ object SolrRelation extends LazyLogging {
       }
     })
     if (conf.partitionBy.isDefined && conf.partitionBy.get == "time" && conf.getStreamingExpr.isEmpty) {
-      val timePartitionQuery =
-        // No need to optimize for non empty streaming expr
-        if (collection.indexOf(",") != -1) {
-          new TimePartitioningQuery(conf, initialQuery, Some(collection.split(",").toList))
-        } else {
-          new TimePartitioningQuery(conf, initialQuery)
-        }
+      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
       val allCollections = timePartitionQuery.getPartitionsForQuery()
       logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
       collection =  allCollections.mkString(",")
