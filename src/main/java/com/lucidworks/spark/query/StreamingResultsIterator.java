@@ -35,7 +35,6 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
   protected boolean usingCursors = false;
   protected String nextCursorMark = null;
   protected String cursorMarkOfCurrentPage = null;
-  protected boolean closeAfterIterating = false;
   protected LinkedBlockingDeque<SolrDocument> queue;
   protected Integer maxSampleDocs = null;
   protected String solrId = null;
@@ -59,7 +58,6 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
       solrId = solrServer.toString();
     }
 
-    this.closeAfterIterating = !(solrServer instanceof CloudSolrClient);
     this.solrQuery = solrQuery;
     this.usingCursors = (cursorMark != null);
     this.nextCursorMark = cursorMark;
@@ -94,11 +92,6 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
       hasNext = (totalDocs > 0 && iterPos < currentPageSize);
     }
 
-    if (!hasNext && closeAfterIterating) {
-      try {
-        solrServer.close();
-      } catch (Exception exc) { exc.printStackTrace(); }
-    }
     return hasNext;
   }
 

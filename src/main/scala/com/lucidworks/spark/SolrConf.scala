@@ -23,6 +23,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def getCollection: Option[String] = config.get(SOLR_COLLECTION_PARAM)
 
+  def getCollectionAlias: Option[String] = config.get(COLLECTION_ALIAS)
+
   def getQuery: Option[String] = config.get(SOLR_QUERY_PARAM)
 
   def getStreamingExpr: Option[String] = config.get(SOLR_STREAMING_EXPR)
@@ -113,6 +115,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def samplePct: Option[Float] =
     if (config.get(SAMPLE_PCT).isDefined) Some(config(SAMPLE_PCT).toFloat) else None
+
+  def schema: Option[String] = config.get(SCHEMA)
 
   def requestHandler: Option[String] = {
 
@@ -274,6 +278,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (getSolrFieldTypes.isDefined) {
       sb ++= s", ${SOLR_FIELD_TYPES}=${getSolrFieldTypes.get}"
+    }
+    if (getCollectionAlias.isDefined) {
+      sb ++= s", ${COLLECTION_ALIAS}=${getCollectionAlias.get}"
     }
     sb ++= ")"
     sb.toString

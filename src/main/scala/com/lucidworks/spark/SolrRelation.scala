@@ -111,7 +111,15 @@ class SolrRelation(
       if (userRequestedFields.isDefined) {
         // filter out any function query invocations from the base schema list
         val baseSchemaFields = userRequestedFields.get.filter(!_.funcReturnType.isDefined).map(_.name) ++ Array(uniqueKey)
-        baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
+        if (conf.schema.isEmpty) {
+          baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
+        } else {
+          val fieldSet = SolrRelation.parseSchemaExprSchemaToStructFields(conf.schema.get)
+          if (fieldSet.isEmpty) {
+            throw new IllegalStateException(s"Failed to extract schema fields from schema config ${schema}")
+          }
+          baseSchema = Some(new StructType(fieldSet.toArray.sortBy(f => f.name)))
+        }
         SolrRelationUtil.deriveQuerySchema(userRequestedFields.get, baseSchema.get)
       } else if (initialQuery.getRequestHandler == QT_STREAM) {
         var fieldSet: scala.collection.mutable.Set[StructField] = scala.collection.mutable.Set[StructField]()
@@ -570,10 +578,18 @@ class SolrRelation(
       sparkSession.sparkContext.register(acc, accName)
       SparkSolrAccumulatorContext.add(accName, acc.id)
 
+      val modifiedCollection =
+        if (collection.indexOf(",") != -1) {
+          new TimePartitioningQuery(conf, query, Some(collection.split(",").toList))
+            .getPartitionsForQuery()
+            .mkString(",")
+        } else {
+          collection
+        }
       // Construct the SolrRDD based on the request handler
       val solrRDD: SolrRDD[_] = SolrRDD.apply(
         conf.getZkHost.get,
-        collection,
+        modifiedCollection,
         sqlContext.sparkContext,
         Some(qt),
         splitsPerShard = conf.getSplitsPerShard,
@@ -808,12 +824,12 @@ object SolrRelation extends LazyLogging {
         throw new IllegalArgumentException("collection option is required!")
       }
     })
-    if (conf.partitionBy.isDefined && conf.partitionBy.get == "time") {
+    if (conf.partitionBy.isDefined && conf.partitionBy.get == "time" && conf.getStreamingExpr.isEmpty) {
       val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
       val allCollections = timePartitionQuery.getPartitionsForQuery()
       logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
       collection =  allCollections.mkString(",")
-    }
+   }
     initialQuery.set("collection", collection)
   }
 
@@ -962,7 +978,7 @@ object SolrRelation extends LazyLogging {
   def parseSortParamFromString(sortParam: String):  List[SortClause] = {
     val sortClauses: ListBuffer[SortClause] = ListBuffer.empty
     for (pair <- sortParam.split(",")) {
-      val sortStringParams = pair.split(" ")
+      val sortStringParams = pair.trim.split(" ")
       if (sortStringParams.nonEmpty) {
         if (sortStringParams.size == 2) {
           sortClauses += new SortClause(sortStringParams(0), sortStringParams(1))

@@ -98,7 +98,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
   protected Replica getRandomReplica() {
     ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
-    Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection).getActiveSlices();
+    Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection.split(",")[0]).getActiveSlices();
     if (slices == null || slices.size() == 0)
       throw new IllegalStateException("No active shards found "+collection);
 
