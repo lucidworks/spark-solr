@@ -825,11 +825,17 @@ object SolrRelation extends LazyLogging {
       }
     })
     if (conf.partitionBy.isDefined && conf.partitionBy.get == "time" && conf.getStreamingExpr.isEmpty) {
-      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
-      val allCollections = timePartitionQuery.getPartitionsForQuery()
-      logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
-      collection =  allCollections.mkString(",")
-   }
+      if (collection.indexOf(",") != -1) {
+        new TimePartitioningQuery(conf, initialQuery, Some(collection.split(",").toList))
+          .getPartitionsForQuery()
+          .mkString(",")
+      } else {
+        val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
+        val allCollections = timePartitionQuery.getPartitionsForQuery()
+        logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
+        collection =  allCollections.mkString(",")
+      }
+    }
     initialQuery.set("collection", collection)
   }
 
