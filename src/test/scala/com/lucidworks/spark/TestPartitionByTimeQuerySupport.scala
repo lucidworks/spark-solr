@@ -200,7 +200,7 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
     SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
     try {
-      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection2Name,$collection1Name")
       aliasCreateRequest.process(solrClient)
       val dfParams = Map(
         PARTITION_BY -> "time",

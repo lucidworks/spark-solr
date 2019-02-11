@@ -498,7 +498,7 @@ object SolrQuerySupport extends LazyLogging {
     if (collectionAdminResp.getStatus == 0) {
       val allAliases = collectionAdminResp.getAliases.toMap
       if (allAliases.contains(alias)) {
-        val aliases = allAliases(alias).split(",").toList
+        val aliases = allAliases(alias).split(",").toList.sorted
         logger.debug(s"Resolved alias ${alias} to ${aliases}")
         return Some(aliases)
       }
