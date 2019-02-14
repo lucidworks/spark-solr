@@ -64,6 +64,7 @@ class SolrRelation(
 
   checkRequiredParams()
 
+  lazy val solrVersion : String = SolrSupport.getSolrVersion(conf.getZkHost.get)
   lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
@@ -651,7 +652,6 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val solrVersion = SolrSupport.getSolrVersion(zkHost)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
@@ -745,7 +745,6 @@ class SolrRelation(
     val collectionId = conf.getCollection.get
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val solrVersion = SolrSupport.getSolrVersion(zkHost)
 
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
@@ -825,11 +824,17 @@ object SolrRelation extends LazyLogging {
       }
     })
     if (conf.partitionBy.isDefined && conf.partitionBy.get == "time" && conf.getStreamingExpr.isEmpty) {
-      val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
-      val allCollections = timePartitionQuery.getPartitionsForQuery()
-      logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
-      collection =  allCollections.mkString(",")
-   }
+      if (collection.indexOf(",") != -1) {
+        new TimePartitioningQuery(conf, initialQuery, Some(collection.split(",").toList))
+          .getPartitionsForQuery()
+          .mkString(",")
+      } else {
+        val timePartitionQuery = new TimePartitioningQuery(conf, initialQuery)
+        val allCollections = timePartitionQuery.getPartitionsForQuery()
+        logger.info(s"Collection rewritten from ${collection} to ${allCollections}")
+        collection =  allCollections.mkString(",")
+      }
+    }
     initialQuery.set("collection", collection)
   }
 

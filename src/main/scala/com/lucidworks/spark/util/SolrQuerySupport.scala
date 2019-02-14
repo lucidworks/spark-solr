@@ -496,9 +496,11 @@ object SolrQuerySupport extends LazyLogging {
     val listAliases = new ListAliases()
     val collectionAdminResp = listAliases.process(SolrSupport.getCachedCloudClient(zkHost))
     if (collectionAdminResp.getStatus == 0) {
-      val aliases = collectionAdminResp.getAliases.toMap
-      if (aliases.contains(alias)) {
-        return Some(aliases(alias).split(",").toList)
+      val allAliases = collectionAdminResp.getAliases.toMap
+      if (allAliases.contains(alias)) {
+        val aliases = allAliases(alias).split(",").toList.sorted
+        logger.debug(s"Resolved alias ${alias} to ${aliases}")
+        return Some(aliases)
       }
     } else {
       logger.error(s"Failed to get alias list from Solr. Response text ${collectionAdminResp.getResponse.toString}")

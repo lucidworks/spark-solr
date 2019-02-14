@@ -200,7 +200,7 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
     SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
     try {
-      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection2Name,$collection1Name")
       aliasCreateRequest.process(solrClient)
       val dfParams = Map(
         PARTITION_BY -> "time",
@@ -216,8 +216,44 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
       val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
       val allPartitions = timePartitioningQuery.findAllPartitions
       val aliases = timePartitioningQuery.getPartitions(true)
+      val solrRelation = new SolrRelation(dfParams, None, sparkSession)
+      assert(solrRelation.collection === s"${collection1Name},${collection2Name}")
       assert(allPartitions.size == 2)
       assert(aliases.size == 2)
+    } finally {
+      val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
+      deleteAlias.process(solrClient)
+      SolrCloudUtil.deleteCollection(collection1Name, cluster)
+      SolrCloudUtil.deleteCollection(collection2Name, cluster)
+    }
+  }
+
+  test("Test alias query with pre-resolved collections") {
+    val aliasName = "testAlias"
+    val solrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val collection1Name = aliasName + "_2011_04_10"
+    val collection2Name = aliasName + "_2011_04_11"
+    SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
+    try {
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      aliasCreateRequest.process(solrClient)
+      val dfParams = Map(
+        PARTITION_BY -> "time",
+        TIMESTAMP_FIELD_NAME -> "timestamp",
+        TIME_PERIOD -> "1DAYS",
+        DATETIME_PATTERN -> "yyyy_MM_dd",
+        TIMEZONE_ID -> "UTC",
+        "collection" -> s"${collection1Name},${collection2Name}",
+        COLLECTION_ALIAS -> aliasName,
+        SOLR_ZK_HOST_PARAM -> zkHost
+      )
+      val solrConf = new SolrConf(dfParams)
+      val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
+      val aliases = timePartitioningQuery.getPartitions(true)
+      assert(aliases.size == 2)
+      val solrRelation = new SolrRelation(dfParams, None, sparkSession)
+      assert(solrRelation.collection === s"${collection1Name},${collection2Name}")
     } finally {
       val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
       deleteAlias.process(solrClient)
