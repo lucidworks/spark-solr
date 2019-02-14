@@ -102,6 +102,7 @@ object SolrRelationUtil extends LazyLogging {
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
+    // Retain the keys that are present in the Luke handler
     fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {

@@ -9,6 +9,7 @@ import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl._
+import org.apache.solr.client.solrj.request.CollectionAdminRequest.ListAliases
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
@@ -489,6 +490,22 @@ object SolrQuerySupport extends LazyLogging {
         "Solr request returned with status code '" + lukeResponse.getStatus + "'. Response: '" + lukeResponse.getResponse.toString)
     }
     mapAsScalaMap(lukeResponse.getFieldInfo).toMap.keySet
+  }
+
+  def getCollectionsForAlias(zkHost: String, alias: String): Option[List[String]] = {
+    val listAliases = new ListAliases()
+    val collectionAdminResp = listAliases.process(SolrSupport.getCachedCloudClient(zkHost))
+    if (collectionAdminResp.getStatus == 0) {
+      val allAliases = collectionAdminResp.getAliases.toMap
+      if (allAliases.contains(alias)) {
+        val aliases = allAliases(alias).split(",").toList.sorted
+        logger.debug(s"Resolved alias ${alias} to ${aliases}")
+        return Some(aliases)
+      }
+    } else {
+      logger.error(s"Failed to get alias list from Solr. Response text ${collectionAdminResp.getResponse.toString}")
+    }
+    None
   }
 
   def validateExportHandlerQuery(solrServer: SolrClient, solrQuery: SolrQuery) = {
