@@ -64,6 +64,7 @@ class SolrRelation(
 
   checkRequiredParams()
 
+  lazy val solrVersion : String = SolrSupport.getSolrVersion(conf.getZkHost.get)
   lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
@@ -651,7 +652,6 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val solrVersion = SolrSupport.getSolrVersion(zkHost)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
 
     // build up a list of updates to send to the Solr Schema API
@@ -745,7 +745,6 @@ class SolrRelation(
     val collectionId = conf.getCollection.get
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val solrVersion = SolrSupport.getSolrVersion(zkHost)
 
     val solrFields : Map[String, SolrFieldMeta] =
       SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
