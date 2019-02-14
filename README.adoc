@@ -17,18 +17,18 @@ chart below shows the versions supported across the past releases. 'Connector' r
 [width="40%",frame="topbot",options="header,footer"]
 |======================
 |Connector      | Spark | Solr
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.6.0/jar[3.6.0]  | 2.4.0 | 7.5.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.5.8/jar[3.5.8]  | 2.3.2 | 7.5.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.4.5/jar[3.4.5]  | 2.2.1 | 7.2.1
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.3.4/jar[3.3.4]  | 2.2.0 | 7.1.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.2.2/jar[3.2.2]  | 2.2.0 | 6.6.1
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.1.1/jar[3.1.1]  | 2.1.1 | 6.6.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.0.4/jar[3.0.4]  | 2.1.1 | 6.5.1
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.4.0/jar[2.4.0]  | 1.6.3 | 6.4.2
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.3.4/jar[2.3.4]  | 1.6.3 | 6.3.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.2.3/jar[2.2.3]  | 1.6.2 | 6.1.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.1.0/jar[2.1.0]  | 1.6.2 | 6.1.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.0.4/jar[2.0.4]  | 1.6.1 | 5.5.2
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.6.0/jar[3.6.0]   | 2.4.0 | 7.5.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.5.8/jar[3.5.14]  | 2.3.2 | 7.6.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.4.5/jar[3.4.5]   | 2.2.1 | 7.2.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.3.4/jar[3.3.4]   | 2.2.0 | 7.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.2.2/jar[3.2.2]   | 2.2.0 | 6.6.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.1.1/jar[3.1.1]   | 2.1.1 | 6.6.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.0.4/jar[3.0.4]   | 2.1.1 | 6.5.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.4.0/jar[2.4.0]   | 1.6.3 | 6.4.2
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.3.4/jar[2.3.4]   | 1.6.3 | 6.3.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.2.3/jar[2.2.3]   | 1.6.2 | 6.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.1.0/jar[2.1.0]   | 1.6.2 | 6.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.0.4/jar[2.0.4]   | 1.6.1 | 5.5.2
 |======================
 
 
