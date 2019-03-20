@@ -55,7 +55,10 @@ object SolrRelationUtil extends LazyLogging {
             funcReturnType = Some(LongType)
           }
           logger.debug(s"Found a Solr function query: ${field} with return type: ${funcReturnType}")
+        } else if (field.equals("score")) { //Support the "score" pseudo-field as a double
+          funcReturnType = Some(DoubleType)
         }
+
         QueryField(URLDecoder.decode(field, "UTF-8"), Some(alias), funcReturnType)
       } else {
         QueryField(f)
