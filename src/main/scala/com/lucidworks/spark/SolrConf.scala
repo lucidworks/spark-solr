@@ -118,6 +118,10 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def schema: Option[String] = config.get(SCHEMA)
 
+  def getMaxShardsForSchemaSampling: Option[Int] = {
+    if (config.get(MAX_SHARDS_FOR_SCHEMA_SAMPLING).isDefined) Some(config(MAX_SHARDS_FOR_SCHEMA_SAMPLING).toInt) else None
+  }
+
   def requestHandler: Option[String] = {
 
     if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
@@ -233,6 +237,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (getSolrSQLSchema.isDefined) {
       sb ++= s", ${SOLR_SQL_SCHEMA}=${getSolrSQLSchema.get}"
+    }
+    if (getMaxShardsForSchemaSampling.isDefined) {
+      sb ++= s", ${MAX_SHARDS_FOR_SCHEMA_SAMPLING}=${getMaxShardsForSchemaSampling.get}"
     }
 
     sb ++= s", extraOptions=${getExtraOptions}"
