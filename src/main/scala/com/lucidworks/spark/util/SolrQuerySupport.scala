@@ -3,7 +3,7 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.util
 
-import com.lucidworks.spark.{JsonFacetUtil, LazyLogging}
+import com.lucidworks.spark.{JsonFacetUtil, LazyLogging, SolrShard}
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrRequest.METHOD
@@ -29,6 +29,7 @@ import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.util.Random
 import scala.util.control.Breaks._
 
 // Should we support all other additional Solr field tags?
@@ -470,15 +471,24 @@ object SolrQuerySupport extends LazyLogging {
     fieldInfoMap.toMap
   }
 
-  def getFieldsFromLuke(zkHost: String, collection: String): Set[String] = {
-    val shardList = SolrSupport.buildShardList(zkHost, collection, false)
+  def getFieldsFromLuke(zkHost: String, collection: String, maxShardsToSample: Option[Int]): Set[String] = {
+    val allShardList = SolrSupport.buildShardList(zkHost, collection, false)
+    val sampledShardList = randomlySampleShardList(allShardList, maxShardsToSample.getOrElse(10))
     val fieldSetBuffer: ListBuffer[String] = ListBuffer.empty[String]
-    shardList.foreach(shard => {
+    sampledShardList.foreach(shard => {
       val randomReplica = SolrRDD.randomReplica(shard)
       val replicaHttpClient = SolrSupport.getCachedHttpSolrClient(randomReplica.replicaUrl, zkHost)
       fieldSetBuffer.++=(getFieldsFromLukePerShard(zkHost, replicaHttpClient))
     })
     fieldSetBuffer.toSet
+  }
+
+  private def randomlySampleShardList(fullShardList: List[SolrShard], maxShardsToSample: Int): List[SolrShard] = {
+    if (fullShardList.size > maxShardsToSample) {
+      Random.shuffle(fullShardList).slice(0, maxShardsToSample)
+    } else {
+      fullShardList
+    }
   }
 
   def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
@@ -600,7 +610,7 @@ object SolrQuerySupport extends LazyLogging {
       pivotFields: Array[PivotField],
       solrRDD: SolrRDD[_],
       escapeFieldNames: Boolean): DataFrame = {
-    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, Some(true), false, Set.empty)
+    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, None, escapeFieldNames, Some(true), false, Set.empty)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {
