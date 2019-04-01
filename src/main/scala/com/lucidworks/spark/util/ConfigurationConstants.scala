@@ -48,6 +48,7 @@ object ConfigurationConstants {
   val ARBITRARY_PARAMS_STRING: String = "solr.params"
 
   val SCHEMA: String = "schema"
+  val MAX_SHARDS_FOR_SCHEMA_SAMPLING = "max_schema_sampling_shards"
   val STREAMING_EXPR_SCHEMA: String = "expr_schema"
   val SOLR_SQL_SCHEMA: String = "sql_schema"
   val EXCLUDE_FIELDS: String = "exclude_fields"

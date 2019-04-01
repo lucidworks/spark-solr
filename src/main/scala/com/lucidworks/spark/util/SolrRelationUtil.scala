@@ -69,16 +69,18 @@ object SolrRelationUtil extends LazyLogging {
   def getBaseSchema(
       zkHost: String,
       collection: String,
+      numShardsToSample: Option[Int],
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean,
       dynamicExtensions: Set[String]): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
+    getBaseSchema(Set.empty[String], zkHost, collection, numShardsToSample, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
 
   def getBaseSchema(
       fields: Set[String],
       zkHost: String,
       collection: String,
+      numShardsToSample: Option[Int],
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean,
@@ -92,7 +94,7 @@ object SolrRelationUtil extends LazyLogging {
     val solrUrl = solrBaseUrl + collection + "/"
     val fieldTypeMap =
       if (fields.isEmpty) {
-        val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
+        val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection, numShardsToSample)
         logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
         if (fieldsFromLuke.isEmpty)
           return new StructType()
