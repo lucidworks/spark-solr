@@ -66,6 +66,20 @@ class QueryResultsIterator(
   override protected def processQueryResponse(resp: QueryResponse): util.List[SolrDocument] = resp.getResults
 }
 
+/**
+  * SolrJ's {@link LukeRequest} doesn't support the 'includeIndexFieldFlags', so this stub class hardcodes it into the
+  * underlying SolrParams until this can be fixed in Solr. This can be removed once our SolrJ has the fix for
+  * SOLR-13362
+  */
+class LukeRequestWithoutIndexFlags extends LukeRequest {
+  override def getParams: SolrParams = {
+    val params = new ModifiableSolrParams(super.getParams)
+    params.add("includeIndexFieldFlags", "false")
+
+    params
+  }
+}
+
 object SolrQuerySupport extends LazyLogging {
 
   val SOLR_DATA_TYPES: Map[String, DataType] = HashMap(
@@ -491,7 +505,7 @@ object SolrQuerySupport extends LazyLogging {
   }
 
   def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
-    val lukeRequest = new LukeRequest()
+    val lukeRequest = new LukeRequestWithoutIndexFlags()
     lukeRequest.setNumTerms(0)
     val lukeResponse = lukeRequest.process(httpSolrClient)
     if (lukeResponse.getStatus != 0) {
