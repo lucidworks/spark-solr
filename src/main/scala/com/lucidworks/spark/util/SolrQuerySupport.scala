@@ -474,13 +474,12 @@ object SolrQuerySupport extends LazyLogging {
   def getFieldsFromLuke(zkHost: String, collection: String, maxShardsToSample: Option[Int]): Set[String] = {
     val allShardList = SolrSupport.buildShardList(zkHost, collection, false)
     val sampledShardList = randomlySampleShardList(allShardList, maxShardsToSample.getOrElse(10))
-    val fieldSetBuffer: ListBuffer[String] = ListBuffer.empty[String]
-    sampledShardList.foreach(shard => {
+    val fieldSetBuffer = sampledShardList.par.map(shard => {
       val randomReplica = SolrRDD.randomReplica(shard)
       val replicaHttpClient = SolrSupport.getCachedHttpSolrClient(randomReplica.replicaUrl, zkHost)
-      fieldSetBuffer.++=(getFieldsFromLukePerShard(zkHost, replicaHttpClient))
-    })
-    fieldSetBuffer.toSet
+      getFieldsFromLukePerShard(zkHost, replicaHttpClient)
+    }).flatten
+    fieldSetBuffer.toSet.seq
   }
 
   private def randomlySampleShardList(fullShardList: List[SolrShard], maxShardsToSample: Int): List[SolrShard] = {
