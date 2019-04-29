@@ -7,6 +7,7 @@ import java.util.Date
 
 import com.lucidworks.spark.LazyLogging
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
+import com.lucidworks.spark.util.SolrRelationUtil.getFieldValueForList
 import org.apache.solr.client.solrj.request.GenericSolrRequest
 import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter
 import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}
@@ -619,8 +620,36 @@ object SolrRelationUtil extends LazyLogging {
 
           doc match {
             case solrDocument: SolrDocument =>
-              val fieldValue = solrDocument.get(field.name)
-              val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
+
+              val obj = solrDocument.get(field.name)
+              val newValue =  obj match {
+                case l: java.util.List[Object] => {
+                  /*
+                  * Field is single valued in the schema but has a List of values.
+                  * Most likely field flattening is on.
+                  */
+                  fieldType match {
+                    case StringType => {
+                      /*
+                      * Field is a String so let's serialize the list to a String.
+                      * Numerics (int, long, float, double) will also report to be String when flattened.
+                      */
+                      getFieldValueForList(l)
+                    }
+                    case any => {
+                      /*
+                      * Not a String, or numeric reporting to be a String. So let's process the field
+                      * the default way.
+                      */
+                      processFieldValue(obj, fieldType, multiValued = false)
+                    }
+                  }
+                }
+                case any => {
+                  processFieldValue(obj, fieldType, multiValued = false)
+                }
+              }
+
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -633,12 +662,24 @@ object SolrRelationUtil extends LazyLogging {
               val obj = map.get(field.name).asInstanceOf[Object]
               val newValue =  obj match {
                 case l: java.util.List[Object] => {
+                  /*
+                  * Field is single valued in the schema but has a List of values.
+                  * Most likely field flattening is on.
+                  */
                   fieldType match {
-                    case BinaryType => {
-                      processFieldValue(obj, fieldType, multiValued = false)
+                    case StringType => {
+                      /*
+                      * Field is a String so let's serialize the list to a String.
+                      * Numerics (int, long, float, double) will also report to be String when flattened.
+                      */
+                      getFieldValueForList (l)
                     }
                     case any => {
-                      getFieldValueForList (l)
+                      /*
+                      * Not String or numeric reporting to be a String. So let's process the field
+                      * the default way.
+                      */
+                      processFieldValue(obj, fieldType, multiValued = false)
                     }
                   }
                 }
