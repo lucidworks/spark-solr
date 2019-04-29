@@ -137,7 +137,10 @@ object SolrRelationUtil extends LazyLogging {
         }
       }
 
-      if (!keepFieldMultivalued && fieldMeta.isMultiValued.isDefined && fieldMeta.isMultiValued.get) {
+      if (!keepFieldMultivalued &&
+           fieldMeta.isMultiValued.isDefined &&
+           fieldMeta.isMultiValued.get &&
+        (dataType.isInstanceOf[StringType] || dataType.isInstanceOf[LongType] || dataType.isInstanceOf[DoubleType] || dataType.isInstanceOf[FloatType])) {
         //If we are flattening a multi-valued field, we consider it a string
         dataType = DataTypes.StringType
       }
@@ -616,17 +619,7 @@ object SolrRelationUtil extends LazyLogging {
 
           doc match {
             case solrDocument: SolrDocument =>
-              val value = solrDocument.get(field.name)
-
-              val fieldValue =  value match {
-                case l: java.util.List[Object] => {
-                  getFieldValueForList(l)
-                }
-                case any => {
-                  solrDocument.getFieldValue(field.name)
-                }
-              }
-
+              val fieldValue = solrDocument.get(field.name)
               val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
@@ -640,7 +633,14 @@ object SolrRelationUtil extends LazyLogging {
               val obj = map.get(field.name).asInstanceOf[Object]
               val newValue =  obj match {
                 case l: java.util.List[Object] => {
-                  getFieldValueForList(l)
+                  fieldType match {
+                    case BinaryType => {
+                      processFieldValue(obj, fieldType, multiValued = false)
+                    }
+                    case any => {
+                      getFieldValueForList (l)
+                    }
+                  }
                 }
                 case any => {
                   processFieldValue(obj, fieldType, multiValued = false)
