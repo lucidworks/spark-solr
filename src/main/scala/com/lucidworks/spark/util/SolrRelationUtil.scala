@@ -137,6 +137,11 @@ object SolrRelationUtil extends LazyLogging {
         }
       }
 
+      if (!keepFieldMultivalued && fieldMeta.isMultiValued.isDefined && fieldMeta.isMultiValued.get) {
+        //If we are flattening a multi-valued field, we consider it a string
+        dataType = DataTypes.StringType
+      }
+
       if (fieldMeta.isRequired.isDefined)
         metadata.putBoolean("required", value = fieldMeta.isRequired.get)
 
@@ -585,6 +590,7 @@ object SolrRelationUtil extends LazyLogging {
   }
 
   def solrDocToRows[T](schema: StructType, docs: RDD[T]): RDD[Row] = {
+
     val fields = schema.fields
 
     val rows = docs.map(doc => {
@@ -607,9 +613,20 @@ object SolrRelationUtil extends LazyLogging {
               }
           }
         } else {
+
           doc match {
             case solrDocument: SolrDocument =>
-              val fieldValue = solrDocument.getFieldValue(field.name)
+              val value = solrDocument.get(field.name)
+
+              val fieldValue =  value match {
+                case l: java.util.List[Object] => {
+                  getFieldValueForList(l)
+                }
+                case any => {
+                  solrDocument.getFieldValue(field.name)
+                }
+              }
+
               val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
@@ -621,7 +638,15 @@ object SolrRelationUtil extends LazyLogging {
               }
             case map: util.Map[_,_] =>
               val obj = map.get(field.name).asInstanceOf[Object]
-              val newValue = processFieldValue(obj, fieldType, multiValued = false)
+              val newValue =  obj match {
+                case l: java.util.List[Object] => {
+                  getFieldValueForList(l)
+                }
+                case any => {
+                  processFieldValue(obj, fieldType, multiValued = false)
+                }
+              }
+
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -649,6 +674,20 @@ object SolrRelationUtil extends LazyLogging {
       solrRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
     } catch {
       case e: Exception => logger.error("Error setting softAutoCommit.maxTime. Exception: {}", e.getMessage)
+    }
+  }
+
+  def getFieldValueForList(values: java.util.List[Object]): String = {
+
+    if(values != null && values.size() > 0) {
+      if(values.get(0).isInstanceOf[Number]) {
+        values.mkString("[", ", ", "]")
+      } else {
+        values.mkString("[\"", "\", \"", "\"]")
+      }
+
+    } else {
+      "[]"
     }
   }
 
