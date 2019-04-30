@@ -98,6 +98,7 @@ object SolrRelationUtil extends LazyLogging {
         logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
         if (fieldsFromLuke.isEmpty)
           return new StructType()
+        // Retain the keys that are present in the Luke handler
         SolrQuerySupport.getFieldTypes(fieldsFromLuke, solrUrl, cloudClient, collection).filterKeys(fieldsFromLuke.contains)
       } else {
         SolrQuerySupport.getFieldTypes(fields, solrUrl, cloudClient, collection)

@@ -17,22 +17,18 @@ chart below shows the versions supported across the past releases. 'Connector' r
 [width="40%",frame="topbot",options="header,footer"]
 |======================
 |Connector      | Spark | Solr
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.4.0%7Cjar[3.4.0]  | 2.2.1 | 7.2.1
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.3.3%7Cjar[3.3.4]  | 2.2.0 | 7.1.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.2.2%7Cjar[3.2.2]  | 2.2.0 | 6.6.1
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.2.0%7Cjar[3.2.0]  | 2.2.0 | 6.6.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.1.1%7Cjar[3.1.1]  | 2.1.1 | 6.6.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.4%7Cjar[3.0.4]  | 2.1.1 | 6.5.1
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.1%7Cjar[3.0.1]  | 2.1.1 | 6.5.1
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta3%7Cjar[3.0.0-beta3]  | 2.1.0 | 6.4.2
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-beta%7Cjar[3.0.0-beta]  | 2.1.0 | 6.3.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C3.0.0-alpha.2%7Cjar[3.0.0-alpha.2]  | 2.0.1 | 6.2.1
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.4.0%7Cjar[2.4.0]          | 1.6.3 | 6.4.2
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.3.4%7Cjar[2.3.4]          | 1.6.3 | 6.3.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.3.3%7Cjar[2.3.3]          | 1.6.3 | 6.3.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.2.3%7Cjar[2.2.3]          | 1.6.2 | 6.1.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.1.0%7Cjar[2.1.0]          | 1.6.2 | 6.1.0
-|http://search.maven.org/#artifactdetails%7Ccom.lucidworks.spark%7Cspark-solr%7C2.0.4%7Cjar[2.0.4]          | 1.6.1 | 5.5.2
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.6.0/jar[3.6.0]   | 2.4.0 | 7.5.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.5.8/jar[3.5.14]  | 2.3.2 | 7.6.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.4.5/jar[3.4.5]   | 2.2.1 | 7.2.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.3.4/jar[3.3.4]   | 2.2.0 | 7.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.2.2/jar[3.2.2]   | 2.2.0 | 6.6.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.1.1/jar[3.1.1]   | 2.1.1 | 6.6.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.0.4/jar[3.0.4]   | 2.1.1 | 6.5.1
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.4.0/jar[2.4.0]   | 1.6.3 | 6.4.2
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.3.4/jar[2.3.4]   | 1.6.3 | 6.3.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.2.3/jar[2.2.3]   | 1.6.2 | 6.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.1.0/jar[2.1.0]   | 1.6.2 | 6.1.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/2.0.4/jar[2.0.4]   | 1.6.1 | 5.5.2
 |======================
 
 
@@ -43,7 +39,7 @@ chart below shows the versions supported across the past releases. 'Connector' r
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --jars spark-solr-3.0.1-shaded.jar
+./bin/spark-shell --jars spark-solr-3.5.5-shaded.jar
 
 The shaded jar can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central] or built from the respective branch
 
@@ -91,7 +87,7 @@ The released jar files (1.1.2, 2.0.0, etc..) can be downloaded from the http://s
 <dependency>
    <groupId>com.lucidworks.spark</groupId>
    <artifactId>spark-solr</artifactId>
-   <version>3.0.0-alpha</version>
+   <version>{latestVersion}</version>
 </dependency>
 
 ==== Snapshots
@@ -109,7 +105,7 @@ This will build 2 jars in the `target` directory:
 * `spark-solr-${VERSION}.jar`
 * `spark-solr-${VERSION}-shaded.jar`
 
-`${VERSION}` will be something like 2.1.0-SNAPSHOT, for development builds.
+`${VERSION}` will be something like 3.5.6-SNAPSHOT, for development builds.
 
 The first .jar is what you'd want to use if you were using spark-solr in your own project. The second is what you'd use to submit one of the included example apps to Spark.
 //end::build-source[]
@@ -256,7 +252,7 @@ Keep in mind that this is only a hint to the split calculator and you may end up
 
 Usage: `option("splits_per_shard", "30")`
 
-Default: 20
+Default: default value is calculated automatically based on the number of docs for Solr query
 
 ==== flatten_multivalued
 
@@ -281,6 +277,31 @@ The `skip_non_dv` option instructs the `solr` datasource to skip all fields that
 Usage: `option("skip_non_dv", "true")`
 
 Default: false
+
+==== sample_seed
+
+The `sample_seed` option allows you to read a random sample of documents from Solr using the specified seed. This option can be useful if you just need to explore the data before performing operations on the full result set. By default, if this option is provided, a 10% sample size is read from Solr, but you can use the `sample_pct` option to control the sample size.
+
+Usage: `option("sample_seed", "5150")`
+
+Default: None
+
+==== sample_pct
+
+The `sample_pct` option allows you to set the size of a random sample of documents from Solr; use a value between 0 and 1.
+
+Usage: `option("sample_pct", "0.05")`
+
+Default: 0.1
+
+==== solr.params
+
+The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
+
+TIP: Don't use this to pass parameters that are covered by other options, such as `fl` (use the `fields` option) or `sort`. This option is strictly intended for parameters that are *NOT* covered by other options.
+
+Usage: `option("solr.params", "fq=userId:[10 TO 1000]")`
+
 
 === Index parameters
 
@@ -316,30 +337,11 @@ Usage: `option("gen_uniq_key", "true")`
 
 Default: false
 
-==== sample_seed
+==== solr_field_types
 
-The `sample_seed` option allows you to read a random sample of documents from Solr using the specified seed. This option can be useful if you just need to explore the data before performing operations on the full result set. By default, if this option is provided, a 10% sample size is read from Solr, but you can use the `sample_pct` option to control the sample size.
+This option can used to specify field type for fields written to Solr. Only works if the field names are not already defined in Solr schema
 
-Usage: `option("sample_seed", "5150")`
-
-Default: None
-
-==== sample_pct
-
-The `sample_pct` option allows you to set the size of a random sample of documents from Solr; use a value between 0 and 1.
-
-Usage: `option("sample_pct", "0.05")`
-
-Default: 0.1
-
-==== solr.params
-
-The `solr.params` option can be used to specify any arbitrary Solr parameters in the form of a Solr query.
-
-TIP: Don't use this to pass parameters that are covered by other options, such as `fl` (use the `fields` option) or `sort`. This option is strictly intended for parameters that are *NOT* covered by other options.
-
-Usage: `option("solr.params", "fq=userId:[10 TO 1000]")`
-
+Usage: `option("solr_field_types", "rating:string,title:text_en"`
 
 === Querying Time Series Data
 
