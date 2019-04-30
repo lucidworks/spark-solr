@@ -141,8 +141,17 @@ object SolrRelationUtil extends LazyLogging {
       if (!keepFieldMultivalued &&
            fieldMeta.isMultiValued.isDefined &&
            fieldMeta.isMultiValued.get &&
-        (dataType.isInstanceOf[StringType] || dataType.isInstanceOf[LongType] || dataType.isInstanceOf[DoubleType] || dataType.isInstanceOf[FloatType])) {
-        //If we are flattening a multi-valued field, we consider it a string
+           (dataType.isInstanceOf[StringType] ||
+             dataType.isInstanceOf[LongType] ||
+             dataType.isInstanceOf[IntegerType] ||
+             dataType.isInstanceOf[DoubleType] ||
+             dataType.isInstanceOf[FloatType])) {
+        /*
+        * Reset the dataType to a String if
+        * we are flattening a multi-value
+        * String, Long, Integer, Double or Float field.
+        */
+
         dataType = DataTypes.StringType
       }
 
