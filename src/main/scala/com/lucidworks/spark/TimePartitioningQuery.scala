@@ -23,7 +23,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   val dateTimePattern: String = getDateTimePattern
   val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
     override protected def initialValue: SimpleDateFormat = {
-      val sdf: SimpleDateFormat = new SimpleDateFormat(getDateTimePattern)
+      val sdf: SimpleDateFormat = new SimpleDateFormat(dateTimePattern)
       sdf.setTimeZone(TimeZone.getTimeZone(solrConf.getTimeZoneId.getOrElse(DEFAULT_TIMEZONE_ID)))
       sdf
     }
@@ -106,6 +106,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def getCollectionsForRangeQuery(rangeQuery: String, partitions: List[String]): List[String] = {
+    val sortedPartitions = partitions.sorted
     val luceneQuery: Query = (new StandardQueryParser).parse(rangeQuery, rangeQuery.substring(0, rangeQuery.indexOf(":")))
     if (!luceneQuery.isInstanceOf[TermRangeQuery]) throw new IllegalArgumentException("Failed to parse " + rangeQuery + " into a Lucene range query!")
     val rq: TermRangeQuery = luceneQuery.asInstanceOf[TermRangeQuery]
@@ -113,12 +114,12 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
     val upper: String = bref2str(rq.getUpperTerm)
 
     if (lower == null && upper == null) {
-      return partitions
+      return sortedPartitions
     }
-    val fromIndex: Int = if (lower != null) mapToExistingCollIndex(lower, partitions) else 0
-    val toIndex:Int = if (upper != null) mapToExistingCollIndex(upper, partitions) else partitions.size - 1
+    val fromIndex: Int = if (lower != null) mapToExistingCollIndex(lower, sortedPartitions) else 0
+    val toIndex:Int = if (upper != null) mapToExistingCollIndex(upper, sortedPartitions) else sortedPartitions.size - 1
     logger.debug(s"Partitions fromIndex: ${fromIndex}. toIndex: ${toIndex}")
-    partitions.slice(fromIndex, toIndex + 1)
+    sortedPartitions.slice(fromIndex, toIndex + 1)
   }
 
   def mapToExistingCollIndex(crit: String, partitions: List[String]): Int = {
@@ -138,7 +139,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def getPartitionMatchRegex: Pattern = {
-    var dtRegex: String = getDateTimePattern
+    var dtRegex: String = dateTimePattern
     dtRegex = dtRegex.replace("yyyy", "(\\d{4})")
     dtRegex = dtRegex.replace("yy", "(\\d{2})")
     dtRegex = dtRegex.replace("MM", "(1[0-2]|0[1-9])")
@@ -160,13 +161,14 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def getDateTimePattern: String = {
+    solrConf.getDateTimePattern.getOrElse(getDefaultDateTimePattern)
+  }
+
+  def getDefaultDateTimePattern: String = {
     val timeUnit = getTimeUnit
-    val defaultDateTimePattern = {
-      if (timeUnit eq TimeUnit.HOURS) "yyyy_MM_dd_HH"
-      else if (timeUnit eq TimeUnit.MINUTES) "yyyy_MM_dd_HH_mm"
-      else DEFAULT_DATETIME_PATTERN
-    }
-    solrConf.getDateTimePattern.getOrElse(defaultDateTimePattern)
+    if (timeUnit eq TimeUnit.HOURS) "yyyy_MM_dd_HH"
+    else if (timeUnit eq TimeUnit.MINUTES) "yyyy_MM_dd_HH_mm"
+    else DEFAULT_DATETIME_PATTERN
   }
 
   def getTimeUnit: TimeUnit = {
@@ -179,12 +181,13 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def getCollectionNameForDate(date: Date): String = {
-    solrConf.getCollectionAlias.getOrElse(solrConf.getCollection.get) + "_" + dateFormatter.get().format(date)
+    val formattedDate = dateFormatter.get().format(date)
+    solrConf.getCollectionAlias.getOrElse(solrConf.getCollection.get) + "_" + formattedDate
   }
 }
 
 object TimePartitioningQuery {
-  val TIMEPERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS)$")
+  val TIMEPERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS|MONTH)$")
 
   def bref2str(bytesRef: BytesRef): String = {
     if (bytesRef != null) bytesRef.utf8ToString
