@@ -631,34 +631,7 @@ object SolrRelationUtil extends LazyLogging {
             case solrDocument: SolrDocument =>
 
               val obj = solrDocument.get(field.name)
-              val newValue =  obj match {
-                case l: java.util.List[Object] => {
-                  /*
-                  * Field is single valued in the schema but has a List of values.
-                  * Most likely field flattening is on.
-                  */
-                  fieldType match {
-                    case StringType => {
-                      /*
-                      * Field is a String so let's serialize the list to a String.
-                      * Numerics (int, long, float, double) will also report to be String when flattened.
-                      */
-                      getFieldValueForList(l)
-                    }
-                    case any => {
-                      /*
-                      * Not a String, or numeric reporting to be a String. So let's process the field
-                      * the default way.
-                      */
-                      processFieldValue(obj, fieldType, multiValued = false)
-                    }
-                  }
-                }
-                case any => {
-                  processFieldValue(obj, fieldType, multiValued = false)
-                }
-              }
-
+              val newValue =  processSingleValue(obj, fieldType)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -669,34 +642,7 @@ object SolrRelationUtil extends LazyLogging {
               }
             case map: util.Map[_,_] =>
               val obj = map.get(field.name).asInstanceOf[Object]
-              val newValue =  obj match {
-                case l: java.util.List[Object] => {
-                  /*
-                  * Field is single valued in the schema but has a List of values.
-                  * Most likely field flattening is on.
-                  */
-                  fieldType match {
-                    case StringType => {
-                      /*
-                      * Field is a String so let's serialize the list to a String.
-                      * Numerics (int, long, float, double) will also report to be String when flattened.
-                      */
-                      getFieldValueForList (l)
-                    }
-                    case any => {
-                      /*
-                      * Not String or numeric reporting to be a String. So let's process the field
-                      * the default way.
-                      */
-                      processFieldValue(obj, fieldType, multiValued = false)
-                    }
-                  }
-                }
-                case any => {
-                  processFieldValue(obj, fieldType, multiValued = false)
-                }
-              }
-
+              val newValue =  processSingleValue(obj, fieldType)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -712,6 +658,37 @@ object SolrRelationUtil extends LazyLogging {
     })
     rows
   }
+
+  def processSingleValue(obj: Any, fieldType: DataType): Any = {
+    obj match {
+      case l: java.util.List[Object] => {
+        /*
+        * Field is single valued in the schema but has a List of values.
+        * Most likely field flattening is on.
+        */
+        fieldType match {
+          case StringType => {
+            /*
+            * Field is a String so let's serialize the list to a String.
+            * Numerics (int, long, float, double) will also report to be String when flattened.
+            */
+            getFieldValueForList (l)
+          }
+          case any => {
+            /*
+            * Not String or numeric reporting to be a String. So let's process the field
+            * the default way.
+            */
+            processFieldValue(obj, fieldType, multiValued = false)
+          }
+        }
+      }
+      case any => {
+        processFieldValue(obj, fieldType, multiValued = false)
+      }
+    }
+  }
+
 
   def setAutoSoftCommit(zkHost: String, collection: String, softAutoCommitMs: Int): Unit = {
     val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
