@@ -708,9 +708,9 @@ object SolrRelationUtil extends LazyLogging {
 
     if(values != null && values.size() > 0) {
       if(values.get(0).isInstanceOf[Number]) {
-        values.mkString("[", ", ", "]")
+        values.mkString(", ")
       } else {
-        values.mkString("[\"", "\", \"", "\"]")
+        values.mkString("\"", "\", \"", "\"")
       }
 
     } else {
