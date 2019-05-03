@@ -125,6 +125,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
   //@Ignore
   @Test
   public void testFlattenMultivalued() throws Exception {
+
     String testCollection = "testFlattenMultivalued";
     try {
       deleteCollection(testCollection);
@@ -143,19 +144,45 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       byte[] imagesBytes = "this is the value of the images field".getBytes(StandardCharsets.UTF_8);
       doc.addField("images", DatatypeConverter.printBase64Binary(imagesBytes));
       doc.addField("ts_tdts", now);
+      doc.addField("test_i", "1");
+      doc.addField("test_ii", "1");
+      doc.addField("test_ii", "2");
+      doc.addField("test_ss", "hello");
+      doc.addField("test_ss", "world");
+
+
       cloudSolrServer.add(testCollection, doc);
       cloudSolrServer.commit(testCollection);
+
+
+      SolrInputDocument doc1 = new SolrInputDocument();
+      doc1.setField("id", "flatten-2");
+      doc1.setField("_raw_content_", DatatypeConverter.printBase64Binary(rawContentBytes));
+      doc1.addField("ts_tdts", now);
+      doc1.addField("test_i", "2");
+      doc1.addField("test_ii", "1");
+      doc1.addField("test_ii", "2");
+      doc1.addField("test_ss", "hello");
+      doc1.addField("test_ss", "world");
+      doc1.addField("a_ss", "test");
+      doc1.addField("a_ss", "test1");
+
+
+      cloudSolrServer.add(testCollection, doc1);
+      cloudSolrServer.commit(testCollection);
+
 
       String zkHost = cluster.getZkServer().getZkAddress();
       Map<String, String> options = new HashMap<String, String>();
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(FLATTEN_MULTIVALUED(), "true");
-      options.put(SOLR_FIELD_PARAM(), "id, _raw_content_, images, ts_tdts");
+      options.put(SORT_PARAM(), "test_i asc, id asc");
+      options.put(SOLR_FIELD_PARAM(), "id, _raw_content_, images, ts_tdts, test_ii, test_ss, a_ss");
 
       SolrQuery q = new SolrQuery("*:*");
       q.setRows(100);
-      q.addSort("id", SolrQuery.ORDER.asc);
+      q.addSort("test_i", SolrQuery.ORDER.asc);
 //      dumpSolrCollection(testCollection, q);
 
       // now read the data back from Solr and validate that it was saved correctly and that all data type handling is correct
@@ -163,9 +190,17 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       fromSolr.printSchema();
 
       List<Row> rows = fromSolr.collectAsList();
-      assertTrue(rows.size() == 1);
+      assertTrue(rows.size() == 2);
       Row first = rows.get(0);
       assertEquals(doc.getFieldValue("id"), first.get(first.fieldIndex("id")));
+      assertEquals("1, 2", first.get(first.fieldIndex("test_ii")));
+      assertEquals("\"hello\", \"world\"", first.get(first.fieldIndex("test_ss")));
+      assertNull(first.get(first.fieldIndex("a_ss")));
+
+
+      Row second = rows.get(1);
+      assertEquals("\"test\", \"test1\"", second.get(second.fieldIndex("a_ss")));
+
 
       // compare the bytes in the images field, which proves the multivalued field was flattened correctly
       byte[] images = (byte[])first.get(first.fieldIndex("images"));

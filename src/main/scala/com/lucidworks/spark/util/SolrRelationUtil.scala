@@ -7,7 +7,6 @@ import java.util.Date
 
 import com.lucidworks.spark.LazyLogging
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
-import com.lucidworks.spark.util.SolrRelationUtil.getFieldValueForList
 import org.apache.solr.client.solrj.request.GenericSolrRequest
 import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter
 import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}
