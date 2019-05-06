@@ -177,7 +177,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
       options.put(SOLR_ZK_HOST_PARAM(), zkHost);
       options.put(SOLR_COLLECTION_PARAM(), testCollection);
       options.put(FLATTEN_MULTIVALUED(), "true");
-      options.put(SORT_PARAM(), "test_i asc, id asc");
+      options.put(SORT_PARAM(), "id asc");
       options.put(SOLR_FIELD_PARAM(), "id, _raw_content_, images, ts_tdts, test_ii, test_ss, a_ss");
 
       SolrQuery q = new SolrQuery("*:*");
