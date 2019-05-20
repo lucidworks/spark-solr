@@ -238,29 +238,29 @@ object SolrRelationUtil extends LazyLogging {
   }
 
   def applyFilter(filter: Filter, solrQuery: SolrQuery, baseSchema: StructType): Unit = {
-   filter match {
-     case f: And =>
-       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
-       values.foreach(v => solrQuery.addFilterQuery(v))
-     case f: Or =>
-       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
-       val fqStringBuilder = new StringBuilder
-       for (i <- values.indices) {
-         if (i == 0) fqStringBuilder.append("(")
-         fqStringBuilder.append(values(i))
-         if (i != values.size-1) {
-           fqStringBuilder.append(" OR ")
-         } else {
-           fqStringBuilder.append(")")
-         }
-       }
-       if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
-     case f: Not =>
-       f.child match {
-         case c : IsNull => solrQuery.addFilterQuery(fq(IsNotNull(c.attribute), baseSchema))
-         case _ => solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
-       }
-     case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
+    filter match {
+      case f: And =>
+        val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+        values.foreach(v => solrQuery.addFilterQuery(v))
+      case f: Or =>
+        val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+        val fqStringBuilder = new StringBuilder
+        for (i <- values.indices) {
+          if (i == 0) fqStringBuilder.append("(")
+          fqStringBuilder.append(values(i))
+          if (i != values.size-1) {
+            fqStringBuilder.append(" OR ")
+          } else {
+            fqStringBuilder.append(")")
+          }
+        }
+        if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
+      case f: Not =>
+        f.child match {
+          case c : IsNull => solrQuery.addFilterQuery(fq(IsNotNull(c.attribute), baseSchema))
+          case _ => solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
+        }
+      case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
    }
   }
 
@@ -273,6 +273,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" OR ")})"
             values.+=(singleFq)
+          case l: Not =>
+            l.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(l.child, baseSchema))
+            }
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
@@ -281,6 +286,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" OR ")})"
             values.+=(singleFq)
+          case r: Not =>
+            r.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(r.child, baseSchema))
+            }
           case _ => values.+=(fq(f.right, baseSchema))
         }
       case f: Or =>
@@ -290,6 +300,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" AND ")})"
             values.+=(singleFq)
+          case l: Not =>
+            l.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(l.child, baseSchema))
+            }
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
@@ -298,6 +313,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" AND ")})"
             values.+=(singleFq)
+          case r: Not =>
+            r.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(r.child, baseSchema))
+            }
           case _ => values.+=(fq(f.right, baseSchema))
         }
     }

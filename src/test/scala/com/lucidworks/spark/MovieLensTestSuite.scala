@@ -5,6 +5,40 @@ import org.apache.spark.sql.types.DoubleType
 
 class MovieLensTestSuite extends MovielensBuilder {
 
+  test("multiple nested where clauses with NOT and AND") {
+    val sql =
+      s"""
+         | select movie_id, title from ${moviesColName} m where
+         |     ((m.genre IN ('comedy') and (m.title != 'Here Comes Cookie (1935)')))
+         |     OR
+         |     (m.genre IN ('action') and m.title = 'Operation Dumbo Drop (1995)')
+        """.stripMargin
+    val results = sparkSession.sql(sql).collect()
+    assert(results.length > 1)
+  }
+
+  test("mutliple nested where clauses with NOT and multiple AND") {
+    val sql =
+      s"""
+        | select movie_id, title from ${moviesColName} m where
+        |     (m.genre IN ('comedy') and ((m.title != 'Here Comes Cookie (1935)') and (m.title != 'Coneheads (1993)')))
+        |     OR
+        |     (m.genre IN ('action') and m.title = 'Operation Dumbo Drop (1995)')
+      """.stripMargin
+    val results = sparkSession.sql(sql).collect()
+    assert(results.length > 1)
+  }
+
+  test("mutliple nested where clauses with NOT and multiple OR") {
+    val sql =
+      s"""
+         | select movie_id, title from ${moviesColName} m where
+         |     (m.genre IN ('comedy') and ((m.title != 'Here Comes Cookie (1935)') or (m.title != 'Coneheads (1993)')))
+      """.stripMargin
+    val results = sparkSession.sql(sql).collect()
+    assert(results.length > 1)
+  }
+
   test("Score column in SQL statement pushdown to Solr") {
     val sqlStmt = s"SELECT movie_id,title,score from ${moviesColName} where _query_='title_txt_en:dog' order by score desc LIMIT 100"
     val opts = Map(
