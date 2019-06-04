@@ -17,16 +17,18 @@ class MovieLensTestSuite extends MovielensBuilder {
     assert(results.length > 1)
   }
 
-  test("mutliple nested where clauses with NOT and multiple AND") {
+  test("multiple nested where clauses with NOT and multiple AND") {
     val sql =
       s"""
-        | select movie_id, title from ${moviesColName} m where
+        | select genre from ${moviesColName} m where
         |     (m.genre IN ('comedy') and ((m.title != 'Here Comes Cookie (1935)') and (m.title != 'Coneheads (1993)')))
         |     OR
         |     (m.genre IN ('action') and m.title = 'Operation Dumbo Drop (1995)')
       """.stripMargin
     val results = sparkSession.sql(sql).collect()
-    assert(results.length > 1)
+    // (426-2) 424 comedy results
+    assert(results.count(r => r.getString(0) === "comedy") == 424)
+    assert(results.count(r => r.getString(0) === "action") == 1)
   }
 
   test("mutliple nested where clauses with NOT and multiple OR") {
@@ -36,7 +38,7 @@ class MovieLensTestSuite extends MovielensBuilder {
          |     (m.genre IN ('comedy') and ((m.title != 'Here Comes Cookie (1935)') or (m.title != 'Coneheads (1993)')))
       """.stripMargin
     val results = sparkSession.sql(sql).collect()
-    assert(results.length > 1)
+    assert(results.length === 424)
   }
 
   test("Score column in SQL statement pushdown to Solr") {
