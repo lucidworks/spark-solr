@@ -17,11 +17,13 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
     val ratingsDF = sparkSession.read.format("solr").options(
       Map("zkhost" -> zkHost, "collection" -> ratingsCollection, "exclude_fields" -> "id,*_timestamp,user*")).load
     val schema = ratingsDF.schema
-    assert(schema.fields.length == 2)
-    assert(schema.fields(0).name == "movie_id")
+    assert(schema.fields.length == 3)
+    assert(schema.fields(0).name == "_root_")
     assert(schema.fields(0).dataType == StringType)
-    assert(schema.fields(1).name == "rating")
-    assert(schema.fields(1).dataType == LongType)
+    assert(schema.fields(1).name == "movie_id")
+    assert(schema.fields(1).dataType == StringType)
+    assert(schema.fields(2).name == "rating")
+    assert(schema.fields(2).dataType == LongType)
     SolrCloudUtil.deleteCollection(ratingsCollection, cluster)
   }
 
@@ -445,16 +447,16 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "true")
       val df = sparkSession.read.format("solr").options(opts).load()
       val schema = df.schema
-      assert(schema.fields.length == 3)
-      assert(schema.fieldNames.toSet  == Set("id", "movie_id", "title"))
+      assert(schema.fields.length == 4)
+      assert(schema.fieldNames.toSet  == Set("_root_", "id", "movie_id", "title"))
     }
 
     {
       val opts = Map("zkhost" -> zkHost, "collection" -> moviesCollection, SKIP_NON_DOCVALUE_FIELDS -> "false")
       val df = sparkSession.read.format("solr").options(opts).load()
       val schema = df.schema
-      assert(schema.fields.length == 4)
-      assert(schema.fieldNames.toSet == Set("id", "movie_id",  "title_txt", "title"))
+      assert(schema.fields.length == 5)
+      assert(schema.fieldNames.toSet == Set("_root_", "id", "movie_id",  "title_txt", "title"))
     }
 
     SolrCloudUtil.deleteCollection(moviesCollection, cluster)
