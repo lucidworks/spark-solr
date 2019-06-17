@@ -78,8 +78,9 @@ class TestIndexing extends TestSuiteBuilder {
     try {
       SolrCloudUtil.buildCollection(zkHost, collection, null, 2, cloudClient, sc)
       val opts = Map("zkhost" -> zkHost, "collection" -> collection)
+
       val solrRelation = new SolrRelation(opts, sparkSession)
-      val fieldsToAdd = solrRelation.getFieldsToAdd(insertSchema)
+      val fieldsToAdd = SolrRelation.getFieldsToAdd(insertSchema, solrRelation.conf, solrRelation.solrVersion, solrRelation.dynamicSuffixes)
       assert(fieldsToAdd.isEmpty)
     } finally {
       SolrCloudUtil.deleteCollection(collection, cluster)

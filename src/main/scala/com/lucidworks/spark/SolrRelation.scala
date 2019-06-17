@@ -654,10 +654,10 @@ class SolrRelation(
     val dfSchema = df.schema
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
+
 
     // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = getFieldsToAdd(dfSchema)
+    val fieldsToAddToSolr = SolrRelation.getFieldsToAdd(dfSchema, conf, solrVersion, dynamicSuffixes)
 
     if (fieldsToAddToSolr.nonEmpty) {
       SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collectionId, cloudClient)
@@ -671,65 +671,10 @@ class SolrRelation(
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
-    val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
-    val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
 
     // Convert RDD of rows in to SolrInputDocuments
-    val docs = df.rdd.map(row => {
-      val schema: StructType = row.schema
-      val doc = new SolrInputDocument
-      schema.fields.foreach(field => {
-        val fname = field.name
-        breakable {
-          if (fname.equals("_version_")) break()
-          val isChildDocument = (fname == fieldNameForChildDocuments)
-          val fieldIndex = row.fieldIndex(fname)
-          val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
-          if (fieldValue.isDefined) {
-            val value = fieldValue.get
+    val docs = df.rdd.map(row => SolrRelation.convertRowToSolrInputDocument(row, conf, uniqueKey))
 
-            if(isChildDocument) {
-              val it = value.asInstanceOf[Iterable[GenericRowWithSchema]].iterator
-              while (it.hasNext) {
-                val elem = it.next()
-                val childDoc = new SolrInputDocument
-                for (i <- 0 until elem.schema.fields.size) {
-                  childDoc.setField(elem.schema.fields(i).name, elem.get(i))
-                }
-
-                // Generate unique key if the child document doesn't have one
-                if (generateUniqChildKey) {
-                  if (!childDoc.containsKey(uniqueKey)) {
-                    childDoc.setField(uniqueKey, UUID.randomUUID().toString)
-                  }
-                }
-
-                doc.addChildDocument(childDoc)
-              }
-              break()
-            }
-
-            value match {
-              //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
-              case v: Iterable[Any] =>
-                val it = v.iterator
-                while (it.hasNext) doc.addField(fname, it.next())
-              case bd: java.math.BigDecimal =>
-                doc.setField(fname, bd.doubleValue())
-              case _ => doc.setField(fname, value)
-            }
-          }
-        }
-      })
-
-      // Generate unique key if the document doesn't have one
-      if (generateUniqKey) {
-        if (!doc.containsKey(uniqueKey)) {
-          doc.setField(uniqueKey, UUID.randomUUID().toString)
-        }
-      }
-      doc
-    })
     val acc: SparkSolrAccumulator = new SparkSolrAccumulator
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
     sparkSession.sparkContext.register(acc, accName)
@@ -740,43 +685,6 @@ class SolrRelation(
 
   private def checkRequiredParams(): Unit = {
     require(conf.getZkHost.isDefined, "Param '" + SOLR_ZK_HOST_PARAM + "' is required")
-  }
-
-  def getFieldsToAdd(dfSchema: StructType): Map[String, AddField] = {
-    val zkHost = conf.getZkHost.get
-    val collectionId = conf.getCollection.get
-    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
-    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
-
-    val solrFields : Map[String, SolrFieldMeta] =
-      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
-    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
-
-    val customFieldTypes =
-      if (conf.getSolrFieldTypes.isDefined)
-        SolrRelation.parseUserSuppliedFieldTypes(conf.getSolrFieldTypes.get)
-      else
-        Map.empty[String, String]
-
-    // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
-    dfSchema.fields.foreach(f => {
-      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
-        if(f.name == fieldNameForChildDocuments) {
-          val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
-          e.foreach(ef => {
-            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
-            logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
-          })
-        } else {
-          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
-          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
-          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
-        }
-      }
-    })
-    fieldsToAddToSolr.toMap
   }
 }
 
@@ -1014,6 +922,47 @@ object SolrRelation extends LazyLogging {
     fieldsToAddToSolr.keySet.toSet
   }
 
+  def getFieldsToAdd(
+      dfSchema: StructType,
+      conf: SolrConf,
+      solrVersion: String,
+      dynamicSuffixes: Set[String]): Map[String, AddField] = {
+    val zkHost = conf.getZkHost.get
+    val collectionId = conf.getCollection.get
+    val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
+    val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
+
+    val solrFields : Map[String, SolrFieldMeta] =
+      SolrQuerySupport.getFieldTypes(Set(), solrBaseUrl + collectionId + "/", cloudClient, collectionId, skipFieldCheck = true)
+    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
+
+    val customFieldTypes =
+      if (conf.getSolrFieldTypes.isDefined)
+        SolrRelation.parseUserSuppliedFieldTypes(conf.getSolrFieldTypes.get)
+      else
+        Map.empty[String, String]
+
+    // build up a list of updates to send to the Solr Schema API
+    val fieldsToAddToSolr = scala.collection.mutable.HashMap.empty[String,AddField]
+    dfSchema.fields.foreach(f => {
+      if (!solrFields.contains(f.name) && !SolrRelationUtil.isValidDynamicFieldName(f.name, dynamicSuffixes)) {
+        if(f.name == fieldNameForChildDocuments) {
+          val e = f.dataType.asInstanceOf[ArrayType].elementType.asInstanceOf[StructType]
+          e.foreach(ef => {
+            val addFieldMap = SolrRelation.toAddFieldMap(ef, solrVersion, customFieldTypes.get(ef.name))
+            logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+            fieldsToAddToSolr += (ef.name -> new AddField(addFieldMap.asJava))
+          })
+        } else {
+          val addFieldMap = SolrRelation.toAddFieldMap(f, solrVersion, customFieldTypes.get(f.name))
+          logger.info(s"adding new field: ${addFieldMap.mkString(", ")}")
+          fieldsToAddToSolr += (f.name -> new AddField(addFieldMap.asJava))
+        }
+      }
+    })
+    fieldsToAddToSolr.toMap
+  }
+
   def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
     logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
     val solrParams = new ModifiableSolrParams()
@@ -1052,6 +1001,65 @@ object SolrRelation extends LazyLogging {
         }
       }
     }
+  }
+
+  def convertRowToSolrInputDocument(row: Row, conf: SolrConf, uniqueKey: String): SolrInputDocument = {
+    val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
+    val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
+    val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
+    val schema: StructType = row.schema
+    val doc = new SolrInputDocument
+    schema.fields.foreach(field => {
+      val fname = field.name
+      breakable {
+        if (fname.equals("_version_")) break()
+        val isChildDocument = (fname == fieldNameForChildDocuments)
+        val fieldIndex = row.fieldIndex(fname)
+        val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
+        if (fieldValue.isDefined) {
+          val value = fieldValue.get
+
+          if(isChildDocument) {
+            val it = value.asInstanceOf[Iterable[GenericRowWithSchema]].iterator
+            while (it.hasNext) {
+              val elem = it.next()
+              val childDoc = new SolrInputDocument
+              for (i <- 0 until elem.schema.fields.size) {
+                childDoc.setField(elem.schema.fields(i).name, elem.get(i))
+              }
+
+              // Generate unique key if the child document doesn't have one
+              if (generateUniqChildKey) {
+                if (!childDoc.containsKey(uniqueKey)) {
+                  childDoc.setField(uniqueKey, UUID.randomUUID().toString)
+                }
+              }
+
+              doc.addChildDocument(childDoc)
+            }
+            break()
+          }
+
+          value match {
+            //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
+            case v: Iterable[Any] =>
+              val it = v.iterator
+              while (it.hasNext) doc.addField(fname, it.next())
+            case bd: java.math.BigDecimal =>
+              doc.setField(fname, bd.doubleValue())
+            case _ => doc.setField(fname, value)
+          }
+        }
+      }
+    })
+
+    // Generate unique key if the document doesn't have one
+    if (generateUniqKey) {
+      if (!doc.containsKey(uniqueKey)) {
+        doc.setField(uniqueKey, UUID.randomUUID().toString)
+      }
+    }
+    doc
   }
 
   def toAddFieldMap(sf: StructField, solrVersion: String, solrType: Option[String] = None): Map[String,AnyRef] = {
