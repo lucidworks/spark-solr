@@ -157,7 +157,7 @@ public class FusionPipelineClient {
         }
         this.trustedRealmGroups = trustedRealmGroups;
       } else {
-        globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.BEST_MATCH).setConnectTimeout(30*1000).setSocketTimeout(90*1000).build();
+        globalConfig = RequestConfig.custom().setCookieSpec(CookieSpecs.STANDARD).setConnectTimeout(30*1000).setSocketTimeout(90*1000).build();
         cookieStore = new BasicCookieStore();
         // build the HttpClient to be used for all requests
         httpClientBuilder.setDefaultRequestConfig(globalConfig).setDefaultCookieStore(cookieStore);
