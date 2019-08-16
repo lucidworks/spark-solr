@@ -5,7 +5,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.module.scala.DefaultScalaModule;
-import org.apache.commons.httpclient.ConnectTimeoutException;
+import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.http.*;
