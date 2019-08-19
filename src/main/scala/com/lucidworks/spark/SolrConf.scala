@@ -80,6 +80,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def splits: Option[Boolean] =
     if (config.get(SOLR_DO_SPLITS).isDefined) Some(config(SOLR_DO_SPLITS).toBoolean) else None
 
+  def addNewFields: Option[Boolean] =
+    if (config.get(ADD_NEW_FIELDS).isDefined) Some(config(ADD_NEW_FIELDS).toBoolean) else None
+
   def docValues: Option[Boolean] =
     if (config.get(SOLR_DOC_VALUES).isDefined) Some(config(SOLR_DOC_VALUES).toBoolean) else None
 
@@ -282,6 +285,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (getAccumulatorName.isDefined) {
       sb ++= s", ${ACCUMULATOR_NAME}=${getAccumulatorName.get}"
+    }
+    if (addNewFields.isDefined) {
+      sb ++= s", ${ADD_NEW_FIELDS}=${addNewFields.get}"
     }
     if (getSolrFieldTypes.isDefined) {
       sb ++= s", ${SOLR_FIELD_TYPES}=${getSolrFieldTypes.get}"

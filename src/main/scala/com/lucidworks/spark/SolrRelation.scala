@@ -659,7 +659,7 @@ class SolrRelation(
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = getFieldsToAdd(dfSchema)
 
-    if (fieldsToAddToSolr.nonEmpty) {
+    if (fieldsToAddToSolr.nonEmpty && conf.addNewFields.getOrElse(true)) {
       SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collectionId, cloudClient)
     }
 

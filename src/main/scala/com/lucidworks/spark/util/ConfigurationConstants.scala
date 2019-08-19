@@ -53,6 +53,7 @@ object ConfigurationConstants {
   val SOLR_SQL_SCHEMA: String = "sql_schema"
   val EXCLUDE_FIELDS: String = "exclude_fields"
   val MAX_ROWS: String = "max_rows"
+  val ADD_NEW_FIELDS: String = "add_new_fields"
 
   val ACCUMULATOR_NAME: String = "acc_name"
 }
