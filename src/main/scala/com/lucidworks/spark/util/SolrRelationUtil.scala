@@ -55,7 +55,10 @@ object SolrRelationUtil extends LazyLogging {
             funcReturnType = Some(LongType)
           }
           logger.debug(s"Found a Solr function query: ${field} with return type: ${funcReturnType}")
+        } else if (field.equals("score")) { //Support the "score" pseudo-field as a double
+          funcReturnType = Some(DoubleType)
         }
+
         QueryField(URLDecoder.decode(field, "UTF-8"), Some(alias), funcReturnType)
       } else {
         QueryField(f)
@@ -66,16 +69,18 @@ object SolrRelationUtil extends LazyLogging {
   def getBaseSchema(
       zkHost: String,
       collection: String,
+      numShardsToSample: Option[Int],
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean,
       dynamicExtensions: Set[String]): StructType =
-    getBaseSchema(Set.empty[String], zkHost, collection, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
+    getBaseSchema(Set.empty[String], zkHost, collection, numShardsToSample, escapeFields, flattenMultivalued, skipNonDocValueFields, dynamicExtensions)
 
   def getBaseSchema(
       fields: Set[String],
       zkHost: String,
       collection: String,
+      numShardsToSample: Option[Int],
       escapeFields: Boolean,
       flattenMultivalued: Option[Boolean],
       skipNonDocValueFields: Boolean,
@@ -89,7 +94,7 @@ object SolrRelationUtil extends LazyLogging {
     val solrUrl = solrBaseUrl + collection + "/"
     val fieldTypeMap =
       if (fields.isEmpty) {
-        val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection)
+        val fieldsFromLuke = SolrQuerySupport.getFieldsFromLuke(zkHost, collection, numShardsToSample)
         logger.debug("Fields from luke handler: {}", fieldsFromLuke.mkString(","))
         if (fieldsFromLuke.isEmpty)
           return new StructType()
@@ -102,6 +107,7 @@ object SolrRelationUtil extends LazyLogging {
     logger.debug("Fields from schema handler: {}", fieldTypeMap.keySet.mkString(","))
     val structFields = new ListBuffer[StructField]
 
+    // Retain the keys that are present in the Luke handler
     fieldTypeMap.foreach{ case(fieldName, fieldMeta) =>
       val metadata = new MetadataBuilder
       var dataType: DataType = {
@@ -129,6 +135,23 @@ object SolrRelationUtil extends LazyLogging {
           dataType = new ArrayType(dataType, true)
           metadata.putBoolean("multiValued", value = true)
         }
+      }
+
+      if (!keepFieldMultivalued &&
+           fieldMeta.isMultiValued.isDefined &&
+           fieldMeta.isMultiValued.get &&
+           (dataType.isInstanceOf[StringType] ||
+             dataType.isInstanceOf[LongType] ||
+             dataType.isInstanceOf[IntegerType] ||
+             dataType.isInstanceOf[DoubleType] ||
+             dataType.isInstanceOf[FloatType])) {
+        /*
+        * Reset the dataType to a String if
+        * we are flattening a multi-value
+        * String, Long, Integer, Double or Float field.
+        */
+
+        dataType = DataTypes.StringType
       }
 
       if (fieldMeta.isRequired.isDefined)
@@ -215,29 +238,29 @@ object SolrRelationUtil extends LazyLogging {
   }
 
   def applyFilter(filter: Filter, solrQuery: SolrQuery, baseSchema: StructType): Unit = {
-   filter match {
-     case f: And =>
-       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
-       values.foreach(v => solrQuery.addFilterQuery(v))
-     case f: Or =>
-       val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
-       val fqStringBuilder = new StringBuilder
-       for (i <- values.indices) {
-         if (i == 0) fqStringBuilder.append("(")
-         fqStringBuilder.append(values(i))
-         if (i != values.size-1) {
-           fqStringBuilder.append(" OR ")
-         } else {
-           fqStringBuilder.append(")")
-         }
-       }
-       if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
-     case f: Not =>
-       f.child match {
-         case c : IsNull => solrQuery.addFilterQuery(fq(IsNotNull(c.attribute), baseSchema))
-         case _ => solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
-       }
-     case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
+    filter match {
+      case f: And =>
+        val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+        values.foreach(v => solrQuery.addFilterQuery(v))
+      case f: Or =>
+        val values = getAllFilterValues(f, baseSchema, ListBuffer.empty[String])
+        val fqStringBuilder = new StringBuilder
+        for (i <- values.indices) {
+          if (i == 0) fqStringBuilder.append("(")
+          fqStringBuilder.append(values(i))
+          if (i != values.size-1) {
+            fqStringBuilder.append(" OR ")
+          } else {
+            fqStringBuilder.append(")")
+          }
+        }
+        if (fqStringBuilder.nonEmpty) solrQuery.addFilterQuery(fqStringBuilder.toString())
+      case f: Not =>
+        f.child match {
+          case c : IsNull => solrQuery.addFilterQuery(fq(IsNotNull(c.attribute), baseSchema))
+          case _ => solrQuery.addFilterQuery("NOT " + fq(f.child, baseSchema))
+        }
+      case _ => solrQuery.addFilterQuery(fq(filter, baseSchema))
    }
   }
 
@@ -250,6 +273,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" OR ")})"
             values.+=(singleFq)
+          case l: Not =>
+            l.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(l.child, baseSchema))
+            }
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
@@ -258,6 +286,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" OR ")})"
             values.+=(singleFq)
+          case r: Not =>
+            r.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(r.child, baseSchema))
+            }
           case _ => values.+=(fq(f.right, baseSchema))
         }
       case f: Or =>
@@ -267,6 +300,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(l, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" AND ")})"
             values.+=(singleFq)
+          case l: Not =>
+            l.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(l.child, baseSchema))
+            }
           case _ => values.+=(fq(f.left, baseSchema))
         }
         f.right match {
@@ -275,6 +313,11 @@ object SolrRelationUtil extends LazyLogging {
             val nestedFqs = getAllFilterValues(r, baseSchema, ListBuffer.empty[String])
             val singleFq = s"(${nestedFqs.mkString(" AND ")})"
             values.+=(singleFq)
+          case r: Not =>
+            r.child match {
+              case c : IsNull => values.+=(fq(IsNotNull(c.attribute), baseSchema))
+              case _ => values.+=("NOT " + fq(r.child, baseSchema))
+            }
           case _ => values.+=(fq(f.right, baseSchema))
         }
     }
@@ -579,6 +622,7 @@ object SolrRelationUtil extends LazyLogging {
   }
 
   def solrDocToRows[T](schema: StructType, docs: RDD[T]): RDD[Row] = {
+
     val fields = schema.fields
 
     val rows = docs.map(doc => {
@@ -601,10 +645,12 @@ object SolrRelationUtil extends LazyLogging {
               }
           }
         } else {
+
           doc match {
             case solrDocument: SolrDocument =>
-              val fieldValue = solrDocument.getFieldValue(field.name)
-              val newValue = processFieldValue(fieldValue, fieldType, multiValued = false)
+
+              val obj = solrDocument.get(field.name)
+              val newValue =  processSingleValue(obj, fieldType)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -615,7 +661,7 @@ object SolrRelationUtil extends LazyLogging {
               }
             case map: util.Map[_,_] =>
               val obj = map.get(field.name).asInstanceOf[Object]
-              val newValue = processFieldValue(obj, fieldType, multiValued = false)
+              val newValue =  processSingleValue(obj, fieldType)
               if (metadata.contains(Constants.PROMOTE_TO_DOUBLE) && metadata.getBoolean(Constants.PROMOTE_TO_DOUBLE)) {
                 newValue match {
                   case n: java.lang.Number => values.add(n.doubleValue())
@@ -632,6 +678,37 @@ object SolrRelationUtil extends LazyLogging {
     rows
   }
 
+  def processSingleValue(obj: Any, fieldType: DataType): Any = {
+    obj match {
+      case l: java.util.List[Object] => {
+        /*
+        * Field is single valued in the schema but has a List of values.
+        * Most likely field flattening is on.
+        */
+        fieldType match {
+          case StringType => {
+            /*
+            * Field is a String so let's serialize the list to a String.
+            * Numerics (int, long, float, double) will also report to be String when flattened.
+            */
+            getFieldValueForList (l)
+          }
+          case any => {
+            /*
+            * Not String or numeric reporting to be a String. So let's process the field
+            * the default way.
+            */
+            processFieldValue(obj, fieldType, multiValued = false)
+          }
+        }
+      }
+      case any => {
+        processFieldValue(obj, fieldType, multiValued = false)
+      }
+    }
+  }
+
+
   def setAutoSoftCommit(zkHost: String, collection: String, softAutoCommitMs: Int): Unit = {
     val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
 
@@ -643,6 +720,20 @@ object SolrRelationUtil extends LazyLogging {
       solrRequest.process(SolrSupport.getCachedCloudClient(zkHost), collection)
     } catch {
       case e: Exception => logger.error("Error setting softAutoCommit.maxTime. Exception: {}", e.getMessage)
+    }
+  }
+
+  def getFieldValueForList(values: java.util.List[Object]): String = {
+
+    if(values != null && values.size() > 0) {
+      if(values.get(0).isInstanceOf[Number]) {
+        values.mkString(", ")
+      } else {
+        values.mkString("\"", "\", \"", "\"")
+      }
+
+    } else {
+      "[]"
     }
   }
 

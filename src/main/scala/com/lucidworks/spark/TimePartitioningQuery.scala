@@ -9,7 +9,7 @@ import org.apache.solr.client.solrj.SolrQuery
 
 import scala.collection.JavaConverters._
 import com.lucidworks.spark.util.QueryConstants._
-import com.lucidworks.spark.util.{ConfigurationConstants, SolrSupport}
+import com.lucidworks.spark.util.{ConfigurationConstants, SolrQuerySupport, SolrSupport}
 import TimePartitioningQuery._
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
@@ -18,12 +18,12 @@ import org.apache.solr.util.DateMathParser
 
 import scala.collection.mutable.ListBuffer
 
-class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLogging {
+class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Option[List[String]] = None) extends LazyLogging {
 
   val dateTimePattern: String = getDateTimePattern
   val dateFormatter: ThreadLocal[SimpleDateFormat] = new ThreadLocal[SimpleDateFormat]() {
     override protected def initialValue: SimpleDateFormat = {
-      val sdf: SimpleDateFormat = new SimpleDateFormat(getDateTimePattern)
+      val sdf: SimpleDateFormat = new SimpleDateFormat(dateTimePattern)
       sdf.setTimeZone(TimeZone.getTimeZone(solrConf.getTimeZoneId.getOrElse(DEFAULT_TIMEZONE_ID)))
       sdf
     }
@@ -34,25 +34,35 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     val timestampFilterPrefix = s"$timestampField:"
 
     // Get all partitions from cluster state
-    val allPartitions: List[String] = getPartitions(true)
+    val allPartitions: List[String] = partitions.getOrElse(getPartitions(true))
 
-    if (query.getFilterQueries == null) {
+    if (query.getFilterQueries == null && query.getFilterQueries.isEmpty) {
       logger.warn(s"No filter query found in ${query}")
       return allPartitions
     }
-    val rangeQueries = query.getFilterQueries
-        .filter(fq => fq != null && !fq.isEmpty)
-        .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
+    val rangeQueries = filterRangeQueries(query.getFilterQueries, timestampFilterPrefix)
     // TODO: What to do if there are multiple filter queries
     if (rangeQueries.isEmpty) {
-      logger.warn(s"No range queries found in filter queries. Returning all partitions: ${allPartitions}")
+      logger.warn(s"No range queries found for filter queries ${query.getFilterQueries.mkString(",")}. Returning all partitions: ${allPartitions}")
       return allPartitions
     }
     logger.debug(s"All partitions returned for query are: ${allPartitions}")
     getCollectionsForRangeQueries(rangeQueries, allPartitions)
   }
 
+  def filterRangeQueries(filterQueries: Array[String], timestampFilterPrefix: String): Array[String] = {
+    filterQueries
+      .filter(fq => fq != null && !fq.isEmpty)
+      .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
+  }
+
   def getPartitions(activeOnly: Boolean): List[String] = {
+    if (solrConf.getCollectionAlias.isDefined) {
+      val aliasList : Option[List[String]] = SolrQuerySupport.getCollectionsForAlias(solrConf.getZkHost.get, solrConf.getCollectionAlias.get)
+      if (aliasList.isDefined) {
+        return aliasList.get
+      }
+    }
     val partitions: List[String] = findAllPartitions
     if (activeOnly) {
       if (solrConf.getMaxActivePartitions.isDefined) {
@@ -96,6 +106,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getCollectionsForRangeQuery(rangeQuery: String, partitions: List[String]): List[String] = {
+    val sortedPartitions = partitions.sorted
     val luceneQuery: Query = (new StandardQueryParser).parse(rangeQuery, rangeQuery.substring(0, rangeQuery.indexOf(":")))
     if (!luceneQuery.isInstanceOf[TermRangeQuery]) throw new IllegalArgumentException("Failed to parse " + rangeQuery + " into a Lucene range query!")
     val rq: TermRangeQuery = luceneQuery.asInstanceOf[TermRangeQuery]
@@ -103,12 +114,12 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
     val upper: String = bref2str(rq.getUpperTerm)
 
     if (lower == null && upper == null) {
-      return partitions
+      return sortedPartitions
     }
-    val fromIndex: Int = if (lower != null) mapToExistingCollIndex(lower, partitions) else 0
-    val toIndex:Int = if (upper != null) mapToExistingCollIndex(upper, partitions) else partitions.size - 1
+    val fromIndex: Int = if (lower != null) mapToExistingCollIndex(lower, sortedPartitions) else 0
+    val toIndex:Int = if (upper != null) mapToExistingCollIndex(upper, sortedPartitions) else sortedPartitions.size - 1
     logger.debug(s"Partitions fromIndex: ${fromIndex}. toIndex: ${toIndex}")
-    partitions.slice(fromIndex, toIndex + 1)
+    sortedPartitions.slice(fromIndex, toIndex + 1)
   }
 
   def mapToExistingCollIndex(crit: String, partitions: List[String]): Int = {
@@ -128,7 +139,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getPartitionMatchRegex: Pattern = {
-    var dtRegex: String = getDateTimePattern
+    var dtRegex: String = dateTimePattern
     dtRegex = dtRegex.replace("yyyy", "(\\d{4})")
     dtRegex = dtRegex.replace("yy", "(\\d{2})")
     dtRegex = dtRegex.replace("MM", "(1[0-2]|0[1-9])")
@@ -150,13 +161,14 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getDateTimePattern: String = {
+    solrConf.getDateTimePattern.getOrElse(getDefaultDateTimePattern)
+  }
+
+  def getDefaultDateTimePattern: String = {
     val timeUnit = getTimeUnit
-    val defaultDateTimePattern = {
-      if (timeUnit eq TimeUnit.HOURS) "yyyy_MM_dd_HH"
-      else if (timeUnit eq TimeUnit.MINUTES) "yyyy_MM_dd_HH_mm"
-      else DEFAULT_DATETIME_PATTERN
-    }
-    solrConf.getDateTimePattern.getOrElse(defaultDateTimePattern)
+    if (timeUnit eq TimeUnit.HOURS) "yyyy_MM_dd_HH"
+    else if (timeUnit eq TimeUnit.MINUTES) "yyyy_MM_dd_HH_mm"
+    else DEFAULT_DATETIME_PATTERN
   }
 
   def getTimeUnit: TimeUnit = {
@@ -169,12 +181,13 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery) extends LazyLo
   }
 
   def getCollectionNameForDate(date: Date): String = {
-    solrConf.getCollection.get + "_" + dateFormatter.get().format(date)
+    val formattedDate = dateFormatter.get().format(date)
+    solrConf.getCollectionAlias.getOrElse(solrConf.getCollection.get) + "_" + formattedDate
   }
 }
 
 object TimePartitioningQuery {
-  val TIMEPERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS)$")
+  val TIMEPERIOD_PATTERN: Pattern = Pattern.compile("^(\\d{1,4})(MINUTES|HOURS|DAYS|MONTH)$")
 
   def bref2str(bytesRef: BytesRef): String = {
     if (bytesRef != null) bytesRef.utf8ToString
