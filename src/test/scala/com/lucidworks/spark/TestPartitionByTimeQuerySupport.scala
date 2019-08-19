@@ -3,8 +3,9 @@ package com.lucidworks.spark
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.SaveMode._
-
 import com.lucidworks.spark.util.ConfigurationConstants._
+import org.apache.solr.client.solrj.request.CollectionAdminRequest
+import org.apache.solr.client.solrj.request.CollectionAdminRequest.{CreateAlias, DeleteAlias}
 /**
  This class is used to test the PartitionByTimeQuerySupport class
   */
@@ -118,6 +119,54 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     assert(selectedPartitions.toSet == Set("events_2017_09_09", "events_2017_09_10", "events_2017_09_11", "events_2017_09_13"))
   }
 
+  test("Test partition selection months") {
+    val rangeQuery = "timestamp:{2017-09-09T00:00:00.00Z TO *]"
+    val solrQuery = new SolrQuery()
+    solrQuery.addFilterQuery(rangeQuery)
+
+    val dfParams = Map(
+      PARTITION_BY -> "time",
+      TIMESTAMP_FIELD_NAME -> "timestamp",
+      TIME_PERIOD -> "1MONTH",
+      DATETIME_PATTERN -> "yyyy_MM",
+      TIMEZONE_ID -> "UTC",
+      "collection" -> "events"
+    )
+    val solrConf = new SolrConf(dfParams)
+
+    val timePartitioningQuery = new TimePartitioningQuery(solrConf, solrQuery)
+    val allPartitions = List("events_2017_10","events_2017_09","events_2017_08","events_2017_07")
+    val selectedPartitions = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, allPartitions)
+    assert(selectedPartitions.toSet === Set("events_2017_10", "events_2017_09"))
+  }
+
+  test("Test range query filtering") {
+    val rangeQuery = "ts:{2016-06-18T00:00:00.00Z TO *]"
+    val solrQuery = new SolrQuery()
+    solrQuery.addFilterQuery(rangeQuery)
+
+    val dfParams = Map(
+      PARTITION_BY -> "time",
+      TIMESTAMP_FIELD_NAME -> "ts",
+      TIME_PERIOD -> "1DAYS",
+      DATETIME_PATTERN -> "yyyy_MM_dd",
+      TIMEZONE_ID -> "UTC",
+      "collection" -> "eventsim"
+    )
+    val solrConf = new SolrConf(dfParams)
+
+    val timePartitioningQuery = new TimePartitioningQuery(solrConf, solrQuery)
+    val filterQueries = timePartitioningQuery.filterRangeQueries(solrQuery.getFilterQueries, "ts:")
+    assert(filterQueries(0) === "ts:{2016-06-18T00:00:00.00Z TO *]")
+    val aps = "eventsim_2016_06_10,eventsim_2016_06_11,eventsim_2016_06_12,eventsim_2016_06_13," +
+      "eventsim_2016_06_14,eventsim_2016_06_15,eventsim_2016_06_16,eventsim_2016_06_17,eventsim_2016_06_18," +
+      "eventsim_2016_06_19,eventsim_2016_06_20,eventsim_2016_06_21,eventsim_2016_06_22,eventsim_2016_06_23," +
+      "eventsim_2016_06_24,eventsim_2016_06_25"
+    val selectedPartitions = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, aps.split(",").toList)
+    val sps = timePartitioningQuery.getCollectionsForRangeQuery(rangeQuery, selectedPartitions.mkString(",").split(",").toList)
+    assert(sps.length === 8)
+  }
+
   test("Test partition selection upper bound") {
     val rangeQuery = "timestamp:[* TO 2017-09-09T00:00:00.00Z}"
     val solrQuery = new SolrQuery()
@@ -164,4 +213,107 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     assert(selectedPartitions.toSet == Set("events_2017_09_07", "events_2017_09_09"))
   }
 
+  test("Test alias query") {
+    val aliasName = "testAlias"
+    val solrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val collection1Name = aliasName + "_2011_04_10"
+    val collection2Name = aliasName + "_2011_04_11"
+    SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
+    try {
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection2Name,$collection1Name")
+      aliasCreateRequest.process(solrClient)
+      val dfParams = Map(
+        PARTITION_BY -> "time",
+        TIMESTAMP_FIELD_NAME -> "timestamp",
+        TIME_PERIOD -> "1DAYS",
+        DATETIME_PATTERN -> "yyyy_MM_dd",
+        TIMEZONE_ID -> "UTC",
+        "collection" -> aliasName,
+        COLLECTION_ALIAS -> aliasName,
+        SOLR_ZK_HOST_PARAM -> zkHost
+      )
+      val solrConf = new SolrConf(dfParams)
+      val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
+      val allPartitions = timePartitioningQuery.findAllPartitions
+      val aliases = timePartitioningQuery.getPartitions(true)
+      val solrRelation = new SolrRelation(dfParams, None, sparkSession)
+      assert(solrRelation.collection === s"${collection1Name},${collection2Name}")
+      assert(allPartitions.size == 2)
+      assert(aliases.size == 2)
+    } finally {
+      val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
+      deleteAlias.process(solrClient)
+      SolrCloudUtil.deleteCollection(collection1Name, cluster)
+      SolrCloudUtil.deleteCollection(collection2Name, cluster)
+    }
+  }
+
+  test("Test alias query with pre-resolved collections") {
+    val aliasName = "testAlias"
+    val solrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val collection1Name = aliasName + "_2011_04_10"
+    val collection2Name = aliasName + "_2011_04_11"
+    SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
+    try {
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      aliasCreateRequest.process(solrClient)
+      val dfParams = Map(
+        PARTITION_BY -> "time",
+        TIMESTAMP_FIELD_NAME -> "timestamp",
+        TIME_PERIOD -> "1DAYS",
+        DATETIME_PATTERN -> "yyyy_MM_dd",
+        TIMEZONE_ID -> "UTC",
+        "collection" -> s"${collection1Name},${collection2Name}",
+        COLLECTION_ALIAS -> aliasName,
+        SOLR_ZK_HOST_PARAM -> zkHost
+      )
+      val solrConf = new SolrConf(dfParams)
+      val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
+      val aliases = timePartitioningQuery.getPartitions(true)
+      assert(aliases.size == 2)
+      val solrRelation = new SolrRelation(dfParams, None, sparkSession)
+      assert(solrRelation.collection === s"${collection1Name},${collection2Name}")
+    } finally {
+      val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
+      deleteAlias.process(solrClient)
+      SolrCloudUtil.deleteCollection(collection1Name, cluster)
+      SolrCloudUtil.deleteCollection(collection2Name, cluster)
+    }
+  }
+
+  test("Test alias query with pre-resolved collections monthly") {
+    val aliasName = "testAlias"
+    val solrClient = SolrSupport.getCachedCloudClient(zkHost)
+    val collection1Name = aliasName + "_2011_04"
+    val collection2Name = aliasName + "_2011_05"
+    SolrCloudUtil.buildCollection(zkHost, collection1Name, null, 1, cloudClient, sc)
+    SolrCloudUtil.buildCollection(zkHost, collection2Name, null, 1, cloudClient, sc)
+    try {
+      val aliasCreateRequest = CollectionAdminRequest.createAlias(aliasName, s"$collection1Name,$collection2Name")
+      aliasCreateRequest.process(solrClient)
+      val dfParams = Map(
+        PARTITION_BY -> "time",
+        TIMESTAMP_FIELD_NAME -> "timestamp",
+        TIME_PERIOD -> "1MONTH",
+        DATETIME_PATTERN -> "yyyy_MM",
+        TIMEZONE_ID -> "UTC",
+        "collection" -> s"${collection1Name},${collection2Name}",
+        COLLECTION_ALIAS -> aliasName,
+        SOLR_ZK_HOST_PARAM -> zkHost
+      )
+      val solrConf = new SolrConf(dfParams)
+      val timePartitioningQuery = new TimePartitioningQuery(solrConf, new SolrQuery())
+      val aliases = timePartitioningQuery.getPartitions(true)
+      assert(aliases.size == 2)
+      val solrRelation = new SolrRelation(dfParams, None, sparkSession)
+      assert(solrRelation.collection === s"${collection1Name},${collection2Name}")
+    } finally {
+      val deleteAlias = CollectionAdminRequest.deleteAlias(aliasName)
+      deleteAlias.process(solrClient)
+      SolrCloudUtil.deleteCollection(collection1Name, cluster)
+      SolrCloudUtil.deleteCollection(collection2Name, cluster)
+    }
+  }
 }

@@ -25,6 +25,8 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Su
 
   override def beforeAll(): Unit = {
     super.beforeAll()
+
+    System.setProperty("jetty.testMode", "true")
     val solrXml = new File("src/test/resources/solr.xml")
     val solrXmlContents: String = TestSolrCloudClusterSupport.readSolrXml(solrXml)
 
@@ -133,6 +135,11 @@ trait MovielensBuilder extends TestSuiteBuilder with BeforeAndAfterAll with Befo
     MovieLensUtil.indexMovieLensDataset(sparkSession, zkHost, uuid)
     SolrSupport.getCachedCloudClient(zkHost).commit(moviesColName)
     SolrSupport.getCachedCloudClient(zkHost).commit(ratingsColName)
+    val opts = Map(
+      "zkhost" -> zkHost,
+      "collection" -> moviesColName)
+    val df = sparkSession.read.format("solr").options(opts).load()
+    df.createOrReplaceTempView(moviesColName)
   }
 
   override def afterAll(): Unit = {

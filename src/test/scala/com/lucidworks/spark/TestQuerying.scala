@@ -11,11 +11,12 @@ class TestQuerying extends TestSuiteBuilder {
 
   test("Solr version") {
     val solrVersion = SolrSupport.getSolrVersion(zkHost)
-    assert(solrVersion == "7.5.0")
+    assert(solrVersion == "8.1.1")
     assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 5, 0))
     assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 3, 0))
     assert(SolrSupport.isSolrVersionAtleast(solrVersion, 7, 1, 0))
-    assert(!SolrSupport.isSolrVersionAtleast(solrVersion, 8, 0, 0))
+    assert(SolrSupport.isSolrVersionAtleast(solrVersion, 8, 0, 0))
+    assert(!SolrSupport.isSolrVersionAtleast(solrVersion, 9, 0, 0))
   }
 
   test("vary queried columns") {
@@ -32,11 +33,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 3)
-      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
+      assert(solrDF.schema.fields.length === 5) // _root_ id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 4)
+      assert(firstRow.size === 5)
       firstRow.foreach(col => assert(col != null))            // no missing values
 
     } finally {
@@ -96,11 +97,11 @@ class TestQuerying extends TestSuiteBuilder {
 
       val solrDF = sparkSession.read.format("solr").options(solrOpts).load()
       assert(solrDF.count == 6)
-      assert(solrDF.schema.fields.length === 4) // id one_txt two_txt three_s
+      assert(solrDF.schema.fields.length === 5) // _root_ id one_txt two_txt three_s
       val oneColFirstRow = solrDF.select("one_txt").head()(0) // query for one column
       assert(oneColFirstRow != null)
       val firstRow = solrDF.head.toSeq                        // query for all columns
-      assert(firstRow.size === 4)
+      assert(firstRow.size === 5)
       firstRow.foreach(col => assert(col != null))            // no missing values
     } finally {
       SolrCloudUtil.deleteCollection(collection1Name, cluster)

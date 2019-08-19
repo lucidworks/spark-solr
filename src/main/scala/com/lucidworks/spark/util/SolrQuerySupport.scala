@@ -3,12 +3,13 @@ package com.lucidworks.spark.util
 import java.net.URLDecoder
 import java.util
 
-import com.lucidworks.spark.{JsonFacetUtil, LazyLogging}
+import com.lucidworks.spark.{JsonFacetUtil, LazyLogging, SolrShard}
 import com.lucidworks.spark.query._
 import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl._
+import org.apache.solr.client.solrj.request.CollectionAdminRequest.ListAliases
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
@@ -28,6 +29,7 @@ import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.util.Random
 import scala.util.control.Breaks._
 
 // Should we support all other additional Solr field tags?
@@ -62,6 +64,20 @@ class QueryResultsIterator(
     cursorMark: String)
   extends PagedResultsIterator[SolrDocument](solrClient, solrQuery, cursorMark) {
   override protected def processQueryResponse(resp: QueryResponse): util.List[SolrDocument] = resp.getResults
+}
+
+/**
+  * SolrJ's {@link LukeRequest} doesn't support the 'includeIndexFieldFlags', so this stub class hardcodes it into the
+  * underlying SolrParams until this can be fixed in Solr. This can be removed once our SolrJ has the fix for
+  * SOLR-13362
+  */
+class LukeRequestWithoutIndexFlags extends LukeRequest {
+  override def getParams: SolrParams = {
+    val params = new ModifiableSolrParams(super.getParams)
+    params.add("includeIndexFieldFlags", "false")
+
+    params
+  }
 }
 
 object SolrQuerySupport extends LazyLogging {
@@ -469,19 +485,27 @@ object SolrQuerySupport extends LazyLogging {
     fieldInfoMap.toMap
   }
 
-  def getFieldsFromLuke(zkHost: String, collection: String): Set[String] = {
-    val shardList = SolrSupport.buildShardList(zkHost, collection, false)
-    val fieldSetBuffer: ListBuffer[String] = ListBuffer.empty[String]
-    shardList.foreach(shard => {
+  def getFieldsFromLuke(zkHost: String, collection: String, maxShardsToSample: Option[Int]): Set[String] = {
+    val allShardList = SolrSupport.buildShardList(zkHost, collection, false)
+    val sampledShardList = randomlySampleShardList(allShardList, maxShardsToSample.getOrElse(10))
+    val fieldSetBuffer = sampledShardList.par.map(shard => {
       val randomReplica = SolrRDD.randomReplica(shard)
       val replicaHttpClient = SolrSupport.getCachedHttpSolrClient(randomReplica.replicaUrl, zkHost)
-      fieldSetBuffer.++=(getFieldsFromLukePerShard(zkHost, replicaHttpClient))
-    })
-    fieldSetBuffer.toSet
+      getFieldsFromLukePerShard(zkHost, replicaHttpClient)
+    }).flatten
+    fieldSetBuffer.toSet.seq
+  }
+
+  private def randomlySampleShardList(fullShardList: List[SolrShard], maxShardsToSample: Int): List[SolrShard] = {
+    if (fullShardList.size > maxShardsToSample) {
+      Random.shuffle(fullShardList).slice(0, maxShardsToSample)
+    } else {
+      fullShardList
+    }
   }
 
   def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
-    val lukeRequest = new LukeRequest()
+    val lukeRequest = new LukeRequestWithoutIndexFlags()
     lukeRequest.setNumTerms(0)
     val lukeResponse = lukeRequest.process(httpSolrClient)
     if (lukeResponse.getStatus != 0) {
@@ -489,6 +513,22 @@ object SolrQuerySupport extends LazyLogging {
         "Solr request returned with status code '" + lukeResponse.getStatus + "'. Response: '" + lukeResponse.getResponse.toString)
     }
     mapAsScalaMap(lukeResponse.getFieldInfo).toMap.keySet
+  }
+
+  def getCollectionsForAlias(zkHost: String, alias: String): Option[List[String]] = {
+    val listAliases = new ListAliases()
+    val collectionAdminResp = listAliases.process(SolrSupport.getCachedCloudClient(zkHost))
+    if (collectionAdminResp.getStatus == 0) {
+      val allAliases = collectionAdminResp.getAliases.toMap
+      if (allAliases.contains(alias)) {
+        val aliases = allAliases(alias).split(",").toList.sorted
+        logger.debug(s"Resolved alias ${alias} to ${aliases}")
+        return Some(aliases)
+      }
+    } else {
+      logger.error(s"Failed to get alias list from Solr. Response text ${collectionAdminResp.getResponse.toString}")
+    }
+    None
   }
 
   def validateExportHandlerQuery(solrServer: SolrClient, solrQuery: SolrQuery) = {
@@ -583,7 +623,7 @@ object SolrQuerySupport extends LazyLogging {
       pivotFields: Array[PivotField],
       solrRDD: SolrRDD[_],
       escapeFieldNames: Boolean): DataFrame = {
-    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, escapeFieldNames, Some(true), false, Set.empty)
+    val schema = SolrRelationUtil.getBaseSchema(solrRDD.zkHost, solrRDD.collection, None, escapeFieldNames, Some(true), false, Set.empty)
     val schemaWithPivots = toPivotSchema(solrData.schema, pivotFields, solrRDD.collection, schema, solrRDD.uniqueKey, solrRDD.zkHost)
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {
