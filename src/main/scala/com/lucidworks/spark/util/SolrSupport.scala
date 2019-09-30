@@ -181,7 +181,8 @@ object SolrSupport extends LazyLogging {
   }
 
   case class ShardInfo(shardUrl: String, zkHost: String)
-  case class CloudClientParams(zkHost: String, zkClientTimeout: Int=30000, zkConnectTimeout: Int=60000, solrParams: Option[ModifiableSolrParams] = None)
+  // Did not use Option for solrParams since it's okay to pass in null for ModifiableSolrParams and calling from java/JS is easy
+  case class CloudClientParams(zkHost: String, zkClientTimeout: Int=30000, zkConnectTimeout: Int=60000, solrParams: ModifiableSolrParams=null)
 
   def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
     getHttpSolrClient(shardUrl, zkHost)
@@ -194,7 +195,7 @@ object SolrSupport extends LazyLogging {
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
   private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
     val zkHost = cloudClientParams.zkHost
-    logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
+    logger.info(s"Creating a new SolrCloudClient with $cloudClientParams")
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
@@ -206,7 +207,7 @@ object SolrSupport extends LazyLogging {
         logger.error("No custom builder found for configured zkhost")
       }
     }
-    val params = new ModifiableSolrParams(cloudClientParams.solrParams.orNull)
+    val params = new ModifiableSolrParams(cloudClientParams.solrParams)
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
     if (isKerberosNeeded(zkHost)) {
       val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
