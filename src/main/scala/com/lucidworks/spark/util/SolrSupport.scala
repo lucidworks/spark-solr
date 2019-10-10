@@ -12,7 +12,7 @@ import java.util.regex.Pattern
 import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
-import com.lucidworks.spark.util.SolrSupport.ShardInfo
+import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
 import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.commons.httpclient.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
@@ -33,21 +33,21 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._
 
 object CacheCloudSolrClient {
-  private val loader = new CacheLoader[String, CloudSolrClient]() {
-    def load(zkHost: String): CloudSolrClient = {
-      SolrSupport.getNewSolrCloudClient(zkHost)
+  private val loader = new CacheLoader[CloudClientParams, CloudSolrClient]() {
+    def load(cloudClientParams: CloudClientParams): CloudSolrClient = {
+      SolrSupport.getNewSolrCloudClient(cloudClientParams)
     }
   }
 
-  private val listener = new RemovalListener[String, CloudSolrClient]() {
-    def onRemoval(rn: RemovalNotification[String, CloudSolrClient]): Unit = {
+  private val listener = new RemovalListener[CloudClientParams, CloudSolrClient]() {
+    def onRemoval(rn: RemovalNotification[CloudClientParams, CloudSolrClient]): Unit = {
       if (rn != null && rn.getValue != null) {
         rn.getValue.close()
       }
     }
   }
 
-  val cache: LoadingCache[String, CloudSolrClient] = CacheBuilder
+  val cache: LoadingCache[CloudClientParams, CloudSolrClient] = CacheBuilder
     .newBuilder()
     .removalListener(listener)
     .build(loader)
@@ -170,7 +170,7 @@ object SolrSupport extends LazyLogging {
       if (authHttpClientBuilder.isDefined) {
         logger.info("Custom http client defined: {}", authHttpClientBuilder)
         return authHttpClientBuilder.get
-          .withHttpClient(getSolrCloudClient(zkHost).getHttpClient)
+          .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
           .withBaseSolrUrl(shardUrl).build()
       }
     }
@@ -181,6 +181,7 @@ object SolrSupport extends LazyLogging {
   }
 
   case class ShardInfo(shardUrl: String, zkHost: String)
+  case class CloudClientParams(zkHost: String, zkClientTimeout: Int=30000, zkConnectTimeout: Int=60000, solrParams: Option[ModifiableSolrParams] = None)
 
   def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
     getHttpSolrClient(shardUrl, zkHost)
@@ -191,8 +192,9 @@ object SolrSupport extends LazyLogging {
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
-  private def getSolrCloudClient(zkHost: String): CloudSolrClient =  {
-    logger.debug(s"Creating a new SolrCloudClient for zkhost $zkHost")
+  private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
+    val zkHost = cloudClientParams.zkHost
+    logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
     val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
@@ -204,7 +206,7 @@ object SolrSupport extends LazyLogging {
         logger.error("No custom builder found for configured zkhost")
       }
     }
-    val params = new ModifiableSolrParams()
+    val params = new ModifiableSolrParams(cloudClientParams.solrParams.orNull)
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
     if (isKerberosNeeded(zkHost)) {
       val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
@@ -216,8 +218,8 @@ object SolrSupport extends LazyLogging {
     }
     val httpClient = HttpClientUtil.createClient(params)
     val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
-    solrClient.setZkClientTimeout(30000)
-    solrClient.setZkConnectTimeout(60000)
+    solrClient.setZkClientTimeout(cloudClientParams.zkClientTimeout)
+    solrClient.setZkConnectTimeout(cloudClientParams.zkConnectTimeout)
     solrClient.connect()
     logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
@@ -236,12 +238,16 @@ object SolrSupport extends LazyLogging {
   }
 
   // Use this only if you want a new SolrCloudClient instance. This new instance should be closed by the methods downstream
-  def getNewSolrCloudClient(zkHost: String): CloudSolrClient = {
-    getSolrCloudClient(zkHost)
+  def getNewSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient = {
+    getSolrCloudClient(cloudClientParams)
+  }
+
+  def getCachedCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient = {
+    CacheCloudSolrClient.cache.get(cloudClientParams)
   }
 
   def getCachedCloudClient(zkHost: String): CloudSolrClient = {
-    CacheCloudSolrClient.cache.get(zkHost)
+    CacheCloudSolrClient.cache.get(CloudClientParams(zkHost))
   }
 
   def getSolrBaseUrl(zkHost: String) = {
@@ -352,7 +358,7 @@ object SolrSupport extends LazyLogging {
         SolrException.getRootCause(e) match {
           case e1 @ (_:SessionExpiredException | _:OperationTimeoutException) =>
             logger.info("Got an exception with message '" + e1.getMessage +  "'.  Resetting the cached solrClient")
-            CacheCloudSolrClient.cache.invalidate(zkHost)
+            CacheCloudSolrClient.cache.invalidate(CloudClientParams(zkHost))
             val newClient = SolrSupport.getCachedCloudClient(zkHost)
             sendBatchToSolr(newClient, collection, batch, commitWithin)
         }
