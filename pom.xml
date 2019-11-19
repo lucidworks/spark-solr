@@ -40,7 +40,7 @@
     <spark.version>2.4.4</spark.version>
     <solr.version>8.3.0</solr.version>
     <hadoop.version>2.7.5</hadoop.version>
-    <fasterxml.version>2.10.1</fasterxml.version>
+    <fasterxml.version>2.9.9</fasterxml.version>
     <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
