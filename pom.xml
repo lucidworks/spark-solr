@@ -177,13 +177,13 @@
               <goal>testCompile</goal>
             </goals>
           </execution>
-          <execution>
+         <!-- <execution>
             <id>attach-scaladocs</id>
             <phase>verify</phase>
             <goals>
               <goal>doc-jar</goal>
             </goals>
-          </execution>
+          </execution> -->
         </executions>
         <configuration>
           <scalaVersion>${scala.version}</scalaVersion>
@@ -285,6 +285,10 @@
                   <exclude>org.eclipse.jetty.orbit:*</exclude>
                   <exclude>org.slf4j:*</exclude>
                   <exclude>org.scala-lang:scala-library</exclude>
+		  <!-- begin removed for livy-->
+                  <exclude>org.scala-lang:scala-reflect</exclude>
+                  <exclude>org.scala-lang.modules:scala-parser-combinators_2.11</exclude>
+		  <!-- end   removed for livy-->
                   <exclude>commons-httpclient:commons-httpclient</exclude>
                   <exclude>org.apache.curator:*</exclude>
                   <exclude>org.apache.commons:commons-lang3</exclude>

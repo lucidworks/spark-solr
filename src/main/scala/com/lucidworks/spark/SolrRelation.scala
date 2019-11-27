@@ -659,7 +659,7 @@ class SolrRelation(
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = getFieldsToAdd(dfSchema)
 
-    if (fieldsToAddToSolr.nonEmpty) {
+    if (fieldsToAddToSolr.nonEmpty && conf.addNewFields.getOrElse(true)) {
       SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collectionId, cloudClient)
     }
 
@@ -694,7 +694,17 @@ class SolrRelation(
                 val elem = it.next()
                 val childDoc = new SolrInputDocument
                 for (i <- 0 until elem.schema.fields.size) {
-                  childDoc.setField(elem.schema.fields(i).name, elem.get(i))
+                    val childFname = elem.schema.fields(i).name
+                    val childValue = elem.get(i)
+                    childValue match {
+                      //TODO: Do we need to check explicitly for ArrayBuffer and WrappedArray
+                      case v: Iterable[Any] =>
+                        val it = v.iterator
+                        while (it.hasNext) childDoc.addField(childFname, it.next())
+                      case bd: java.math.BigDecimal =>
+                        childDoc.setField(childFname, bd.doubleValue())
+                      case _ => childDoc.setField(childFname, childValue)
+                    }
                 }
 
                 // Generate unique key if the child document doesn't have one

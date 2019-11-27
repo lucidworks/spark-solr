@@ -395,6 +395,14 @@ Usage: `option("max_active_partitions", "100")`
 
 Default: null
 
+===== add_new_fields
+
+Used to let spark create the non defined columns.
+
+Usage: `option("add_new_fields", "false")`
+
+Default: true
+
 //end::tuning[]
 
 //tag::spark-troubleshooting[]
