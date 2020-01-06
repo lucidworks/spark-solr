@@ -4,7 +4,7 @@
 :toc-placement!:
 :toc-title:
 
-This project includes tools for reading data from Solr as a Spark RDD and indexing objects from Spark into Solr using SolrJ.
+This project includes tools for reading data from Solr as a Spark DataFrame/RDD and indexing objects from Spark into Solr using SolrJ.
 
 toc::[]
 
@@ -17,8 +17,10 @@ chart below shows the versions supported across the past releases. 'Connector' r
 [width="40%",frame="topbot",options="header,footer"]
 |======================
 |Connector      | Spark | Solr
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.7.0/jar[3.7.0]   | 2.4.4 | 8.3.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.6.6/jar[3.6.6]   | 2.4.3 | 8.2.0
 |https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.6.0/jar[3.6.0]   | 2.4.0 | 7.5.0
-|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.5.8/jar[3.5.14]  | 2.3.2 | 7.6.0
+|https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.5.8/jar[3.5.19]  | 2.3.2 | 7.6.0
 |https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.4.5/jar[3.4.5]   | 2.2.1 | 7.2.1
 |https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.3.4/jar[3.3.4]   | 2.2.0 | 7.1.0
 |https://search.maven.org/artifact/com.lucidworks.spark/spark-solr/3.2.2/jar[3.2.2]   | 2.2.0 | 6.6.1
@@ -39,7 +41,7 @@ chart below shows the versions supported across the past releases. 'Connector' r
 
 [source]
 cd $SPARK_HOME
-./bin/spark-shell --jars spark-solr-3.5.5-shaded.jar
+./bin/spark-shell --jars spark-solr-{version}-shaded.jar
 
 The shaded jar can be downloaded from the http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22com.lucidworks.spark%22%20AND%20a%3A%22spark-solr%22[Maven Central] or built from the respective branch
 

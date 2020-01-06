@@ -10,6 +10,7 @@ import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.*;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import javax.xml.bind.DatatypeConverter;

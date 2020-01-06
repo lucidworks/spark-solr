@@ -13,7 +13,7 @@ import java.util.*;
 
 import static com.lucidworks.spark.util.ConfigurationConstants.*;
 
-public class SolrSqlTest extends RDDProcessorTestBase{
+public class SolrSqlTest extends RDDProcessorTestBase {
 
 
   /**
@@ -52,14 +52,15 @@ public class SolrSqlTest extends RDDProcessorTestBase{
 
         String[] fieldNames = schema.fieldNames();
         // list of fields that are indexed from {@code EventsimUtil#loadEventSimDataSet}
-        assert fieldNames.length == 20; // 18 fields from the file + 1 extra artist_txt field  + 1 for the id field
+        Assert.assertEquals(21, fieldNames.length);  // 18 fields from the file + id + _root_ + artist_txt
+        //assert fieldNames.length == 20;
 
         Assert.assertEquals(schema.apply("ts").dataType().typeName(), DataTypes.TimestampType.typeName());
         Assert.assertEquals(schema.apply("sessionId").dataType().typeName(), DataTypes.LongType.typeName());
         Assert.assertEquals(schema.apply("length").dataType().typeName(), DataTypes.DoubleType.typeName());
         Assert.assertEquals(schema.apply("song").dataType().typeName(), DataTypes.StringType.typeName());
 
-        assert ((Row) rows.get(0)).length() == 20;
+        Assert.assertEquals(21, ((Row)rows.get(0)).length());
       }
 
       // Filter using SQL syntax and escape field names

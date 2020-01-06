@@ -71,6 +71,8 @@ public class TestSolrCloudClusterSupport {
 
   @BeforeClass
   public static void startCluster() throws Exception {
+
+      System.setProperty("jetty.testMode", "true");
     File solrXml = new File("src/test/resources/solr.xml");
     String solrXmlContents = readSolrXml(solrXml);
 
