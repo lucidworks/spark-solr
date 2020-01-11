@@ -47,10 +47,10 @@ class SolrStreamWriter(
   /**
     * TODO: Provide option to store this is in a HDFS metadata file akin to [[org.apache.spark.sql.execution.streaming.HDFSMetadataLog]]
     */
-  val batchIds: mutable.Set[Long] = mutable.Set.empty
+  @volatile private var latestBatchId: Long = -1L
 
   override def addBatch(batchId: Long, df: DataFrame): Unit = {
-    if (batchIds.contains(batchId)) {
+    if (batchId <= latestBatchId) {
       logger.info(s"Skipping already processed batch $batchId")
     } else {
       val rows = df.collect()
@@ -68,7 +68,7 @@ class SolrStreamWriter(
         val solrDocs = rows.toStream.map(row => SolrRelation.convertRowToSolrInputDocument(row, solrConf, uniqueKey))
         SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, collection, solrDocs, solrConf.commitWithin)
         logger.info(s"Written ${rows.length} documents to Solr collection $collection from batch $batchId")
-        batchIds.+(batchId)
+        latestBatchId = batchId
       }
     }
   }
