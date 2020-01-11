@@ -7,6 +7,8 @@ import org.apache.spark.sql.streaming.OutputMode
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.spark.sql.types.StructType
 
+import scala.collection.mutable
+
 /**
   * Writes a Spark stream to Solr
   * @param sparkSession
@@ -42,20 +44,32 @@ class SolrStreamWriter(
     .filter(f => f.startsWith("*_") || f.endsWith("_*"))
     .map(f => if (f.startsWith("*_")) f.substring(1) else f.substring(0, f.length-1))
 
+  /**
+    * TODO: Provide option to store this is in a HDFS metadata file akin to [[org.apache.spark.sql.execution.streaming.HDFSMetadataLog]]
+    */
+  val batchIds: mutable.Set[Long] = mutable.Set.empty
+
   override def addBatch(batchId: Long, df: DataFrame): Unit = {
-    val schema: StructType = df.schema
-    val solrClient = SolrSupport.getCachedCloudClient(zkhost)
+    if (batchIds.contains(batchId)) {
+      logger.info(s"Skipping already processed batch $batchId")
+    } else {
+      val rows = df.collect()
+      if (rows.nonEmpty) {
+        val schema: StructType = df.schema
+        val solrClient = SolrSupport.getCachedCloudClient(zkhost)
 
-    // build up a list of updates to send to the Solr Schema API
-    val fieldsToAddToSolr = SolrRelation.getFieldsToAdd(schema, solrConf, solrVersion, dynamicSuffixes)
+        // build up a list of updates to send to the Solr Schema API
+        val fieldsToAddToSolr = SolrRelation.getFieldsToAdd(schema, solrConf, solrVersion, dynamicSuffixes)
 
-    if (fieldsToAddToSolr.nonEmpty) {
-      SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collection, solrClient)
+        if (fieldsToAddToSolr.nonEmpty) {
+          SolrRelation.addFieldsForInsert(fieldsToAddToSolr, collection, solrClient)
+        }
+
+        val solrDocs = rows.toStream.map(row => SolrRelation.convertRowToSolrInputDocument(row, solrConf, uniqueKey))
+        SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, collection, solrDocs, solrConf.commitWithin)
+        logger.info(s"Written ${rows.length} documents to Solr collection $collection from batch $batchId")
+        batchIds.+(batchId)
+      }
     }
-
-    val rows = df.collect()
-    val solrDocs = rows.toStream.map(row => SolrRelation.convertRowToSolrInputDocument(row, solrConf, uniqueKey))
-    SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, collection, solrDocs, solrConf.commitWithin)
-    logger.info("Written {} documents to Solr collection {}", rows.length, collection)
   }
 }

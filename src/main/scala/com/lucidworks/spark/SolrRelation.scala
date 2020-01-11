@@ -1067,10 +1067,10 @@ object SolrRelation extends LazyLogging {
     map += ("name" -> sf.name)
     map += ("indexed" -> "true")
     map += ("stored" -> "true")
-    if (solrType.isEmpty) {
-      map += ("docValues" -> "true")
-    }
     val dataType = sf.dataType
+    if (solrType.isEmpty) {
+      map += ("docValues" -> isDocValuesSupported(dataType))
+    }
     dataType match {
       case at: ArrayType =>
         map += ("multiValued" -> "true")
@@ -1098,6 +1098,13 @@ object SolrRelation extends LazyLogging {
       case IntegerType | ShortType => "tint"
       case LongType => "tlong"
       case _ => "string"
+    }
+  }
+
+  def isDocValuesSupported(dataType: DataType): String = {
+    dataType match {
+      case BinaryType => "false"
+      case _ => "true"
     }
   }
 
