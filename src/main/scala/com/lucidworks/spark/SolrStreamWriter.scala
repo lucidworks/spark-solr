@@ -44,10 +44,11 @@ class SolrStreamWriter(
     .filter(f => f.startsWith("*_") || f.endsWith("_*"))
     .map(f => if (f.startsWith("*_")) f.substring(1) else f.substring(0, f.length-1))
 
-  /**
-    * TODO: Provide option to store this is in a HDFS metadata file akin to [[org.apache.spark.sql.execution.streaming.HDFSMetadataLog]]
-    */
   @volatile private var latestBatchId: Long = -1L
+  val acc: SparkSolrAccumulator = new SparkSolrAccumulator
+  val accName = if (solrConf.getAccumulatorName.isDefined) solrConf.getAccumulatorName.get else "Records Written"
+  sparkSession.sparkContext.register(acc, accName)
+  SparkSolrAccumulatorContext.add(accName, acc.id)
 
   override def addBatch(batchId: Long, df: DataFrame): Unit = {
     if (batchId <= latestBatchId) {
@@ -66,8 +67,9 @@ class SolrStreamWriter(
         }
 
         val solrDocs = rows.toStream.map(row => SolrRelation.convertRowToSolrInputDocument(row, solrConf, uniqueKey))
+        acc.add(solrDocs.length.toLong)
         SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, collection, solrDocs, solrConf.commitWithin)
-        logger.info(s"Written ${rows.length} documents to Solr collection $collection from batch $batchId")
+        logger.info(s"Written ${solrDocs.length} documents to Solr collection $collection from batch $batchId")
         latestBatchId = batchId
       }
     }

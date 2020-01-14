@@ -5,6 +5,7 @@ import java.util.UUID
 
 import com.lucidworks.spark.util.{ConfigurationConstants, SolrCloudUtil, SolrQuerySupport, SolrSupport}
 import org.apache.commons.io.FileUtils
+import org.apache.spark.solr.SparkInternalObjects
 
 class TestSolrStreamWriter extends TestSuiteBuilder {
 
@@ -17,12 +18,14 @@ class TestSolrStreamWriter extends TestSuiteBuilder {
     try {
       val datasetPath = "src/test/resources/test-data/oneusagov"
       val streamingJsonDF = sparkSession.readStream.json(datasetPath)
+      val accName = "acc-" + UUID.randomUUID().toString
       assert(streamingJsonDF.isStreaming)
       val writeOptions = Map(
         "collection" -> collectionName,
         "zkhost" -> zkHost,
         "checkpointLocation" -> offsetsDir,
-        ConfigurationConstants.GENERATE_UNIQUE_KEY -> "true")
+        ConfigurationConstants.GENERATE_UNIQUE_KEY -> "true",
+        ConfigurationConstants.ACCUMULATOR_NAME -> accName)
       val streamingQuery = streamingJsonDF
         .drop("_id")
         .writeStream
@@ -36,6 +39,9 @@ class TestSolrStreamWriter extends TestSuiteBuilder {
         logger.info(s"Status ${streamingQuery.status}")
         SolrSupport.getCachedCloudClient(zkHost).commit(collectionName)
         assert(SolrQuerySupport.getNumDocsFromSolr(collectionName, zkHost, None) === 13)
+        val acc = SparkInternalObjects.getAccumulatorById(SparkSolrAccumulatorContext.getId(accName).get)
+        assert(acc.isDefined)
+        assert(acc.get.value == 13)
       } finally {
         streamingQuery.stop()
       }
