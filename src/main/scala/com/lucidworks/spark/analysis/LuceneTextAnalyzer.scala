@@ -187,7 +187,7 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     val output = new java.util.HashMap[String,java.util.List[String]]()
     for ((field, values) <- fieldValues) output.put(field, analyzeMVJava(field, values))
     java.util.Collections.unmodifiableMap(output)
-  }eventSimCount
+  }
   def tokenStream(fieldName: String, text: String) = analyzerWrapper.tokenStream(fieldName, text)
   /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
     * for the analyzer to tokenize the contents of `reader`. */
