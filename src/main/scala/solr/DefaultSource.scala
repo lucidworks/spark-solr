@@ -1,11 +1,13 @@
 package solr
 
-import com.lucidworks.spark.SolrRelation
+import com.lucidworks.spark.{SolrRelation, SolrStreamWriter}
 import com.lucidworks.spark.util.Constants
-import org.apache.spark.sql.{DataFrame, SaveMode, SQLContext}
-import org.apache.spark.sql.sources.{DataSourceRegister, BaseRelation, CreatableRelationProvider, RelationProvider}
+import org.apache.spark.sql.execution.streaming.Sink
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
+import org.apache.spark.sql.sources._
+import org.apache.spark.sql.streaming.OutputMode
 
-class DefaultSource extends RelationProvider with CreatableRelationProvider with DataSourceRegister {
+class DefaultSource extends RelationProvider with CreatableRelationProvider with StreamSinkProvider with DataSourceRegister {
 
   override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation = {
     try {
@@ -33,4 +35,12 @@ class DefaultSource extends RelationProvider with CreatableRelationProvider with
   }
 
   override def shortName(): String = Constants.SOLR_FORMAT
+
+  override def createSink(
+      sqlContext: SQLContext,
+      parameters: Map[String, String],
+      partitionColumns: Seq[String],
+      outputMode: OutputMode): Sink = {
+    new SolrStreamWriter(sqlContext.sparkSession, parameters, partitionColumns, outputMode)
+  }
 }

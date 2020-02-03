@@ -14,8 +14,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def getZkHost: Option[String] = {
     if (config.contains(SOLR_ZK_HOST_PARAM)) return config.get(SOLR_ZK_HOST_PARAM)
 
-    // allow users to set the zkhost using a Java system property
-    var zkHostSysProp = System.getProperty("solr.zkhost")
+    // allow users to set the zkhost using a Java system property or env property
+    val zkHostSysProp = System.getProperty("solr.zkhost", System.getenv("SOLR_ZKHOST"))
     if (zkHostSysProp != null) return Some(zkHostSysProp)
 
     None
