@@ -46,6 +46,15 @@
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>central</id>
+      <url>https://repo1.maven.org/maven2</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+  </pluginRepositories> 
   <repositories>
     <repository>
       <id>Central Maven repository</id>
