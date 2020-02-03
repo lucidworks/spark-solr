@@ -188,8 +188,6 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     for ((field, values) <- fieldValues) output.put(field, analyzeMVJava(field, values))
     java.util.Collections.unmodifiableMap(output)
   }
-  /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
-    * for the analyzer to tokenize the contents of `text`. */
   def tokenStream(fieldName: String, text: String) = analyzerWrapper.tokenStream(fieldName, text)
   /** Looks up the analyzer mapped to `fieldName` and returns a [[org.apache.lucene.analysis.TokenStream]]
     * for the analyzer to tokenize the contents of `reader`. */
