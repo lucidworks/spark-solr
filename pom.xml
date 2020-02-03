@@ -57,6 +57,11 @@
   </pluginRepositories> 
   <repositories>
     <repository>
+      <id>Central Maven repository</id>
+      <name>Central Maven repository https</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+    <repository>
       <id>Restlet Releases</id>
       <name>Restlet Releases Repository</name>
       <url>http://maven.restlet.com/</url>
