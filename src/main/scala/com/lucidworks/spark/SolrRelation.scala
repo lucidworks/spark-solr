@@ -1056,7 +1056,6 @@ object SolrRelation extends LazyLogging {
 
     // Generate unique key if the document doesn't have one
     if (generateUniqKey) {
-      logger.info(s"Seeing if doc has idField: ${idField}")
       if (!doc.containsKey(idField)) {
         doc.setField(idField, UUID.randomUUID().toString)
       }
