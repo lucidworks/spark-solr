@@ -11,12 +11,19 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   require(config != null, "Config cannot be null")
   require(config.nonEmpty, "Config cannot be empty")
 
+  var zkHostFromDriverEnv : Option[String] = None
+
   def getZkHost: Option[String] = {
+    if (zkHostFromDriverEnv.isDefined) return zkHostFromDriverEnv
     if (config.contains(SOLR_ZK_HOST_PARAM)) return config.get(SOLR_ZK_HOST_PARAM)
 
     // allow users to set the zkhost using a Java system property or env property
     val zkHostSysProp = System.getProperty("solr.zkhost", System.getenv("SOLR_ZKHOST"))
-    if (zkHostSysProp != null) return Some(zkHostSysProp)
+    if (zkHostSysProp != null) {
+      // stash it for later use in executors
+      zkHostFromDriverEnv = Some(zkHostSysProp)
+      return zkHostFromDriverEnv
+    }
 
     None
   }

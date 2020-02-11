@@ -655,7 +655,6 @@ class SolrRelation(
     val solrBaseUrl = SolrSupport.getSolrBaseUrl(zkHost)
     val cloudClient = SolrSupport.getCachedCloudClient(zkHost)
 
-
     // build up a list of updates to send to the Solr Schema API
     val fieldsToAddToSolr = SolrRelation.getFieldsToAdd(dfSchema, conf, solrVersion, dynamicSuffixes)
 
@@ -673,7 +672,10 @@ class SolrRelation(
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
 
     // Convert RDD of rows in to SolrInputDocuments
-    val docs = df.rdd.map(row => SolrRelation.convertRowToSolrInputDocument(row, conf, uniqueKey))
+    logger.info(s"Lookup uniqueKey using zkHost=${zkHost}, collectionId=${collectionId}")
+    val uk = SolrQuerySupport.getUniqueKey(zkHost, collectionId)
+    logger.info(s"Converting rows to input docs with zkHost=${zkHost}, collectionId=${collectionId}, uk=${uk}")
+    val docs = df.rdd.map(row => SolrRelation.convertRowToSolrInputDocument(row, conf, uk))
 
     val acc: SparkSolrAccumulator = new SparkSolrAccumulator
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
@@ -1003,7 +1005,7 @@ object SolrRelation extends LazyLogging {
     }
   }
 
-  def convertRowToSolrInputDocument(row: Row, conf: SolrConf, uniqueKey: String): SolrInputDocument = {
+  def convertRowToSolrInputDocument(row: Row, conf: SolrConf, idField: String): SolrInputDocument = {
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
     val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
     val fieldNameForChildDocuments = conf.getChildDocFieldName.getOrElse(DEFAULT_CHILD_DOC_FIELD_NAME)
@@ -1030,8 +1032,8 @@ object SolrRelation extends LazyLogging {
 
               // Generate unique key if the child document doesn't have one
               if (generateUniqChildKey) {
-                if (!childDoc.containsKey(uniqueKey)) {
-                  childDoc.setField(uniqueKey, UUID.randomUUID().toString)
+                if (!childDoc.containsKey(idField)) {
+                  childDoc.setField(idField, UUID.randomUUID().toString)
                 }
               }
 
@@ -1055,8 +1057,9 @@ object SolrRelation extends LazyLogging {
 
     // Generate unique key if the document doesn't have one
     if (generateUniqKey) {
-      if (!doc.containsKey(uniqueKey)) {
-        doc.setField(uniqueKey, UUID.randomUUID().toString)
+      logger.info(s"Seeing if doc has idField: ${idField}")
+      if (!doc.containsKey(idField)) {
+        doc.setField(idField, UUID.randomUUID().toString)
       }
     }
     doc
