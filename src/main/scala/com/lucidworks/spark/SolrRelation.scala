@@ -672,9 +672,8 @@ class SolrRelation(
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
 
     // Convert RDD of rows in to SolrInputDocuments
-    logger.info(s"Lookup uniqueKey using zkHost=${zkHost}, collectionId=${collectionId}")
     val uk = SolrQuerySupport.getUniqueKey(zkHost, collectionId)
-    logger.info(s"Converting rows to input docs with zkHost=${zkHost}, collectionId=${collectionId}, uk=${uk}")
+    logger.info(s"Converting rows to input docs with zkHost=${zkHost}, collectionId=${collectionId}, uniqueKey=${uk}")
     val docs = df.rdd.map(row => SolrRelation.convertRowToSolrInputDocument(row, conf, uk))
 
     val acc: SparkSolrAccumulator = new SparkSolrAccumulator
