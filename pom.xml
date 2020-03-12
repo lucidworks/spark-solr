@@ -64,7 +64,7 @@
     <repository>
       <id>Restlet Releases</id>
       <name>Restlet Releases Repository</name>
-      <url>https://maven.restlet.com/</url>
+      <url>http://maven.restlet.com/</url>
       <releases>
         <enabled>true</enabled>
       </releases>
