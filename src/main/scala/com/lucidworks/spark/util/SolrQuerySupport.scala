@@ -25,6 +25,7 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
+import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
@@ -385,44 +386,59 @@ object SolrQuerySupport extends LazyLogging {
     * We need this to retrieve schema of dynamic fields
     * @param solrUrl
     * @param fieldNames
-    * @param fieldDefs
     * @return
     */
   def getFieldDefinitionsFromSchema(
       solrUrl: String,
       fieldNames: Seq[String],
       cloudSolrClient: CloudSolrClient,
-      collection: String,
-      fieldDefs: Map[String, Any] = Map.empty): Map[String, Any] = {
-    val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
-    logger.debug("Requesting schema for fields: {} ", fieldNames.mkString(","))
+      collection: String): Map[String, Any] = {
 
+    /**
+      * Form url for fields, if the length is too long then split it into multiple strings
+      * @param fieldNames
+      * @return
+      */
+    def getFieldListAsUrlParams(fieldNames: Seq[String], fieldsUrlBase: String): Seq[String] = {
+      val allowedUrlLimit = 2048 - fieldsUrlBase.length
+      var flLength = 0
+      var sb = new StringBuilder()
 
-    if (fieldNames.isEmpty && fieldDefs.isEmpty)
-      return fetchFieldSchemaInfoFromSolr("", cloudSolrClient, collection)
-
-    if (fieldNames.isEmpty && fieldDefs.nonEmpty)
-      return fieldDefs
-
-    val allowedUrlLimit = 2048 - fieldsUrlBase.length
-    var flLength = 0
-    val sb = new StringBuilder()
-
-    for (i <- fieldNames.indices) {
-      val fieldName = fieldNames(i)
-      if (flLength + fieldName.length + 1 < allowedUrlLimit) {
-        if (fieldName != null || fieldName.nonEmpty) {
-          sb.append(fieldName)
-          if (i < fieldNames.size) sb.append(",")
+      val fieldUrls = ListBuffer.empty[String]
+      for (i <- fieldNames.indices) {
+        val fieldName = fieldNames(i)
+        if (flLength + fieldName.length + 1 < allowedUrlLimit) {
+          if (i < fieldNames.size) sb.append(s"$fieldName,") else sb.append(fieldName)
           flLength = flLength + fieldName.length + 1
+        } else {
+          fieldUrls += sb.toString()
+          sb = new mutable.StringBuilder()
+          if (i < fieldNames.size) sb.append(s"$fieldName,") else sb.append(fieldName)
+          flLength = fieldName.length + 1
         }
-      } else {
-        val defs: Map[String, Any] = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
-        return getFieldDefinitionsFromSchema(solrUrl, fieldNames.takeRight(fieldNames.length - i), cloudSolrClient, collection, defs ++ fieldDefs)
+      }
+      // Add the remaining left over fields
+      if (sb.nonEmpty) fieldUrls += sb.toString()
+      fieldUrls.toList
+    }
+
+    @tailrec
+    def getFieldDefsFromSchema(flList: Seq[String], cloudSolrClient: CloudSolrClient, collection: String, defs: Map[String, Any]): Map[String, Any] = {
+      flList match {
+        case Nil => defs
+        case fl :: xs =>
+          getFieldDefsFromSchema(xs, cloudSolrClient, collection, defs ++ fetchFieldSchemaInfoFromSolr(fl, cloudSolrClient, collection))
       }
     }
-    val defs = fetchFieldSchemaInfoFromSolr(sb.toString(), cloudSolrClient, collection)
-    getFieldDefinitionsFromSchema(solrUrl, Seq.empty, cloudSolrClient, collection, defs ++ fieldDefs)
+
+    logger.debug("Requesting schema for fields: {}", fieldNames.mkString(","))
+
+    if (fieldNames.isEmpty) {
+      fetchFieldSchemaInfoFromSolr("", cloudSolrClient, collection)
+    } else {
+      val fieldsUrlBase = solrUrl + "schema/fields?showDefaults=true&includeDynamic=true"
+      getFieldDefsFromSchema(getFieldListAsUrlParams(fieldNames, fieldsUrlBase), cloudSolrClient, collection, Map.empty)
+    }
   }
 
   def fetchFieldSchemaInfoFromSolr(fl: String, cloudSolrClient: CloudSolrClient, collection: String) : Map[String, Any] = {
@@ -488,11 +504,11 @@ object SolrQuerySupport extends LazyLogging {
   def getFieldsFromLuke(zkHost: String, collection: String, maxShardsToSample: Option[Int]): Set[String] = {
     val allShardList = SolrSupport.buildShardList(zkHost, collection, false)
     val sampledShardList = randomlySampleShardList(allShardList, maxShardsToSample.getOrElse(10))
-    val fieldSetBuffer = sampledShardList.par.map(shard => {
+    val fieldSetBuffer = sampledShardList.par.flatMap(shard => {
       val randomReplica = SolrRDD.randomReplica(shard)
       val replicaHttpClient = SolrSupport.getCachedHttpSolrClient(randomReplica.replicaUrl, zkHost)
       getFieldsFromLukePerShard(zkHost, replicaHttpClient)
-    }).flatten
+    })
     fieldSetBuffer.toSet.seq
   }
 
