@@ -64,6 +64,8 @@ class SolrRelation(
 
   checkRequiredParams()
 
+  SolrSupport.doBasicAuthByOptsIfUsed(parameters)
+
   lazy val solrVersion : String = SolrSupport.getSolrVersion(conf.getZkHost.get)
   lazy val initialQuery: SolrQuery = SolrRelation.buildQuery(conf)
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional

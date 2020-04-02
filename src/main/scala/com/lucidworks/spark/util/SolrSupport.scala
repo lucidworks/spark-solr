@@ -19,9 +19,10 @@ import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
+import org.apache.solr.client.solrj.impl.HttpClientUtil
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
-import org.apache.solr.common.params.ModifiableSolrParams
+import org.apache.solr.common.params.{MapSolrParams, ModifiableSolrParams}
 import org.apache.solr.common.util.SimpleOrderedMap
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
@@ -78,6 +79,7 @@ object SolrSupport extends LazyLogging {
 
   val AUTH_CONFIGURER_CLASS = "auth.configurer.class"
   val SOLR_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)(\\.(\\d+))?.*")
+  var basicAuthBySparkOpts = false; //false: via system properties or no auth  true: via spark options or no auth
 
   def getSolrVersion(zkHost: String): String = {
     val sysQuery = new SolrQuery
@@ -731,6 +733,45 @@ object SolrSupport extends LazyLogging {
       splits += ExportHandlerSplit(query, replica, splitsPerShard, i)
     }
     splits.toList
+  }
+
+  /**
+    * To support basic auth by Spark options,
+    * it set username and password in PreemptiveBasicAuthClientBuilderFactory by spark options and get cached client immediately
+    * It does not support using both Spark options and system properties for basic auth,
+    * username and password in spark options will cover credentials in system properties.
+    *
+    * @param params Spark options
+    */
+  def doBasicAuthByOptsIfUsed(params: Map[String, String]): Unit ={
+    val usernameInOpts = params.get(HttpClientUtil.PROP_BASIC_AUTH_USER)
+    val passwordInOpts = params.get(HttpClientUtil.PROP_BASIC_AUTH_PASS)
+
+    if (!basicAuthBySparkOpts){
+      if (usernameInOpts == None) {
+        return
+      } else {
+        val credentials = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS)
+        val configFile = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_HTTP_CLIENT_CONFIG)
+        if (null != credentials || null != configFile){
+          logger.warn(s""" There is "${PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS}" or "${PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_HTTP_CLIENT_CONFIG}" """ +
+            s""" in system properties and "${HttpClientUtil.PROP_BASIC_AUTH_USER}" in spark options. Credentials in spark options will cover credentials in system properties""")
+        }
+        basicAuthBySparkOpts = true
+      }
+    }
+
+    if (usernameInOpts == None || passwordInOpts == None){
+      System.clearProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS)
+      PreemptiveBasicAuthClientBuilderFactory.setDefaultSolrParams(null)
+    } else {
+      logger.info(s"basic auth info  zkHost:${params.getOrElse("zkhost", "")} username:${usernameInOpts.get}")
+      System.setProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS, usernameInOpts.get + ":" + passwordInOpts.get)
+      val authParams = Map(HttpClientUtil.PROP_BASIC_AUTH_USER -> usernameInOpts.get,
+        HttpClientUtil.PROP_BASIC_AUTH_PASS -> passwordInOpts.get)
+      PreemptiveBasicAuthClientBuilderFactory.setDefaultSolrParams(new MapSolrParams(authParams))
+    }
+    getCachedCloudClient(params.getOrElse("zkhost", ""))
   }
 
   case class WorkerShardSplit(query: SolrQuery, replica: SolrReplica)
