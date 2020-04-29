@@ -63,6 +63,10 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       updateRequest.process(cloudClient, collectionName)
       updateRequest.commit(cloudClient, collectionName)
 
+      val allFieldsDF = sparkSession.read.format("solr").options(
+        Map("zkhost" -> zkHost, "collection" -> collectionName, "fields" -> fl, "request_handler" -> "/select", "splits" -> "true")).load
+      assert(allFieldsDF.schema.fieldNames.length === fields.size)
+
       val testDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName,
           "query" -> "s_the_abcdefghijklmnopqrstuvwxyz_field_01:[* TO *]", "fields" -> fl, "request_handler" -> "/select", "splits" -> "true")).load
@@ -82,8 +86,6 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       val exprDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName, "expr" -> searchExpr)).load
       val exprSchema = exprDF.schema
-      //exprDF.printSchema
-      fields.foreach(_ => exprSchema.fieldIndex(_)) // throws exception if not found
       assert(exprDF.collectAsList().size == 100)
     } finally {
       SolrCloudUtil.deleteCollection(collectionName, cluster)
@@ -106,6 +108,10 @@ class RelationTestSuite extends TestSuiteBuilder with LazyLogging {
       }
       updateRequest.process(cloudClient, collectionName)
       updateRequest.commit(cloudClient, collectionName)
+
+      val allFieldsDF = sparkSession.read.format("solr").options(
+        Map("zkhost" -> zkHost, "collection" -> collectionName, "fields" -> fields.mkString(","), "splits" -> "true")).load
+      assert(allFieldsDF.schema.fieldNames.length === fields.size)
 
       val testDF = sparkSession.read.format("solr").options(
         Map("zkhost" -> zkHost, "collection" -> collectionName,
