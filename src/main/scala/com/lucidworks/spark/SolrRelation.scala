@@ -1144,4 +1144,4 @@ object SolrRelation extends LazyLogging {
 case class StreamField(name:String, dataType: DataType, alias:Option[String], hasReplace: Boolean = false)
 case class StreamFields(collection:String,fields:ListBuffer[StreamField],metrics:ListBuffer[StreamField])
 
-class CollectionEmptyException extends IllegalStateException
+class CollectionEmptyException(message: String) extends IllegalStateException(message)
