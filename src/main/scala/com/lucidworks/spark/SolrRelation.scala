@@ -512,7 +512,7 @@ class SolrRelation(
     }
 
     if (scanSchema.fields.length == 0) {
-      throw new IllegalStateException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
+      throw new CollectionEmptyException(s"No fields defined in query schema for query: ${query}. This is likely an issue with the Solr collection ${collection}, does it have data?")
     }
 
     // prevent users from trying to export a func query as /export doesn't do that
@@ -1143,3 +1143,5 @@ object SolrRelation extends LazyLogging {
 
 case class StreamField(name:String, dataType: DataType, alias:Option[String], hasReplace: Boolean = false)
 case class StreamFields(collection:String,fields:ListBuffer[StreamField],metrics:ListBuffer[StreamField])
+
+class CollectionEmptyException(message: String) extends IllegalStateException(message)
