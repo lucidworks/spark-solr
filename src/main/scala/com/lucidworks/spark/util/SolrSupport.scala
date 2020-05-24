@@ -319,8 +319,11 @@ object SolrSupport extends LazyLogging {
       commitWithin: Option[Int],
       accumulator: Option[SparkSolrAccumulator] = None): Unit = {
     //TODO: Return success or false by boolean ?
+    val uk = SolrQuerySupport.getUniqueKey(zkHost, collection)
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
+      solrClient.setIdField(uk)
+      logger.info(s"setIdField:$uk")
       val batch = new ArrayBuffer[SolrInputDocument]()
       var numDocs: Long = 0
       while (solrInputDocumentIterator.hasNext) {
