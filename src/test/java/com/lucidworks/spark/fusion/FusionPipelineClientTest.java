@@ -135,15 +135,15 @@ public class FusionPipelineClientTest {
     if (useWireMockRule) {
       // mock out the Pipeline API
       //  stubFor(post(urlEqualTo("/api/apollo/index-pipelines")).willReturn(aResponse().withStatus(200)));
-      stubFor(post(urlEqualTo(fusionPipelineUrlWithoutHostAndPort)).willReturn(aResponse().withStatus(200)));
+      stubFor(post(urlEqualTo(fusionPipelineUrlWithoutHostAndPort+"?echo=false")).willReturn(aResponse().withStatus(200)));
 
       stubFor(get(urlEqualTo(fusionProxyBaseUrl + fusionIndexingPipelineUrlExtension)).willReturn(aResponse().withStatus(200).withBody("hello")));
 
       // a bad node in the mix ... to test FusionPipelineClient error handling
-      stubFor(post(urlEqualTo(badPath)).willReturn(aResponse().withStatus(500)));
+      stubFor(post(urlEqualTo(badPath+"?echo=false")).willReturn(aResponse().withStatus(500)));
 
       // another bad node in the mix which produces un-authorized errors... to test FusionPipelineClient error handling
-      stubFor(post(urlEqualTo(unauthPath)).willReturn(aResponse().withStatus(401)));
+      stubFor(post(urlEqualTo(unauthPath+"?echo=false")).willReturn(aResponse().withStatus(401)));
 
       // mock out the Session API
       stubFor(post(urlEqualTo("/api/session?realmName=" + fusionRealm)).willReturn(aResponse().withStatus(200)));
