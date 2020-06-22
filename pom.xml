@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>3.9.0-SNAPSHOT</version>
+  <version>4.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -36,14 +36,14 @@
   </distributionManagement>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
-    <spark.version>2.4.5</spark.version>
+    <java.version>11</java.version>
+    <spark.version>3.0.0</spark.version>
     <solr.version>8.4.1</solr.version>
     <hadoop.version>2.7.5</hadoop.version>
-    <fasterxml.version>2.10.1</fasterxml.version>
-    <scala.version>2.11.12</scala.version>
-    <scala.binary.version>2.11</scala.binary.version>
-    <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
+    <fasterxml.version>2.11.0</fasterxml.version>
+    <scala.version>2.12.10</scala.version>
+    <scala.binary.version>2.12</scala.binary.version>
+    <scoverage.plugin.version>1.4.1</scoverage.plugin.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
   <pluginRepositories>
@@ -78,7 +78,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>2.10.3</version>
+            <version>3.2.0</version>
             <executions>
               <execution>
                 <id>attach-javadocs</id>
@@ -98,7 +98,7 @@
                 <phase>verify</phase>
                 <goals>
                   <goal>sign</goal>
-	        </goals>
+	              </goals>
                 <configuration>
                   <gpgArguments>
                     <arg>--pinentry-mode</arg>
@@ -121,7 +121,7 @@
           <plugin>
             <groupId>org.jacoco</groupId>
             <artifactId>jacoco-maven-plugin</artifactId>
-            <version>0.7.5.201505241946</version>
+            <version>0.8.5</version>
             <configuration>
               <excludes>
               <exclude>com/lucidworks/spark/example/**</exclude>
@@ -156,9 +156,6 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-surefire-plugin</artifactId>
             <version>2.18.1</version>
-            <configuration>
-              <argLine>${argLine} -XX:MaxPermSize=${MaxPermSize}</argLine>
-            </configuration>
           </plugin>
         </plugins>
       </build>
@@ -169,7 +166,7 @@
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.2.2</version>
+        <version>4.4.0</version>
         <executions>
           <execution>
             <id>eclipse-add-source</id>
@@ -213,7 +210,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.0</version>
+        <version>3.8.1</version>
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
@@ -222,16 +219,13 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>versions-maven-plugin</artifactId>
-        <version>2.3</version>
+        <version>2.7</version>
       </plugin>
       <!-- Surefire runs Java tests -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.18.1</version>
-        <configuration>
-          <argLine> -XX:MaxPermSize=${MaxPermSize}</argLine>
-        </configuration>
+        <version>2.22.2</version>
       </plugin>
       <!-- ScalaTest runs Scala tests -->
       <plugin>
@@ -262,7 +256,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.1.0</version>
+        <version>3.2.4</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -372,7 +366,7 @@
                 <relocation>
                   <pattern>org.apache.http</pattern>
                   <shadedPattern>shaded.apache.http</shadedPattern>
-		</relocation>
+		            </relocation>
               </relocations>
             </configuration>
           </execution>
@@ -446,7 +440,7 @@
     <dependency>
       <groupId>com.esotericsoftware</groupId>
       <artifactId>kryo-shaded</artifactId>
-      <version>3.0.3</version>
+      <version>4.0.2</version>
       <scope>compile</scope>
     </dependency>
     <dependency>
@@ -461,19 +455,14 @@
       <version>${spark.version}</version>
     </dependency>
     <dependency>
-        <groupId>org.apache.bahir</groupId>
-        <artifactId>spark-streaming-twitter_${scala.binary.version}</artifactId>
-        <version>2.0.1</version>
-    </dependency>
-    <dependency>
       <groupId>commons-cli</groupId>
       <artifactId>commons-cli</artifactId>
-      <version>1.3.1</version>
+      <version>1.4</version>
     </dependency>
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
-      <version>2.5</version>
+      <version>2.7</version>
     </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>
@@ -594,12 +583,12 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
-      <version>3.5</version>
+      <version>3.9</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.12</version>
+      <version>4.13</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -639,7 +628,7 @@
     <dependency>
       <groupId>org.scalatest</groupId>
       <artifactId>scalatest_${scala.binary.version}</artifactId>
-      <version>3.0.3</version>
+      <version>3.0.8</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -650,19 +639,20 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>1.19</version>
+      <version>1.20</version>
     </dependency>
-    <dependency> <!-- optional dependency of joda-time that is mandatory in Scala -->
+    <!-- optional dependency of joda-time that is mandatory in Scala -->
+    <!--
+    <dependency>
       <groupId>org.joda</groupId>
       <artifactId>joda-convert</artifactId>
-      <version>1.2</version>
+      <version>2.2.1</version>
     </dependency>
+    -->
     <dependency>
-      <groupId>com.github.tomakehurst</groupId>
-      <artifactId>wiremock</artifactId>
-      <version>1.56</version>
-      <!-- Include everything below here if you have dependency conflicts -->
-      <classifier>standalone</classifier>
+        <groupId>com.github.tomakehurst</groupId>
+        <artifactId>wiremock-standalone</artifactId>
+        <version>2.26.3</version>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>

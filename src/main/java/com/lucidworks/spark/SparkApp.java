@@ -23,8 +23,6 @@ import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
 import com.lucidworks.spark.example.query.*;
-import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
-import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
@@ -241,14 +239,10 @@ public class SparkApp implements Serializable {
 
     streamProcType = streamProcType.trim();
 
-    if ("twitter-to-solr".equals(streamProcType))
-      return new TwitterToSolrStreamProcessor();
-    else if ("word-count".equals(streamProcType))
+    if ("word-count".equals(streamProcType))
       return new WordCount();
     else if ("term-vectors".equals(streamProcType))
       return new ReadTermVectors();
-    else if ("docfilter".equals(streamProcType))
-      return new DocumentFilteringStreamProcessor();
     else if ("hdfs-to-solr".equals(streamProcType))
       return new HdfsToSolrRDDProcessor();
     else if ("logs2solr".equals(streamProcType))
@@ -278,10 +272,8 @@ public class SparkApp implements Serializable {
 
   private static void displayProcessorOptions(PrintStream out) throws Exception {
     HelpFormatter formatter = new HelpFormatter();
-    formatter.printHelp("twitter-to-solr", getProcessorOptions(new TwitterToSolrStreamProcessor()));
     formatter.printHelp("word-count", getProcessorOptions(new WordCount()));
     formatter.printHelp("term-vectors", getProcessorOptions(new ReadTermVectors()));
-    formatter.printHelp("docfilter", getProcessorOptions(new DocumentFilteringStreamProcessor()));
     formatter.printHelp("hdfs-to-solr", getProcessorOptions(new HdfsToSolrRDDProcessor()));
     formatter.printHelp("logs2solr", getProcessorOptions(new Logs2SolrRDDProcessor()));
     formatter.printHelp("query-solr-benchmark", getProcessorOptions(new QueryBenchmark()));

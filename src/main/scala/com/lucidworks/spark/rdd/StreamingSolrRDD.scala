@@ -90,9 +90,10 @@ class StreamingSolrRDD(
         query.setRequestHandler(solrRequestHandler)
         logger.debug(s"Using export handler to fetch documents from ${partition.preferredReplica} for query: ${partition.query}")
         val resultsIterator = getExportHandlerBasedIterator(url, query, partition.numWorkers, partition.workerId)
-        context.addTaskCompletionListener { (context) =>
-          logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
-        }
+        // TODO: Spark3
+        //context.addTaskCompletionListener { (context) =>
+        //  logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
+        //}
         resultsIterator
       case partition: AnyRef => throw new Exception("Unknown partition type '" + partition.getClass)
     }
