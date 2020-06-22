@@ -5,7 +5,6 @@ import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.SaveMode._
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
-import org.apache.spark.sql.functions._
 
 /**
  This class is used to test the PartitionByTimeQuerySupport class
