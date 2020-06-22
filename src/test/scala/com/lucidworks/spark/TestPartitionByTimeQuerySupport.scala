@@ -1,7 +1,5 @@
 package com.lucidworks.spark
 
-import java.util.TimeZone
-
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
 import org.apache.solr.client.solrj.SolrQuery
 import org.apache.spark.sql.SaveMode._
@@ -24,16 +22,16 @@ class TestPartitionByTimeQuerySupport extends TestSuiteBuilder {
     SolrCloudUtil.buildCollection(zkHost, collection3Name, null, 1, cloudClient, sc)
     try {
       val jsonFileLocation = "src/test/resources/test-data/events.json"
-      val jsonDF = sparkSession.read.json(jsonFileLocation)
+      val jsonDF = sparkSession.read.option("inferTimestamp", false).json(jsonFileLocation)
       assert(jsonDF.count == 100)
 
-      var col1DF=jsonDF.filter(jsonDF("timestamp_tdt") >= to_timestamp(lit("2014-11-24T17:30:00Z")) && jsonDF("timestamp_tdt") < to_timestamp(lit("2014-11-24T17:31:00Z")))
+      var col1DF=jsonDF.filter(jsonDF("timestamp_tdt") >="2014-11-24T17:30" && jsonDF("timestamp_tdt") < "2014-11-24T17:31")
       assert(col1DF.count == 32)
       col1DF=col1DF.drop(col1DF("_version_"))
-      var col2DF=jsonDF.filter(jsonDF("timestamp_tdt") >= to_timestamp(lit("2014-11-24T17:31:00Z")) && jsonDF("timestamp_tdt") < to_timestamp(lit("2014-11-24T17:32:00Z")))
+      var col2DF=jsonDF.filter(jsonDF("timestamp_tdt") >="2014-11-24T17:31" && jsonDF("timestamp_tdt") < "2014-11-24T17:32")
       assert(col2DF.count == 31)
       col2DF=col2DF.drop(col2DF("_version_"))
-      var col3DF=jsonDF.filter(jsonDF("timestamp_tdt") >= to_timestamp(lit("2014-11-24T17:33:00Z")) && jsonDF("timestamp_tdt") < to_timestamp(lit("2014-11-24T17:34:00Z")))
+      var col3DF=jsonDF.filter(jsonDF("timestamp_tdt") >="2014-11-24T17:33" && jsonDF("timestamp_tdt") < "2014-11-24T17:34")
       assert(col3DF.count == 37)
       col3DF=col3DF.drop(col3DF("_version_"))
 
