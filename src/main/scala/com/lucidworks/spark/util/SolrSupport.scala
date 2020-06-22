@@ -5,22 +5,18 @@ import java.lang.reflect.Modifier
 import java.net.{ConnectException, InetAddress, SocketException, URL}
 import java.nio.file.{Files, Paths}
 import java.util.Date
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 import com.google.common.cache._
-import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
 import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.http.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.UpdateRequest
-import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
+import org.apache.solr.client.solrj.{SolrClient, SolrQuery}
 import org.apache.solr.common.cloud._
-import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
+import org.apache.solr.common.{SolrException, SolrInputDocument}
 import org.apache.solr.common.params.ModifiableSolrParams
 import org.apache.solr.common.util.SimpleOrderedMap
 import org.apache.spark.rdd.RDD
@@ -566,70 +562,6 @@ object SolrSupport extends LazyLogging {
     else if (classOf[Date] == clazz) return Some("_tdt")
     logger.debug("failed to map class '" + clazz + "' to a known dynamic type")
     None
-  }
-
-  def filterDocuments(
-      filterContext: DocFilterContext,
-      zkHost: String,
-      collection: String,
-      docs: DStream[SolrInputDocument]): DStream[SolrInputDocument] = {
-    val partitionIndex = new AtomicInteger(0)
-    val idFieldName = filterContext.getDocIdFieldName
-
-    docs.mapPartitions(solrInputDocumentIterator => {
-      val startNano: Long = System.nanoTime()
-      val partitionId: Int = partitionIndex.incrementAndGet()
-
-      val partitionFq: String = "docfilterid_i:" + partitionId
-      // TODO: Can this be used concurrently? probably better to have each partition check it out from a pool
-      val solr = EmbeddedSolrServerFactory.singleton.getEmbeddedSolrServer(zkHost, collection)
-
-      // index all docs in this partition, then match queries
-      var numDocs: Int = 0
-      val inputDocs: mutable.Map[String, SolrInputDocument] = new mutable.HashMap[String, SolrInputDocument]
-      while (solrInputDocumentIterator.hasNext) {
-        numDocs += 1
-        val doc: SolrInputDocument = solrInputDocumentIterator.next()
-        doc.setField("docfilterid_i", partitionId)
-        solr.add(doc)
-        inputDocs.put(doc.getFieldValue(idFieldName).asInstanceOf[String], doc)
-      }
-      solr.commit
-
-      for (q: SolrQuery <- filterContext.getQueries) {
-        val query = q.getCopy
-        query.setFields(idFieldName)
-        query.setRows(inputDocs.size)
-        query.addFilterQuery(partitionFq)
-
-        var queryResponse: Option[QueryResponse] = None
-        try {
-          queryResponse = Some(solr.query(query))
-        }
-        catch {
-          case e: SolrServerException =>
-            throw new RuntimeException(e)
-        }
-
-        if (queryResponse.isDefined) {
-          for (doc: SolrDocument  <- queryResponse.get.getResults) {
-            val docId: String = doc.getFirstValue(idFieldName).asInstanceOf[String]
-            val inputDoc = inputDocs.get(docId)
-            if (inputDoc.isDefined) filterContext.onMatch(q, inputDoc.get)
-          }
-
-          solr.deleteByQuery(partitionFq, 100)
-          val durationNano: Long = System.nanoTime - startNano
-
-          logger.debug("Partition " + partitionId + " took " + TimeUnit.MILLISECONDS.convert(durationNano, TimeUnit.NANOSECONDS) + "ms to process " + numDocs + " docs")
-          for (inputDoc <- inputDocs.values) {
-            inputDoc.removeField("docfilterid_i")
-          }
-        }
-      }
-
-      inputDocs.valuesIterator
-    })
   }
 
   def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
