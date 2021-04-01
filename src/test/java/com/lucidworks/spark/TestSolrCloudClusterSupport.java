@@ -94,7 +94,9 @@ public class TestSolrCloudClusterSupport {
     cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
             testWorkingDir.toPath(), solrXmlContents, extraServlets, null);
 
-    cloudSolrServer = new CloudSolrClient.Builder().withZkHost(cluster.getZkServer().getZkAddress()).sendUpdatesOnlyToShardLeaders().build();
+    final List<String> zkHosts = Collections.singletonList(cluster.getZkServer().getZkAddress());
+    final Optional<String> zkChroot = Optional.empty();
+    cloudSolrServer = new CloudSolrClient.Builder(zkHosts, zkChroot).sendUpdatesOnlyToShardLeaders().build();
     cloudSolrServer.connect();
 
     assertTrue(!cloudSolrServer.getZkStateReader().getClusterState().getLiveNodes().isEmpty());
