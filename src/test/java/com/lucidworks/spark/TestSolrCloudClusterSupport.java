@@ -24,7 +24,6 @@ import org.junit.BeforeClass;
 import org.junit.AfterClass;
 import org.noggit.CharArr;
 import org.noggit.JSONWriter;
-import org.restlet.ext.servlet.ServerServlet;
 import org.scalatest.FunSuite;
 
 import static org.junit.Assert.assertNotNull;
@@ -87,9 +86,6 @@ public class TestSolrCloudClusterSupport {
 
     // need the schema stuff
     final SortedMap<ServletHolder,String> extraServlets = new TreeMap<ServletHolder,String>();
-    final ServletHolder solrSchemaRestApi = new ServletHolder("SolrSchemaRestApi", ServerServlet.class);
-    solrSchemaRestApi.setInitParameter("org.restlet.application", "org.apache.solr.rest.SolrSchemaRestApi");
-    extraServlets.put(solrSchemaRestApi, "/schema/*");
 
     cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
             testWorkingDir.toPath(), solrXmlContents, extraServlets, null);
