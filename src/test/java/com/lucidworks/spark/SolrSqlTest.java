@@ -43,7 +43,7 @@ public class SolrSqlTest extends RDDProcessorTestBase {
 
       {
         Dataset eventsim = sparkSession.read().format("solr").options(options).option(SOLR_DOC_VALUES(), "true").load();
-        eventsim.registerTempTable("eventsim");
+        eventsim.createOrReplaceTempView("eventsim");
 
         Dataset records = sparkSession.sql("SELECT * FROM eventsim");
         StructType schema = records.schema();
@@ -66,7 +66,7 @@ public class SolrSqlTest extends RDDProcessorTestBase {
       // Filter using SQL syntax and escape field names
       {
         Dataset eventsim = sparkSession.read().format("solr").options(options).load();
-        eventsim.registerTempTable("eventsim");
+        eventsim.createOrReplaceTempView("eventsim");
 
         Dataset records = sparkSession.sql("SELECT `userId`, `ts` from eventsim WHERE `gender` = 'M'");
         assert records.count() == 567;

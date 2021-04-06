@@ -238,7 +238,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
         options.put(SOLR_COLLECTION_PARAM(), testCollection);
 
         Dataset df = sparkSession.read().format("solr").options(options).load();
-        df.registerTempTable("events");
+        df.createOrReplaceTempView("events");
         sparkSession.sql("SELECT * FROM events").take(1);
 
         sparkSession.sql("SELECT `params.title_s` from events").take(2);
@@ -331,7 +331,7 @@ public class SolrRelationTest extends RDDProcessorTestBase {
 
       Dataset df = sparkSession.read().format("solr").options(options).load();
       df.show();
-      df.registerTempTable(testCollection);
+      df.createOrReplaceTempView(testCollection);
       validateSchema(df);
       //df.show();
 
