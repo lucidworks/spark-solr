@@ -673,7 +673,7 @@ class SolrRelation(
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
     val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
-    val batchSizeType: String = if (conf.batchSizeType.isDefined) conf.batchSizeType.get else "num_docs"
+    val batchSizeType: BatchSizeType = if (conf.batchSizeType.isDefined) BatchSizeType.valueOf(conf.batchSizeType.get) else BatchSizeType.NUM_DOCS
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
