@@ -65,12 +65,14 @@ public class SparkApp implements Serializable {
     protected String zkHost;
     protected String collection;
     protected int batchSize;
+    protected String batchSizeType;
     
     public int run(SparkConf conf, CommandLine cli) throws Exception {
 
       this.zkHost = cli.getOptionValue("zkHost", "localhost:9983");
       this.collection = cli.getOptionValue("collection", "collection1");
       this.batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
+      this.batchSizeType = cli.getOptionValue("batchSizeType", "num_docs");
 
       // Create a local StreamingContext with two working thread and batch interval
       int batchIntervalSecs = Integer.parseInt(cli.getOptionValue("batchInterval", "1"));

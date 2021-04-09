@@ -101,7 +101,7 @@ public class DocumentFilteringStreamProcessor extends SparkApp.StreamProcessor {
       SolrSupport.filterDocuments(docFilterContext, zkHost, filterCollection, docs.dstream());
 
     // now index the enriched docs into Solr (or do whatever after the matching process runs)
-    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, enriched);
+    SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, batchSizeType, enriched);
   }
 
   protected DocFilterContext loadDocFilterContext(JavaStreamingContext jssc, CommandLine cli)
