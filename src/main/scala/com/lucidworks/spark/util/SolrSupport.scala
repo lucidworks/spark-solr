@@ -12,7 +12,7 @@ import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
-import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
+import com.lucidworks.spark.{BatchSizeType, LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.commons.lang.StringUtils
 import org.apache.http.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
@@ -265,7 +265,7 @@ object SolrSupport extends LazyLogging {
       zkHost: String,
       collection: String,
       batchSize: Int,
-      batchSizeType: String,
+      batchSizeType: BatchSizeType,
       docs: DStream[SolrInputDocument]): Unit =
     docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, batchSizeType, rdd))
 
@@ -310,13 +310,13 @@ object SolrSupport extends LazyLogging {
       zkHost: String,
       collection: String,
       batchSize: Int,
-      batchSizeType: String,
+      batchSizeType: BatchSizeType,
       rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, batchSizeType, rdd, None)
 
   def indexDocs(zkHost: String,
                 collection: String,
                 batchSize: Int,
-                batchSizeType: String,
+                batchSizeType: BatchSizeType,
                 rdd: RDD[SolrInputDocument],
                 commitWithin: Option[Int],
                 accumulator: Option[SparkSolrAccumulator] = None): Unit = {
@@ -338,7 +338,7 @@ object SolrSupport extends LazyLogging {
           numBytesInBatch = 0L
         }
         batch += doc
-        numBytesInBatch += numBytesInBatch
+        numBytesInBatch += nextDocSize
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
@@ -354,11 +354,12 @@ object SolrSupport extends LazyLogging {
                   numBytesInBatch: Long,
                   nextDocSize: Long,
                   batchSize: Int,
-                  batchSizeType: String): Boolean = {
-    if (StringUtils.equalsIgnoreCase(batchSizeType, "num_docs")) {
-      return numDocsInBatch > 0 && numDocsInBatch + 1 >= batchSize
+                  batchSizeType: BatchSizeType): Boolean = {
+    if (batchSizeType == BatchSizeType.NUM_BYTES) {
+      return numDocsInBatch > 0 && numBytesInBatch + nextDocSize >= batchSize
     }
-    numDocsInBatch > 0 && numBytesInBatch + nextDocSize >= batchSize;
+    // Else assume BatchSizeType is NUM_DOCS
+    numDocsInBatch > 0 && numDocsInBatch + 1 >= batchSize
   }
 
   def sendBatchToSolrWithRetry(

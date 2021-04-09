@@ -670,7 +670,7 @@ class SolrRelation(
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
-    val batchSizeType: String = if (conf.batchSizeType.isDefined) conf.batchSizeType.get else "num_docs"
+    val batchSizeType: BatchSizeType = if (conf.batchSizeType.isDefined) BatchSizeType.valueOf(conf.batchSizeType.get) else BatchSizeType.NUM_DOCS
 
     // Convert RDD of rows in to SolrInputDocuments
     val uk = SolrQuerySupport.getUniqueKey(zkHost, collectionId)
