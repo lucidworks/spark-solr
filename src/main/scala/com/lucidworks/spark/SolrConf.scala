@@ -101,6 +101,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def batchSize: Option[Int] =
     if (config.get(BATCH_SIZE).isDefined) Some(config(BATCH_SIZE).toInt) else None
 
+  def batchSizeType: Option[String] = config.get(BATCH_SIZE_TYPE)
+
   def useCursorMarks: Option[Boolean] =
     if (config.get(USE_CURSOR_MARKS).isDefined) Some(config(USE_CURSOR_MARKS).toBoolean) else None
 
@@ -276,6 +278,9 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (batchSize.isDefined) {
       sb ++= s", ${BATCH_SIZE}=${batchSize.get}"
+    }
+    if (batchSizeType.isDefined) {
+      sb ++= s", ${BATCH_SIZE_TYPE}=${batchSizeType.get}"
     }
     if (getChildDocFieldName.isDefined) {
       sb ++= s", ${CHILD_DOC_FIELDNAME}=${getChildDocFieldName.get}"

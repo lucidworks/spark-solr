@@ -8,13 +8,14 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
-
 import com.google.common.cache._
 import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.ShardInfo
 import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.commons.httpclient.NoHttpResponseException
+import org.apache.commons.lang.StringUtils
+import org.apache.http.NoHttpResponseException
 import org.apache.solr.client.solrj.impl._
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -259,8 +260,9 @@ object SolrSupport extends LazyLogging {
       zkHost: String,
       collection: String,
       batchSize: Int,
+      batchSizeType: String,
       docs: DStream[SolrInputDocument]): Unit =
-    docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, rdd))
+    docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, batchSizeType, rdd))
 
   def sendDStreamOfDocsToFusion(
       fusionUrl: String,
@@ -303,30 +305,35 @@ object SolrSupport extends LazyLogging {
       zkHost: String,
       collection: String,
       batchSize: Int,
-      rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, rdd, None)
+      batchSizeType: String,
+      rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, batchSizeType, rdd, None)
 
-  def indexDocs(
-      zkHost: String,
-      collection: String,
-      batchSize: Int,
-      rdd: RDD[SolrInputDocument],
-      commitWithin: Option[Int],
-      accumulator: Option[SparkSolrAccumulator] = None): Unit = {
+  def indexDocs(zkHost: String,
+                collection: String,
+                batchSize: Int,
+                batchSizeType: String,
+                rdd: RDD[SolrInputDocument],
+                commitWithin: Option[Int],
+                accumulator: Option[SparkSolrAccumulator] = None): Unit = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
       val batch = new ArrayBuffer[SolrInputDocument]()
       var numDocs: Long = 0
+      var numBytesInBatch: Long = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
-        batch += doc
-        if (batch.length >= batchSize) {
+        val nextDocSize = ObjectSizeCalculator.getObjectSize(numBytesInBatch): Long
+        if (wouldBatchBeFull(batch.size, numBytesInBatch, nextDocSize, batchSize, batchSizeType)) {
           numDocs += batch.length
           if (accumulator.isDefined)
             accumulator.get.add(batch.length.toLong)
           sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
           batch.clear
+          numBytesInBatch = 0L
         }
+        batch += doc
+        numBytesInBatch += numBytesInBatch
       }
       if (batch.nonEmpty) {
         numDocs += batch.length
@@ -336,6 +343,17 @@ object SolrSupport extends LazyLogging {
         batch.clear
       }
     })
+  }
+
+  def wouldBatchBeFull(numDocsInBatch: Int,
+                  numBytesInBatch: Long,
+                  nextDocSize: Long,
+                  batchSize: Int,
+                  batchSizeType: String): Boolean = {
+    if (StringUtils.equalsIgnoreCase(batchSizeType, "num_docs")) {
+      return numDocsInBatch > 0 && numDocsInBatch + 1 >= batchSize
+    }
+    numDocsInBatch > 0 && numBytesInBatch + nextDocSize >= batchSize;
   }
 
   def sendBatchToSolrWithRetry(

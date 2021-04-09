@@ -130,7 +130,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
         return doc;
       }
     });
-    SolrSupport.indexDocs(zkHost, collection, 1000, docs.rdd());
+    SolrSupport.indexDocs(zkHost, collection, 1000, "num_docs", docs.rdd());
     return inputDocs.length;
   }
 }

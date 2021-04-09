@@ -673,6 +673,7 @@ class SolrRelation(
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
     val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
+    val batchSizeType: String = if (conf.batchSizeType.isDefined) conf.batchSizeType.get else "num_docs"
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
@@ -734,7 +735,7 @@ class SolrRelation(
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
     sparkSession.sparkContext.register(acc, accName)
     SparkSolrAccumulatorContext.add(accName, acc.id)
-    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin, Some(acc))
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, batchSizeType, docs, conf.commitWithin, Some(acc))
     logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }
 

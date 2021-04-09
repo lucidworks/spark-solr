@@ -63,7 +63,7 @@ public class BasicIndexingTest extends StreamProcessorTestBase {
 
     // Send to Solr
     String zkHost = cluster.getZkServer().getZkAddress();
-    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, docs.dstream());
+    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, "num_docs", docs.dstream());
 
     // Actually start processing the stream here ...
     jssc.start();
