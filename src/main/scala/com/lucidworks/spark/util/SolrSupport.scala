@@ -1,5 +1,23 @@
 package com.lucidworks.spark.util
 
+import com.google.common.cache._
+import com.lucidworks.spark.filter.DocFilterContext
+import com.lucidworks.spark.fusion.FusionPipelineClient
+import com.lucidworks.spark.util.SolrSupport.ShardInfo
+import com.lucidworks.spark._
+import org.apache.commons.httpclient.NoHttpResponseException
+import org.apache.solr.client.solrj.impl._
+import org.apache.solr.client.solrj.request.UpdateRequest
+import org.apache.solr.client.solrj.response.QueryResponse
+import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
+import org.apache.solr.common.cloud._
+import org.apache.solr.common.params.ModifiableSolrParams
+import org.apache.solr.common.util.SimpleOrderedMap
+import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.streaming.dstream.DStream
+import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
+
 import java.beans.{IntrospectionException, Introspector, PropertyDescriptor}
 import java.lang.reflect.Modifier
 import java.net.{ConnectException, InetAddress, SocketException, URL}
@@ -8,28 +26,6 @@ import java.util.Date
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
-import com.google.common.cache._
-import com.lucidworks.spark.filter.DocFilterContext
-import com.lucidworks.spark.fusion.FusionPipelineClient
-import com.lucidworks.spark.util.SolrSupport.ShardInfo
-import com.lucidworks.spark.{LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
-import org.apache.commons.httpclient.NoHttpResponseException
-import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
-import com.lucidworks.spark.{BatchSizeType, LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
-import org.apache.commons.lang.StringUtils
-import org.apache.http.NoHttpResponseException
-import org.apache.solr.client.solrj.impl._
-import org.apache.solr.client.solrj.request.UpdateRequest
-import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
-import org.apache.solr.common.cloud._
-import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
-import org.apache.solr.common.params.ModifiableSolrParams
-import org.apache.solr.common.util.SimpleOrderedMap
-import org.apache.spark.rdd.RDD
-import org.apache.spark.streaming.dstream.DStream
-import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
-
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
