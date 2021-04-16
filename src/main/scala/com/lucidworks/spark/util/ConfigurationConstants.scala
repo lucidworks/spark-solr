@@ -26,6 +26,9 @@ object ConfigurationConstants {
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
   val BATCH_SIZE: String = "batch_size"
+  val RETRY_BACKOFF_DELAY_MS: String = "retry_backoff_delay_ms"
+  val RETRY_MAX_DELAY_MS: String = "retry_max_delay_ms"
+  val RETRY_MAX_DURATION_MS: String = "retry_max_duration_ms"
   val GENERATE_UNIQUE_KEY: String = "gen_uniq_key"
   val GENERATE_UNIQUE_CHILD_KEY: String = "gen_uniq_child_key"
   val COMMIT_WITHIN_MILLI_SECS: String = "commit_within"

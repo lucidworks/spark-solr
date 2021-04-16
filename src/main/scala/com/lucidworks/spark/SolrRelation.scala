@@ -670,6 +670,9 @@ class SolrRelation(
     }
 
     val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
+    val retryBackoffDelayMs: Long = if (conf.retryBackoffDelayMs.isDefined) conf.retryBackoffDelayMs.get else 2500
+    val retryMaxDelayMs: Long = if (conf.retryMaxDelayMs.isDefined) conf.retryMaxDelayMs.get else 10000
+    val retryMaxDurationMs: Long = if (conf.retryMaxDurationMs.isDefined) conf.retryMaxDurationMs.get else 60000
 
     // Convert RDD of rows in to SolrInputDocuments
     val uk = SolrQuerySupport.getUniqueKey(zkHost, collectionId)
@@ -680,7 +683,7 @@ class SolrRelation(
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
     sparkSession.sparkContext.register(acc, accName)
     SparkSolrAccumulatorContext.add(accName, acc.id)
-    SolrSupport.indexDocs(zkHost, collectionId, batchSize, docs, conf.commitWithin, Some(acc))
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs, docs, conf.commitWithin, Some(acc))
     logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }
 

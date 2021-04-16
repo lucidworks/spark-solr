@@ -44,6 +44,7 @@
     <scala.version>2.11.12</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <scoverage.plugin.version>1.1.1</scoverage.plugin.version>
+    <jodah.retry.version>2.4.0</jodah.retry.version>
     <MaxPermSize>128m</MaxPermSize>
   </properties>
   <pluginRepositories>
@@ -513,6 +514,11 @@
           <artifactId>hadoop-hdfs-client</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>net.jodah</groupId>
+      <artifactId>failsafe</artifactId>
+      <version>${jodah.retry.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>

@@ -2,9 +2,8 @@ package com.lucidworks.spark.example.ml
 
 import java.net.URI
 import java.util.Locale
-
 import com.lucidworks.spark.{LazyLogging, SparkApp}
-import com.lucidworks.spark.util.SolrSupport
+import com.lucidworks.spark.util.{SolrRequestRetryer, SolrSupport}
 import org.apache.commons.cli.CommandLine
 import org.apache.commons.cli.Option.{builder => OptionBuilder}
 import org.apache.solr.common.SolrInputDocument
@@ -101,7 +100,7 @@ class NewsgroupsIndexer extends SparkApp.RDDProcessor with LazyLogging {
       val solrServer = SolrSupport.getCachedCloudClient(zkHost)
       val batch = ListBuffer.empty[SolrInputDocument]
       def sendBatch(): Unit = {
-        SolrSupport.sendBatchToSolr(solrServer, collection, batch.toList)
+        SolrSupport.sendBatchToSolr(solrServer, SolrRequestRetryer.defaultInstance(), collection, batch.toList)
         numDocs += batch.size
         logger.info(s"Sent $numDocs docs to Solr from $path")
         batch.clear()

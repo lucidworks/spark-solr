@@ -26,6 +26,7 @@ import com.lucidworks.spark.example.query.*;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
+import com.lucidworks.spark.util.SolrRequestRetryer;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.GnuParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -65,12 +66,18 @@ public class SparkApp implements Serializable {
     protected String zkHost;
     protected String collection;
     protected int batchSize;
-    
+    protected long retryBackoffDelayMs;
+    protected long retryMaxDelayMs;
+    protected long retryMaxDurationMs;
+
     public int run(SparkConf conf, CommandLine cli) throws Exception {
 
       this.zkHost = cli.getOptionValue("zkHost", "localhost:9983");
       this.collection = cli.getOptionValue("collection", "collection1");
       this.batchSize = Integer.parseInt(cli.getOptionValue("batchSize", "10"));
+      this.retryBackoffDelayMs = Long.parseLong(cli.getOptionValue("retryBackoffDelayMs", String.valueOf(SolrRequestRetryer.DEFAULT_MAX_BACKOFF_DELAY_MS)));
+      this.retryMaxDelayMs = Long.parseLong(cli.getOptionValue("retryMaxDelayMs", String.valueOf(SolrRequestRetryer.DEFAULT_MAX_DELAY_MS)));
+      this.retryMaxDurationMs = Long.parseLong(cli.getOptionValue("retryMaxDurationMs", String.valueOf(SolrRequestRetryer.DEFAULT_MAX_DURATION_MS)));
 
       // Create a local StreamingContext with two working thread and batch interval
       int batchIntervalSecs = Integer.parseInt(cli.getOptionValue("batchInterval", "1"));
@@ -102,6 +109,18 @@ public class SparkApp implements Serializable {
 
     public int getBatchSize() {
       return batchSize;
+    }
+
+    public long getRetryBackoffDelayMs() {
+      return retryBackoffDelayMs;
+    }
+
+    public long getRetrymaxDelayMs() {
+      return retryMaxDelayMs;
+    }
+
+    public long getRetrymaxDurationMs() {
+      return retryMaxDurationMs;
     }
 
     /**
@@ -220,6 +239,24 @@ public class SparkApp implements Serializable {
               .required(false)
               .desc("Number of docs to queue up on the client before sending to Solr; default is 10")
               .longOpt("batchSize")
+              .build(),
+      Option.builder()
+              .hasArg()
+              .required(false)
+              .desc("When doing retries - amount to backoff between retries, in milliseconds")
+              .longOpt("retryBackoffDelayMs")
+              .build(),
+      Option.builder()
+              .hasArg()
+              .required(false)
+              .desc("When doing retries - Maximum amount of delay for a single backoff, in milliseconds")
+              .longOpt("retryMaxDelayMs")
+              .build(),
+      Option.builder()
+              .hasArg()
+              .required(false)
+              .desc("When doing retries - Maximum duration of a retry attempt, in milliseconds")
+              .longOpt("retryMaxDurationMs")
               .build(),
       Option.builder()
               .hasArg()

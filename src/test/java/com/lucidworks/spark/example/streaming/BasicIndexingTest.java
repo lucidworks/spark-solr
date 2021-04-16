@@ -6,6 +6,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 import com.lucidworks.spark.StreamProcessorTestBase;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
+import com.lucidworks.spark.util.SolrRequestRetryer;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrDocument;
@@ -63,7 +64,7 @@ public class BasicIndexingTest extends StreamProcessorTestBase {
 
     // Send to Solr
     String zkHost = cluster.getZkServer().getZkAddress();
-    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, docs.dstream());
+    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, SolrRequestRetryer.DEFAULT_MAX_BACKOFF_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DURATION_MS, docs.dstream());
 
     // Actually start processing the stream here ...
     jssc.start();

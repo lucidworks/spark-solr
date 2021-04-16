@@ -69,7 +69,7 @@ public class TwitterToSolrStreamProcessor extends SparkApp.StreamProcessor {
       );
 
       // when ready, send the docs into a SolrCloud cluster
-      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, docs.dstream());
+      SolrSupport.indexDStreamOfDocs(zkHost, collection, batchSize, retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs, docs.dstream());
     }
   }
 

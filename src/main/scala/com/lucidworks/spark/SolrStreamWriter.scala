@@ -1,6 +1,6 @@
 package com.lucidworks.spark
 
-import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
+import com.lucidworks.spark.util.{SolrQuerySupport, SolrRequestRetryer, SolrSupport}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.execution.streaming.Sink
 import org.apache.spark.sql.streaming.OutputMode
@@ -68,7 +68,7 @@ class SolrStreamWriter(
 
         val solrDocs = rows.toStream.map(row => SolrRelation.convertRowToSolrInputDocument(row, solrConf, uniqueKey))
         acc.add(solrDocs.length.toLong)
-        SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, collection, solrDocs, solrConf.commitWithin)
+        SolrSupport.sendBatchToSolrWithRetry(zkhost, solrClient, SolrRequestRetryer.defaultInstance(), collection, solrDocs, solrConf.commitWithin)
         logger.info(s"Written ${solrDocs.length} documents to Solr collection $collection from batch $batchId")
         latestBatchId = batchId
       }
