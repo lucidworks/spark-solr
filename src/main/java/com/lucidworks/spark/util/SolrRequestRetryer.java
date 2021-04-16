@@ -44,7 +44,7 @@ public class SolrRequestRetryer {
                         ConnectException.class,
                         NoHttpResponseException.class,
                         SocketException.class))
-                .onRetry(retry -> log.warn("Experienced an error when doing a SolrRequest. Performing a retry: " + retry))));
+                .onRetry(retry -> log.error("Experienced an error when doing a SolrRequest. Performing a retry: " + retry))));
     }
 
     public SolrRequestRetryer(RetryPolicy<NamedList<Object>> retryPolicy) {
