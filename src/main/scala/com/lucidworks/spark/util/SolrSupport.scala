@@ -259,8 +259,11 @@ object SolrSupport extends LazyLogging {
       collection: String,
       batchSize: Int,
       batchSizeType: BatchSizeType,
+      retryBackoffDelayMs: Long,
+      retryMaxDelayMs: Long,
+      retryMaxDurationMs: Long,
       docs: DStream[SolrInputDocument]): Unit =
-    docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, batchSizeType, rdd))
+    docs.foreachRDD(rdd => indexDocs(zkHost, collection, batchSize, batchSizeType, retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs, rdd))
 
   def sendDStreamOfDocsToFusion(
       fusionUrl: String,
@@ -304,18 +307,25 @@ object SolrSupport extends LazyLogging {
       collection: String,
       batchSize: Int,
       batchSizeType: BatchSizeType,
-      rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, batchSizeType, rdd, None)
+      retryBackoffDelayMs: Long,
+      retryMaxDelayMs: Long,
+      retryMaxDurationMs: Long,
+      rdd: RDD[SolrInputDocument]): Unit = indexDocs(zkHost, collection, batchSize, batchSizeType, retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs, rdd, None)
 
   def indexDocs(zkHost: String,
                 collection: String,
                 batchSize: Int,
                 batchSizeType: BatchSizeType,
+                retryBackoffDelayMs: Long,
+                retryMaxDelayMs: Long,
+                retryMaxDurationMs: Long,
                 rdd: RDD[SolrInputDocument],
                 commitWithin: Option[Int],
                 accumulator: Option[SparkSolrAccumulator] = None): Unit = {
     //TODO: Return success or false by boolean ?
     rdd.foreachPartition(solrInputDocumentIterator => {
       val solrClient = getCachedCloudClient(zkHost)
+      val solrRequestRetryer = SolrRequestRetryer.instance(retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs)
       val batch = new ArrayBuffer[SolrInputDocument]()
       var numDocs: Long = 0
       var numBytesInBatch: Long = 0
@@ -326,7 +336,7 @@ object SolrSupport extends LazyLogging {
           numDocs += batch.length
           if (accumulator.isDefined)
             accumulator.get.add(batch.length.toLong)
-          sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
+          sendBatchToSolrWithRetry(zkHost, solrClient, solrRequestRetryer, collection, batch, commitWithin)
           batch.clear
           numBytesInBatch = 0L
         }
@@ -337,7 +347,7 @@ object SolrSupport extends LazyLogging {
         numDocs += batch.length
         if (accumulator.isDefined)
           accumulator.get.add(batch.length.toLong)
-        sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
+        sendBatchToSolrWithRetry(zkHost, solrClient, solrRequestRetryer, collection, batch, commitWithin)
         batch.clear
       }
     })
@@ -358,11 +368,12 @@ object SolrSupport extends LazyLogging {
   def sendBatchToSolrWithRetry(
       zkHost: String,
       solrClient: SolrClient,
+      solrRequestRetryer: SolrRequestRetryer,
       collection: String,
       batch: Iterable[SolrInputDocument],
       commitWithin: Option[Int]): Unit = {
     try {
-      sendBatchToSolr(solrClient, collection, batch, commitWithin)
+      sendBatchToSolr(solrClient, solrRequestRetryer, collection, batch, commitWithin)
     } catch {
       // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
       case e : Exception =>
@@ -371,16 +382,17 @@ object SolrSupport extends LazyLogging {
             logger.info("Got an exception with message '" + e1.getMessage +  "'.  Resetting the cached solrClient")
             CacheCloudSolrClient.cache.invalidate(zkHost)
             val newClient = SolrSupport.getCachedCloudClient(zkHost)
-            sendBatchToSolr(newClient, collection, batch, commitWithin)
+            sendBatchToSolr(newClient, solrRequestRetryer, collection, batch, commitWithin)
         }
     }
   }
 
-  def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit =
-    sendBatchToSolr(solrClient, collection, batch, None)
+  def sendBatchToSolr(solrClient: SolrClient, solrRequestRetryer: SolrRequestRetryer, collection: String, batch: Iterable[SolrInputDocument]): Unit =
+    sendBatchToSolr(solrClient, solrRequestRetryer, collection, batch, None)
 
   def sendBatchToSolr(
       solrClient: SolrClient,
+      solrRequestRetryer: SolrRequestRetryer,
       collection: String,
       batch: Iterable[SolrInputDocument],
       commitWithin: Option[Int]): Unit = {
@@ -397,37 +409,16 @@ object SolrSupport extends LazyLogging {
     req.add(asJavaCollection(batch))
 
     try {
-      solrClient.request(req)
+      solrRequestRetryer.request(solrClient, req)
       val timeTaken = (System.currentTimeMillis() - initialTime)/1000.0
       logger.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents")
     } catch {
       case e: Exception =>
-        if (shouldRetry(e)) {
-          logger.error("Send batch to collection " + collection + " failed due to " + e + " ; will retry ...")
-          try {
-            Thread.sleep(2000)
-          } catch {
-            case ie: InterruptedException => Thread.interrupted()
-          }
-
-          try {
-            solrClient.request(req)
-          } catch {
-            case ex: Exception =>
-              logger.error("Send batch to collection " + collection + " failed due to: " + e, e)
-              ex match {
-                case re: RuntimeException => throw re
-                case e: Exception => throw new RuntimeException(e)
-              }
-          }
-        } else {
-          logger.error("Send batch to collection " + collection + " failed due to: " + e, e)
-          e match {
-            case re: RuntimeException => throw re
-            case ex: Exception => throw new RuntimeException(ex)
-          }
+        logger.error("Send batch to collection " + collection + " failed due to: " + e, e)
+        e match {
+          case re: RuntimeException => throw re
+          case ex: Exception => throw new RuntimeException(ex)
         }
-
     }
 
   }

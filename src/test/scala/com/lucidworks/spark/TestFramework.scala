@@ -172,7 +172,7 @@ object MovieLensUtil {
       .limit(10000)
       .write
       .format("solr")
-      .options(Map("zkhost" -> zkhost, "collection" -> s"movielens_ratings_$uuid", "batch_size" -> "10000"))
+      .options(Map("zkhost" -> zkhost, "collection" -> s"movielens_ratings_$uuid", "batch_size" -> "10000", "retry_backoff_delay_ms" -> "2000", "retry_max_delay_ms" -> "5000", "retry_max_duration_ms" -> "30000"))
       .save
   }
 }

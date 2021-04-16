@@ -670,10 +670,13 @@ class SolrRelation(
       SolrRelationUtil.setAutoSoftCommit(zkHost, collectionId, softAutoCommitMs)
     }
 
-    val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val generateUniqKey: Boolean = conf.genUniqKey.getOrElse(false)
     val generateUniqChildKey: Boolean = conf.genUniqChildKey.getOrElse(false)
+    val batchSize: Int = if (conf.batchSize.isDefined) conf.batchSize.get else 1000
     val batchSizeType: BatchSizeType = if (conf.batchSizeType.isDefined) BatchSizeType.valueOf(conf.batchSizeType.get) else BatchSizeType.NUM_DOCS
+    val retryBackoffDelayMs: Long = if (conf.retryBackoffDelayMs.isDefined) conf.retryBackoffDelayMs.get else 2500
+    val retryMaxDelayMs: Long = if (conf.retryMaxDelayMs.isDefined) conf.retryMaxDelayMs.get else 10000
+    val retryMaxDurationMs: Long = if (conf.retryMaxDurationMs.isDefined) conf.retryMaxDurationMs.get else 60000
 
     // Convert RDD of rows in to SolrInputDocuments
     val docs = df.rdd.map(row => {
@@ -735,7 +738,7 @@ class SolrRelation(
     val accName = if (conf.getAccumulatorName.isDefined) conf.getAccumulatorName.get else "Records Written"
     sparkSession.sparkContext.register(acc, accName)
     SparkSolrAccumulatorContext.add(accName, acc.id)
-    SolrSupport.indexDocs(zkHost, collectionId, batchSize, batchSizeType, docs, conf.commitWithin, Some(acc))
+    SolrSupport.indexDocs(zkHost, collectionId, batchSize, batchSizeType, retryBackoffDelayMs, retryMaxDelayMs, retryMaxDurationMs, docs, conf.commitWithin, Some(acc))
     logger.info("Written {} documents to Solr collection {}", acc.value, collectionId)
   }
 

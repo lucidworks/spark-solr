@@ -1,6 +1,7 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.rdd.SolrJavaRDD;
+import com.lucidworks.spark.util.SolrRequestRetryer;
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
@@ -128,7 +129,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
         return doc;
       }
     });
-    SolrSupport.indexDocs(zkHost, collection, batchSize, batchSizeType, docs.rdd());
+    SolrSupport.indexDocs(zkHost, collection, batchSize, batchSizeType, SolrRequestRetryer.DEFAULT_MAX_BACKOFF_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DURATION_MS, docs.rdd());
     return inputDocs.length;
   }
 }

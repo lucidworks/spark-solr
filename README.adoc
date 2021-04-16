@@ -308,6 +308,30 @@ Usage: `option("batch_size", "10000")`
 
 Default: 500
 
+==== retry_backoff_delay_ms
+
+The `retry_backoff_delay_ms` option, when doing retries is the amount to backoff between retries, in milliseconds.
+
+Usage: `option("retry_backoff_delay_ms", "1000")`
+
+Default: 2500
+
+==== retry_max_delay_ms
+
+The `retry_max_delay_ms` option, when doing retries is the maximum amount of delay for a single backoff, in milliseconds.
+
+Usage: `option("retry_max_delay_ms", "5000")`
+
+Default: 10000
+
+==== retry_max_duration_ms
+
+The `retry_max_duration_ms` option, when doing retries is the maximum duration of a retry attempt, in milliseconds.
+
+Usage: `option("retry_max_duration_ms", "120000")`
+
+Default: 60000
+
 ==== gen_uniq_key
 
 If the documents are missing the unique key (derived from Solr schema), then the `gen_uniq_key` option will generate a unique value for each document before indexing to Solr. Instead of this option, the http://lucene.apache.org/solr/api/solr-core/org/apache/solr/update/processor/UUIDUpdateProcessorFactory.html[UUIDUpdateProcessorFactory] can be used to generate UUID values for documents that are missing the unique key field

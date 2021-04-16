@@ -30,6 +30,9 @@ object ConfigurationConstants {
   val BATCH_SIZE: String = "batch_size"
   // num_docs or num_bytes
   val BATCH_SIZE_TYPE: String = "batch_size_type"
+  val RETRY_BACKOFF_DELAY_MS: String = "retry_backoff_delay_ms"
+  val RETRY_MAX_DELAY_MS: String = "retry_max_delay_ms"
+  val RETRY_MAX_DURATION_MS: String = "retry_max_duration_ms"
   val GENERATE_UNIQUE_KEY: String = "gen_uniq_key"
   val GENERATE_UNIQUE_CHILD_KEY: String = "gen_uniq_child_key"
   val COMMIT_WITHIN_MILLI_SECS: String = "commit_within"

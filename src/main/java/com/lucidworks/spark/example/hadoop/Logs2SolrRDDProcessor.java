@@ -1,5 +1,6 @@
 package com.lucidworks.spark.example.hadoop;
 
+import com.lucidworks.spark.util.SolrRequestRetryer;
 import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
@@ -68,13 +69,13 @@ public class Logs2SolrRDDProcessor implements SparkApp.RDDProcessor {
               doc.setField("line_t", line);
               batch.add(doc);
               if (batch.size() >= batchSize)
-                SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.collectionAsScalaIterable(batch));
+                SolrSupport.sendBatchToSolr(solrServer, SolrRequestRetryer.defaultInstance(), collection, JavaConversions.collectionAsScalaIterable(batch));
 
               if (lineNum % 10000 == 0)
                 log.info("Sent "+lineNum+" docs to Solr from "+path);
             }
             if (!batch.isEmpty())
-              SolrSupport.sendBatchToSolr(solrServer, collection, JavaConversions.collectionAsScalaIterable(batch));
+              SolrSupport.sendBatchToSolr(solrServer, SolrRequestRetryer.defaultInstance(), collection, JavaConversions.collectionAsScalaIterable(batch));
           } catch (Exception exc) {
             log.error("Failed to read '" + path + "' due to: " + exc);
           } finally {

@@ -103,6 +103,15 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def batchSizeType: Option[String] = config.get(BATCH_SIZE_TYPE)
 
+  def retryBackoffDelayMs: Option[Long] =
+    if (config.get(RETRY_BACKOFF_DELAY_MS).isDefined) Some(config(RETRY_BACKOFF_DELAY_MS).toLong) else None
+
+  def retryMaxDelayMs: Option[Long] =
+    if (config.get(RETRY_MAX_DELAY_MS).isDefined) Some(config(RETRY_MAX_DELAY_MS).toLong) else None
+
+  def retryMaxDurationMs: Option[Long] =
+    if (config.get(RETRY_MAX_DURATION_MS).isDefined) Some(config(RETRY_MAX_DURATION_MS).toLong) else None
+
   def useCursorMarks: Option[Boolean] =
     if (config.get(USE_CURSOR_MARKS).isDefined) Some(config(USE_CURSOR_MARKS).toBoolean) else None
 
@@ -281,6 +290,15 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     }
     if (batchSizeType.isDefined) {
       sb ++= s", ${BATCH_SIZE_TYPE}=${batchSizeType.get}"
+    }
+    if (retryBackoffDelayMs.isDefined) {
+      sb ++= s", ${RETRY_BACKOFF_DELAY_MS}=${retryBackoffDelayMs.get}"
+    }
+    if (retryMaxDelayMs.isDefined) {
+      sb ++= s", ${RETRY_MAX_DELAY_MS}=${retryMaxDelayMs.get}"
+    }
+    if (retryMaxDurationMs.isDefined) {
+      sb ++= s", ${RETRY_MAX_DURATION_MS}=${retryMaxDurationMs.get}"
     }
     if (getChildDocFieldName.isDefined) {
       sb ++= s", ${CHILD_DOC_FIELDNAME}=${getChildDocFieldName.get}"

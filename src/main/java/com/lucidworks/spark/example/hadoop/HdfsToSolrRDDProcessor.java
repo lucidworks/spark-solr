@@ -1,6 +1,7 @@
 package com.lucidworks.spark.example.hadoop;
 
 import com.lucidworks.spark.BatchSizeType;
+import com.lucidworks.spark.util.SolrRequestRetryer;
 import com.lucidworks.spark.util.SolrSupport;
 import com.lucidworks.spark.SparkApp;
 import org.apache.commons.cli.CommandLine;
@@ -80,7 +81,7 @@ public class HdfsToSolrRDDProcessor implements SparkApp.RDDProcessor {
     int numRunners = Integer.parseInt(cli.getOptionValue("numRunners", "2"));
     int pollQueueTime = Integer.parseInt(cli.getOptionValue("pollQueueTime", "20"));
     //SolrSupport.streamDocsIntoSolr(zkHost, collection, "id", pairs, queueSize, numRunners, pollQueueTime);
-    SolrSupport.indexDocs(zkHost, collection, 100, BatchSizeType.NUM_DOCS, pairs.values().rdd());
+    SolrSupport.indexDocs(zkHost, collection, 100, BatchSizeType.NUM_DOCS, SolrRequestRetryer.DEFAULT_MAX_BACKOFF_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DELAY_MS, SolrRequestRetryer.DEFAULT_MAX_DURATION_MS, pairs.values().rdd());
 
     // send a final commit in case soft auto-commits are not enabled
     CloudSolrClient cloudSolrClient = SolrSupport.getCachedCloudClient(zkHost);
