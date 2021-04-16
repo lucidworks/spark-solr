@@ -333,7 +333,7 @@ object SolrSupport extends LazyLogging {
           numDocs += batch.length
           if (accumulator.isDefined)
             accumulator.get.add(batch.length.toLong)
-          sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
+          sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin, numBytesInBatch)
           batch.clear
           numBytesInBatch = 0L
         }
@@ -344,7 +344,7 @@ object SolrSupport extends LazyLogging {
         numDocs += batch.length
         if (accumulator.isDefined)
           accumulator.get.add(batch.length.toLong)
-        sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin)
+        sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin, numBytesInBatch)
         batch.clear
       }
     })
@@ -362,14 +362,21 @@ object SolrSupport extends LazyLogging {
     numDocsInBatch > 0 && numDocsInBatch + 1 >= batchSize
   }
 
-  def sendBatchToSolrWithRetry(
-      zkHost: String,
-      solrClient: SolrClient,
-      collection: String,
-      batch: Iterable[SolrInputDocument],
-      commitWithin: Option[Int]): Unit = {
+  def sendBatchToSolrWithRetry(zkHost: String,
+                               solrClient: SolrClient,
+                               collection: String,
+                               batch: Iterable[SolrInputDocument],
+                               commitWithin: Option[Int]): Unit =
+    SolrSupport.sendBatchToSolrWithRetry(zkHost, solrClient, collection, batch, commitWithin, -1)
+
+  def sendBatchToSolrWithRetry(zkHost: String,
+                               solrClient: SolrClient,
+                               collection: String,
+                               batch: Iterable[SolrInputDocument],
+                               commitWithin: Option[Int],
+                               numBytesInBatch: Long): Unit = {
     try {
-      sendBatchToSolr(solrClient, collection, batch, commitWithin)
+      sendBatchToSolr(solrClient, collection, batch, commitWithin, numBytesInBatch)
     } catch {
       // Reset the cache when SessionExpiredException is thrown. Plus side is that the job won't fail
       case e : Exception =>
@@ -378,19 +385,27 @@ object SolrSupport extends LazyLogging {
             logger.info("Got an exception with message '" + e1.getMessage +  "'.  Resetting the cached solrClient")
             CacheCloudSolrClient.cache.invalidate(CloudClientParams(zkHost))
             val newClient = SolrSupport.getCachedCloudClient(zkHost)
-            sendBatchToSolr(newClient, collection, batch, commitWithin)
+            sendBatchToSolr(newClient, collection, batch, commitWithin, numBytesInBatch)
         }
     }
   }
 
-  def sendBatchToSolr(solrClient: SolrClient, collection: String, batch: Iterable[SolrInputDocument]): Unit =
-    sendBatchToSolr(solrClient, collection, batch, None)
+  def sendBatchToSolr(solrClient: SolrClient,
+                      collection: String,
+                      batch: Iterable[SolrInputDocument]): Unit =
+    sendBatchToSolr(solrClient, collection, batch, None, -1L)
 
-  def sendBatchToSolr(
-      solrClient: SolrClient,
-      collection: String,
-      batch: Iterable[SolrInputDocument],
-      commitWithin: Option[Int]): Unit = {
+  def sendBatchToSolr(solrClient: SolrClient,
+                      collection: String,
+                      batch: Iterable[SolrInputDocument],
+                      commitWithin: Option[Int]): Unit =
+    sendBatchToSolr(solrClient, collection, batch, commitWithin, -1L)
+
+  def sendBatchToSolr(solrClient: SolrClient,
+                      collection: String,
+                      batch: Iterable[SolrInputDocument],
+                      commitWithin: Option[Int],
+                      numBytesInBatch: Long): Unit = {
     val req = new UpdateRequest()
     req.setParam("collection", collection)
 
@@ -399,14 +414,14 @@ object SolrSupport extends LazyLogging {
     if (commitWithin.isDefined)
       req.setCommitWithin(commitWithin.get)
 
-    logger.info("Sending batch of " + batch.size + " to collection " + collection)
+    logOutgoingBatch(collection, batch, numBytesInBatch)
 
     req.add(asJavaCollection(batch))
 
     try {
       solrClient.request(req)
       val timeTaken = (System.currentTimeMillis() - initialTime)/1000.0
-      logger.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents")
+      logCompletedBatch(batch, numBytesInBatch, timeTaken)
     } catch {
       case e: Exception =>
         if (shouldRetry(e)) {
@@ -435,6 +450,23 @@ object SolrSupport extends LazyLogging {
           }
         }
 
+    }
+
+  }
+
+  private def logCompletedBatch(batch: Iterable[SolrInputDocument], numBytesInBatch: Long, timeTaken: Double) = {
+    if (numBytesInBatch > 0) {
+      logger.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents with '" + numBytesInBatch + "' bytes")
+    } else {
+      logger.info("Took '" + timeTaken + "' secs to index '" + batch.size + "' documents bytes")
+    }
+  }
+
+  private def logOutgoingBatch(collection: String, batch: Iterable[SolrInputDocument], numBytesInBatch: Long) = {
+    if (numBytesInBatch > 0) {
+      logger.info("Sending batch of " + batch.size + " with " + numBytesInBatch + " bytes to collection " + collection)
+    } else {
+      logger.info("Sending batch of " + batch.size + " to collection " + collection)
     }
 
   }
