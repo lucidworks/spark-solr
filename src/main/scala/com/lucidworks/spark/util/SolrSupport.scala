@@ -328,7 +328,7 @@ object SolrSupport extends LazyLogging {
       var numBytesInBatch: Long = 0
       while (solrInputDocumentIterator.hasNext) {
         val doc = solrInputDocumentIterator.next()
-        val nextDocSize = ObjectSizeCalculator.getObjectSize(numBytesInBatch): Long
+        val nextDocSize = ObjectSizeCalculator.getObjectSize(doc): Long
         if (wouldBatchBeFull(batch.size, numBytesInBatch, nextDocSize, batchSize, batchSizeType)) {
           numDocs += batch.length
           if (accumulator.isDefined)
