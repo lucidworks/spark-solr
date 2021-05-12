@@ -32,7 +32,7 @@ public class EventsimUtil {
     // Modify the unix timestamp to ISO format for Solr
     log.info("Indexing eventsim documents from file " + datasetPath);
 
-    df.registerTempTable("jdbcDF");
+    df.createOrReplaceTempView("jdbcDF");
     sparkSession.udf().register("ts2iso", new UDF1<Long, Timestamp>() {
       public Timestamp call(Long ts) {
         return asDate(ts);

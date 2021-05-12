@@ -156,7 +156,7 @@ class MLPipelineScala extends SparkApp.RDDProcessor {
                           |${metrics.confusionMatrix}\n""".stripMargin)
 
     // compute the false positive rate per label
-    println(s"""\nF-Measure: ${metrics.fMeasure}
+    println(s"""\nAccuracy: ${metrics.accuracy}
                           |label\tfpr\n""".stripMargin)
     val labels = labelConverter.getLabels
     for (i <- labels.indices)

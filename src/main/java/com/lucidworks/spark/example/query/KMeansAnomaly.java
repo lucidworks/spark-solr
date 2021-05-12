@@ -99,7 +99,7 @@ public class KMeansAnomaly implements SparkApp.RDDProcessor {
     SolrJavaRDD solrRDD = SolrJavaRDD.get(zkHost, collection, jsc.sc());
     Dataset solrDataWithPivots = SolrQuerySupport.withPivotFields(logEvents, pivotFields, solrRDD.rdd(), false);
     // register this DataFrame so we can execute a SQL query against it for doing sessionization using lag window func
-    solrDataWithPivots.registerTempTable("logs");
+    solrDataWithPivots.createOrReplaceTempView("logs");
 
     // used in SQL below to convert a timestamp into millis since the epoch
     sparkSession.udf().register("ts2ms", new UDF1<Timestamp, Long>() {
