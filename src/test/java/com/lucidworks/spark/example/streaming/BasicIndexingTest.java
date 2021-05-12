@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.concurrent.LinkedBlockingDeque;
 
+import com.lucidworks.spark.BatchSizeType;
 import com.lucidworks.spark.StreamProcessorTestBase;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.util.SolrSupport;
@@ -63,7 +64,7 @@ public class BasicIndexingTest extends StreamProcessorTestBase {
 
     // Send to Solr
     String zkHost = cluster.getZkServer().getZkAddress();
-    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, docs.dstream());
+    SolrSupport.indexDStreamOfDocs(zkHost, testCollection, 1, BatchSizeType.NUM_DOCS, docs.dstream());
 
     // Actually start processing the stream here ...
     jssc.start();
