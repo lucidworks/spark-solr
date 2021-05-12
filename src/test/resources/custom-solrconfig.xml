@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <config>
-    <luceneMatchVersion>7.5.0</luceneMatchVersion>
+    <luceneMatchVersion>LATEST</luceneMatchVersion>
     <dataDir>${solr.data.dir:}</dataDir>
     <directoryFactory name="DirectoryFactory" class="solr.RAMDirectoryFactory"/>
     <codecFactory class="solr.SchemaCodecFactory"/>
