@@ -637,11 +637,15 @@ object SolrRelationUtil extends LazyLogging {
               val fieldValues = solrDocument.getFieldValues(field.name)
               values.add(processMultipleFieldValues(fieldValues, fieldType))
             case map: util.Map[_,_] =>
-              val obj = map.get(field.name).asInstanceOf[Object]
-              val newValue = processFieldValue(obj, fieldType, multiValued = true)
-              newValue match {
-                case arr: Array[_] => values.add(arr)
-                case any => values.add(Array(any))
+              if (map.containsKey(field.name)) {
+                val obj = map.get(field.name).asInstanceOf[Object]
+                val newValue = processFieldValue(obj, fieldType, multiValued = true)
+                newValue match {
+                  case arr: Array[_] => values.add(arr)
+                  case any => values.add(Array(any))
+                    }
+              } else {
+                values.add(None)
               }
           }
         } else {
