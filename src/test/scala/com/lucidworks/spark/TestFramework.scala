@@ -13,7 +13,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.udf
 import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
-import org.restlet.ext.servlet.ServerServlet
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 
 trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Suite =>
@@ -40,10 +39,6 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Su
 
     // need the schema stuff
     val extraServlets: java.util.SortedMap[ServletHolder, String] = new java.util.TreeMap[ServletHolder, String]()
-
-    val solrSchemaRestApi : ServletHolder = new ServletHolder("SolrSchemaRestApi", classOf[ServerServlet])
-    solrSchemaRestApi.setInitParameter("org.restlet.application", "org.apache.solr.rest.SolrSchemaRestApi")
-    extraServlets.put(solrSchemaRestApi, "/schema/*")
 
     cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
       testWorkingDir.toPath, solrXmlContents, extraServlets, null /* extra filters */)

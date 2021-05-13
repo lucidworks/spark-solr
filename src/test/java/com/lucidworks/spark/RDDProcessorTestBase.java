@@ -5,7 +5,6 @@ import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.util.DateMathParser;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -15,10 +14,7 @@ import org.junit.BeforeClass;
 
 import java.io.File;
 import java.io.Serializable;
-import java.time.Instant;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
@@ -29,6 +25,8 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
 
   protected static transient JavaSparkContext jsc;
   protected static transient SparkSession sparkSession;
+  protected int batchSize = 1000;
+  protected BatchSizeType batchSizeType = BatchSizeType.NUM_DOCS;
 
   public JavaSparkContext getJsc() {
     return jsc;
@@ -130,7 +128,7 @@ public class RDDProcessorTestBase extends TestSolrCloudClusterSupport implements
         return doc;
       }
     });
-    SolrSupport.indexDocs(zkHost, collection, 1000, docs.rdd());
+    SolrSupport.indexDocs(zkHost, collection, batchSize, batchSizeType, docs.rdd());
     return inputDocs.length;
   }
 }

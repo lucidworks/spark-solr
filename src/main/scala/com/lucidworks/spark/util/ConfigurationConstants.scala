@@ -1,5 +1,7 @@
 package com.lucidworks.spark.util
 
+import com.lucidworks.spark.BatchSizeType
+
 // This should only be used for config options for the sql statements [SolrRelation]
 object ConfigurationConstants {
   val SOLR_ZK_HOST_PARAM: String = "zkhost"
@@ -26,6 +28,8 @@ object ConfigurationConstants {
   // Index params
   val SOFT_AUTO_COMMIT_SECS: String = "soft_commit_secs"
   val BATCH_SIZE: String = "batch_size"
+  // num_docs or num_bytes
+  val BATCH_SIZE_TYPE: String = "batch_size_type"
   val GENERATE_UNIQUE_KEY: String = "gen_uniq_key"
   val GENERATE_UNIQUE_CHILD_KEY: String = "gen_uniq_child_key"
   val COMMIT_WITHIN_MILLI_SECS: String = "commit_within"

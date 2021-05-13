@@ -92,9 +92,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
     log.info(String.format("Attempting to bootstrap EmbeddedSolrServer instance in dir: %s",
       instanceDir.getAbsolutePath()));
 
-    SolrResourceLoader solrResourceLoader =
-      new SolrResourceLoader(solrHomeDir.toPath());
-    CoreContainer coreContainer = new CoreContainer(solrResourceLoader);
+    CoreContainer coreContainer = new CoreContainer(solrHomeDir.toPath(), null);
     coreContainer.load();
 
     SolrCore core = coreContainer.create(coreName, instanceDir.toPath(), Collections.<String, String>emptyMap(), false);
