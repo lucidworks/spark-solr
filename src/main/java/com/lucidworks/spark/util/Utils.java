@@ -1,5 +1,6 @@
 package com.lucidworks.spark.util;
 
+
 import scala.collection.JavaConverters$;
 
 public class Utils {
@@ -36,6 +37,6 @@ public class Utils {
   }
 
   public static <K, V> scala.collection.immutable.Map<K, V> convertJavaMapToScalaImmmutableMap(final java.util.Map<K, V> m) {
-    return JavaConverters$.MODULE$.mapAsScalaMapConverter(m).asScala().toMap(scala.Predef$.MODULE$.<scala.Tuple2<K, V>>conforms());
+    return JavaConverters$.MODULE$.mapAsScalaMapConverter(m).asScala().toMap(scala.Predef$.MODULE$.$conforms());
   }
 }

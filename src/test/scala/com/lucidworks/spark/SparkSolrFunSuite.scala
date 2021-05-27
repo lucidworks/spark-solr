@@ -17,15 +17,14 @@
 
 package com.lucidworks.spark
 
-import org.scalatest.Outcome
-import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.{FunSuite, Outcome}
 
 /**
  * Base abstract class for all Scala unit tests in spark-solr for handling common functionality.
  *
  * Copied from SparkFunSuite, which is inaccessible from here.
  */
-trait SparkSolrFunSuite extends AnyFunSuite with LazyLogging {
+trait SparkSolrFunSuite extends FunSuite with LazyLogging {
 
   /**
    * Log the suite name and the test name before and after each test.
