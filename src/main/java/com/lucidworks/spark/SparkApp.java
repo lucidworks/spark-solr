@@ -18,7 +18,7 @@ import java.util.TreeSet;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.lucidworks.spark.port.example.events.EventsimIndexer;
+import com.lucidworks.spark.example.events.EventsimIndexer;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
