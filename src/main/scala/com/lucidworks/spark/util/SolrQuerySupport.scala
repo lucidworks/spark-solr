@@ -26,7 +26,8 @@ import org.json4s._
 import org.json4s.jackson.JsonMethods._
 
 import scala.annotation.tailrec
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions._
 import scala.collection.immutable.HashMap
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
@@ -68,7 +69,7 @@ class QueryResultsIterator(
 }
 
 /**
-  * SolrJ's {@link LukeRequest} doesn't support the 'includeIndexFieldFlags', so this stub class hardcodes it into the
+  * SolrJ's  doesn't support the 'includeIndexFieldFlags', so this stub class hardcodes it into the
   * underlying SolrParams until this can be fixed in Solr. This can be removed once our SolrJ has the fix for
   * SOLR-13362
   */
@@ -144,8 +145,8 @@ object SolrQuerySupport extends LazyLogging {
             }
           }
         }
-        if (!paramsNL.isEmpty) {
-          solrQuery.add(SolrParams.toSolrParams(paramsNL))
+        if (paramsNL.nonEmpty) {
+          solrQuery.add(paramsNL.toSolrParams)
         }
       }
     }
@@ -245,7 +246,7 @@ object SolrQuerySupport extends LazyLogging {
     resp
   }
 
-  def setQueryDefaultsForShards(solrQuery: SolrQuery, uniqueKey: String) = {
+  def setQueryDefaultsForShards(solrQuery: SolrQuery, uniqueKey: String): Unit = {
     solrQuery.set("distrib", "false")
     solrQuery.setStart(0)
     if (solrQuery.getRows == null) {
@@ -290,13 +291,13 @@ object SolrQuerySupport extends LazyLogging {
         case m: Map[_, _] if m.keySet.forall(_.isInstanceOf[String])=>
           val payload = m.asInstanceOf[Map[String, Any]]
           // No valid checks for name and value :(
-          val name = payload.get("name").get.asInstanceOf[String]
-          val fieldType = payload.get("type").get.asInstanceOf[String]
+          val name = payload("name").asInstanceOf[String]
+          val fieldType = payload("type").asInstanceOf[String]
 
           val isRequired: Option[Boolean] = {
             if (payload.contains("required")) {
-              if (payload.get("required").isDefined) {
-                payload.get("required").get match {
+              if (payload.contains("required")) {
+                payload("required") match {
                   case v: Boolean => Some(v)
                   case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
                 }
@@ -306,8 +307,8 @@ object SolrQuerySupport extends LazyLogging {
 
           val isMultiValued: Option[Boolean] = {
             if (payload.contains("multiValued")) {
-              if (payload.get("multiValued").isDefined) {
-                payload.get("multiValued").get match {
+              if (payload.contains("multiValued")) {
+                payload("multiValued") match {
                   case v: Boolean => Some(v)
                   case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
                 }
@@ -317,8 +318,8 @@ object SolrQuerySupport extends LazyLogging {
 
           val isStored: Option[Boolean] = {
             if (payload.contains("stored")) {
-              if (payload.get("stored").isDefined) {
-                payload.get("stored").get match {
+              if (payload.contains("stored")) {
+                payload("stored") match {
                   case v: Boolean => Some(v)
                   case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
                 }
@@ -329,8 +330,8 @@ object SolrQuerySupport extends LazyLogging {
           val isDocValues: Option[Boolean] = {
             // location field types are not docValue supported even though schema says so
             if (payload.contains("docValues") && fieldType != "location") {
-              if (payload.get("docValues").isDefined) {
-                payload.get("docValues").get match {
+              if (payload.contains("docValues")) {
+                payload("docValues") match {
                   case v: Boolean => Some(v)
                   case v1: AnyRef => Some(String.valueOf(v1).equals("true"))
                 }
@@ -340,8 +341,8 @@ object SolrQuerySupport extends LazyLogging {
 
           val dynamicBase: Option[String] = {
             if (payload.contains("dynamicBase")) {
-              if (payload.get("dynamicBase").isDefined) {
-                payload.get("dynamicBase").get match {
+              if (payload.contains("dynamicBase")) {
+                payload("dynamicBase") match {
                   case v: String => Some(v)
                 }
               } else None
@@ -350,8 +351,8 @@ object SolrQuerySupport extends LazyLogging {
 
           val fieldClassType: Option[String] = {
             if (fieldTypeToClassMap.contains(fieldType)) {
-              if (fieldTypeToClassMap.get(fieldType).isDefined) {
-                Some(fieldTypeToClassMap.get(fieldType).get)
+              if (fieldTypeToClassMap.contains(fieldType)) {
+                Some(fieldTypeToClassMap(fieldType))
               } else None
             } else None
           }
@@ -384,8 +385,8 @@ object SolrQuerySupport extends LazyLogging {
   /**
     * Do multiple requests if the length of url exceeds limit size (2048).
     * We need this to retrieve schema of dynamic fields
-    * @param solrUrl
-    * @param fieldNames
+    * @param {solrUrl}
+    * @param {fieldNames}
     * @return
     */
   def getFieldDefinitionsFromSchema(
@@ -644,7 +645,7 @@ object SolrQuerySupport extends LazyLogging {
 
     val withPivotFields: RDD[Row] = solrData.rdd.map(row => {
       val fields = Array.empty[Any]
-      for (i <- 0 to row.length-1) fields(i) = row.get(i)
+      for (i <- 0 until row.length) fields(i) = row.get(i)
 
       for (pf <- pivotFields)
         SolrQuerySupport.fillPivotFieldValues(row.getString(row.fieldIndex(pf.solrField)), fields, schemaWithPivots, pf.prefix)

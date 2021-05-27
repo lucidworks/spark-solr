@@ -1,6 +1,5 @@
 package com.lucidworks.spark.rdd;
 
-import com.lucidworks.spark.util.JavaApiHelper;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;

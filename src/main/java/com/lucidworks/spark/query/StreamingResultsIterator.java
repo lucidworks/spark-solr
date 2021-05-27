@@ -5,7 +5,6 @@ import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.StreamingResponseCallback;
-import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.impl.HttpSolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -39,15 +38,15 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
   protected Integer maxSampleDocs = null;
   protected String solrId = null;
 
-  private ResponseCallback responseCallback = new ResponseCallback();
-  private CountDownLatch docListInfoLatch = new CountDownLatch(1);
+  private final ResponseCallback responseCallback = new ResponseCallback();
+  private final CountDownLatch docListInfoLatch = new CountDownLatch(1);
 
   public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery) {
     this(solrServer, solrQuery, null);
   }
 
   public StreamingResultsIterator(SolrClient solrServer, SolrQuery solrQuery, String cursorMark) {
-    this.queue = new LinkedBlockingDeque<SolrDocument>();
+    this.queue = new LinkedBlockingDeque<>();
     this.solrServer = solrServer;
 
     // get some identifier for this solr server

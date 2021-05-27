@@ -1,19 +1,18 @@
-package com.lucidworks.spark.port.example.events
+package com.lucidworks.spark.example.events
 
 import java.net.URL
 import java.util.{Calendar, TimeZone}
-
 import com.lucidworks.spark.SparkApp.RDDProcessor
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 
-import scala.collection.JavaConversions.bufferAsJavaList
+import scala.collection.JavaConverters.bufferAsJavaList
 import scala.collection.mutable.ListBuffer
 
 class EventsimIndexer extends RDDProcessor {
-  val DEFAULT_ENDPOINT = 
+  val DEFAULT_ENDPOINT =
     "http://localhost:8764/api/apollo/index-pipelines/eventsim-default/collections/eventsim/index"
 
   def getName: String = "eventsim"
@@ -70,19 +69,19 @@ class EventsimIndexer extends RDDProcessor {
 
     val sparkSession: SparkSession = SparkSession.builder().config(conf).getOrCreate()
 
-    sparkSession.read.json(cli.getOptionValue("eventsimJson")).foreachPartition(rows => {
+    sparkSession.read.json(cli.getOptionValue("eventsimJson")).foreachPartition((rows: Iterator[Row]) => {
       val fusion: FusionPipelineClient =
         if (fusionAuthEnabled) new FusionPipelineClient(fusionEndpoints, fusionUser, fusionPass, fusionRealm)
         else new FusionPipelineClient(fusionEndpoints)
 
-      val batch = new ListBuffer[Map[String,_]]()
+      val batch = new ListBuffer[Map[String, _]]()
       rows.foreach(next => {
-        var userId : String = ""
-        var sessionId : String = ""
-        var ts : Long = 0
+        var userId: String = ""
+        var sessionId: String = ""
+        var ts: Long = 0
 
-        val fields = new ListBuffer[Map[String,_]]()
-        for (c <- 0 to next.length-1) {
+        val fields = new ListBuffer[Map[String, _]]()
+        for (c <- 0 until next.length) {
           val obj = next.get(c)
           if (obj != null) {
             var colValue = obj
@@ -110,7 +109,7 @@ class EventsimIndexer extends RDDProcessor {
       })
 
       // post the final batch if any left over
-      if (!batch.isEmpty) {
+      if (batch.nonEmpty) {
         fusion.postBatchToPipeline(pipelinePath, bufferAsJavaList(batch))
         batch.clear
       }

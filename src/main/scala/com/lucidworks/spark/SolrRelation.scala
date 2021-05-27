@@ -3,14 +3,13 @@ package com.lucidworks.spark
 import java.io.IOException
 import java.util.UUID
 import java.util.regex.Pattern
-
 import com.lucidworks.spark.query.sql.SolrSQLSupport
 import com.lucidworks.spark.rdd.{SolrRDD, StreamingSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import org.apache.commons.lang.StringUtils
-import org.apache.commons.lang3.StringEscapeUtils
+import org.apache.commons.text.StringEscapeUtils
 import org.apache.solr.client.solrj.SolrQuery.SortClause
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
@@ -69,7 +68,7 @@ class SolrRelation(
   // we don't need the baseSchema for streaming expressions, so we wrap it in an optional
   var baseSchema : Option[StructType] = None
 
-  lazy val collection = initialQuery.get("collection")
+  lazy val collection: String = initialQuery.get("collection")
 
   var optimizedPlan = false
 
@@ -82,7 +81,7 @@ class SolrRelation(
     val solrFields = conf.getFields
     logger.debug(s"Building userRequestedFields from solrFields: ${solrFields.mkString(", ")}")
     val qf = SolrRelationUtil.parseQueryFields(solrFields)
-    if (!qf.filter(_.funcReturnType.isDefined).isEmpty) {
+    if (qf.exists(_.funcReturnType.isDefined)) {
       // must drop the additional type info from any func queries in the field list ...
       initialQuery.setFields(qf.map(_.fl):_*)
     }
@@ -111,7 +110,7 @@ class SolrRelation(
     } else {
       if (userRequestedFields.isDefined) {
         // filter out any function query invocations from the base schema list
-        val baseSchemaFields = userRequestedFields.get.filter(!_.funcReturnType.isDefined).map(_.name) ++ Array(uniqueKey)
+        val baseSchemaFields = userRequestedFields.get.filter(_.funcReturnType.isEmpty).map(_.name) ++ Array(uniqueKey)
         if (conf.schema.isEmpty) {
           baseSchema = Some(getBaseSchemaFromConfig(collection, baseSchemaFields))
         } else {
@@ -149,14 +148,14 @@ class SolrRelation(
               val fieldName = fld.alias.getOrElse(fld.name)
               if (fld.hasReplace) {
                 // completely ignore the Solr type ... force to the replace type
-                fieldSet.add(new StructField(fieldName, fld.dataType))
+                fieldSet.add(StructField(fieldName, fld.dataType))
               } else {
                 if (streamSchema.fieldNames.contains(fieldName)) {
                   fieldSet.add(streamSchema.apply(fieldName))
                 } else {
                   // ugh ... this field coming out of the streaming expression isn't known to solr, so likely a select
                   // expression here with some renaming going on ... just assume string and keep going
-                  fieldSet.add(new StructField(fieldName, fld.dataType))
+                  fieldSet.add(StructField(fieldName, fld.dataType))
                 }
               }
             })
@@ -181,7 +180,7 @@ class SolrRelation(
         // Remove presence of any duplicates in the set
         val fieldList: List[StructField] = fieldSet.groupBy(_.name).map(_._2.head)(breakOut)
         var exprSchema = new StructType(fieldList.toArray.sortBy(f => f.name))
-        logger.info(s"Created combined schema with ${exprSchema.fieldNames.size} fields for streaming expression: ${exprSchema}: ${exprSchema.fields}")
+        logger.info(s"Created combined schema with ${exprSchema.fieldNames.length} fields for streaming expression: ${exprSchema}: ${exprSchema.fields.mkString("Array(", ", ", ")")}")
         exprSchema
       } else if (initialQuery.getRequestHandler == QT_SQL) {
         val sqlStmt = initialQuery.get(SOLR_SQL_STMT)
@@ -192,7 +191,7 @@ class SolrRelation(
           logger.info(s"Using '$solrSQLSchema' from config property '$SOLR_SQL_SCHEMA' to compute the SQL schema")
           solrSQLSchema.split(',').foreach(f => {
             val pair : Array[String] = f.split(':')
-            fieldSet.add(new StructField(pair.apply(0), DataType.fromJson("\""+pair.apply(1)+"\"")))
+            fieldSet.add(StructField(pair.apply(0), DataType.fromJson("\""+pair.apply(1)+"\"")))
           })
         } else {
           val allFieldsSchema : StructType = getBaseSchemaFromConfig(collection, Array.empty)
@@ -202,27 +201,27 @@ class SolrRelation(
           if (sqlColumns.isEmpty)
             throw new IllegalArgumentException(s"Cannot determine schema for DataFrame backed by Solr SQL query: ${sqlStmt}; be sure to specify desired columns explicitly instead of relying on the 'SELECT *' syntax.")
 
-          sqlColumns.foreach((kvp) => {
+          sqlColumns.foreach(kvp => {
             var lower = kvp._1.toLowerCase
             var col = kvp._2
             if (lower.startsWith("count(")) {
-              fieldSet.add(new StructField(kvp._2, LongType))
+              fieldSet.add(StructField(kvp._2, LongType))
             } else if (lower.startsWith("avg(") || lower.startsWith("min(") || lower.startsWith("max(") || lower.startsWith("sum(")) {
               val column = kvp._2
               // todo: this is hacky but needed to work around SOLR-9372 where the type returned from Solr differs
               // based on the aggregation mode used to execute the SQL statement
               val metadata = new MetadataBuilder().putBoolean(Constants.PROMOTE_TO_DOUBLE, value = true).build()
               logger.info(s"Set ${Constants.PROMOTE_TO_DOUBLE} for col: $column")
-              fieldSet.add(new StructField(column, DoubleType, metadata = metadata))
+              fieldSet.add(StructField(column, DoubleType, metadata = metadata))
             }  else if (col.equals("score")) {
-              fieldSet.add(new StructField(col, DoubleType))
+              fieldSet.add(StructField(col, DoubleType))
             } else {
               if (allFieldsSchema.fieldNames.contains(kvp._2)) {
                 val existing = allFieldsSchema.fields(allFieldsSchema.fieldIndex(kvp._2))
                 fieldSet.add(existing)
                 logger.debug(s"Found existing field ${kvp._2}: ${existing}")
               } else {
-                fieldSet.add(new StructField(kvp._2, StringType))
+                fieldSet.add(StructField(kvp._2, StringType))
               }
             }
           })
@@ -254,7 +253,7 @@ class SolrRelation(
   }
 
   private def applyExcludeFieldsToSchema(querySchema: StructType) : StructType = {
-    if (!conf.getExcludeFields.isDefined)
+    if (conf.getExcludeFields.isEmpty)
       return querySchema
 
     val excludeFields = conf.getExcludeFields.get.trim()
@@ -275,7 +274,7 @@ class SolrRelation(
       Pattern.compile(namePattern, Pattern.CASE_INSENSITIVE)
     })
 
-    return StructType(querySchema.filter(p => {
+    StructType(querySchema.filter(p => {
       var isExcluded = false
       for (regex <- excludePatterns) {
         if (regex.matcher(p.name).matches()) {
@@ -333,13 +332,13 @@ class SolrRelation(
                     if (key.indexOf("(") != -1 && key.endsWith(")")) {
                       metrics += getStreamMetricField(key, Some(alias))
                     } else {
-                      fields += new StreamField(key, StringType, Some(alias))
+                      fields += StreamField(key, StringType, Some(alias))
                     }
                   } else {
                     if (selectFieldName.indexOf("(") != -1 && selectFieldName.endsWith(")")) {
                       metrics += getStreamMetricField(selectFieldName, None)
                     } else {
-                      fields += new StreamField(selectFieldName, StringType, None)
+                      fields += StreamField(selectFieldName, StringType, None)
                     }
                   }
                 }
@@ -349,7 +348,7 @@ class SolrRelation(
                     // we have to handle type-conversion from the Solr type to the replace type
                     logger.debug(s"Found a replace expression in select: $e")
                     val params = e.getParameters.asScala
-                    val tmp = params.apply(0)
+                    val tmp = params.head
                     tmp match {
                       case v: StreamExpressionValue => replaceFields += (v.getValue -> StringType)
                     }
@@ -367,10 +366,10 @@ class SolrRelation(
 
             // for any fields that have a replace function applied, we need to override the
             fields = fields.map(f => {
-              if (replaceFields.contains(f.name)) new StreamField(f.name, replaceFields.getOrElse(f.name, StringType), None, true) else f
+              if (replaceFields.contains(f.name)) StreamField(f.name, replaceFields.getOrElse(f.name, StringType), None, true) else f
             })
 
-            val streamFields = new StreamFields(exprCollection.getOrElse(collection), fields, metrics)
+            val streamFields = StreamFields(exprCollection.getOrElse(collection), fields, metrics)
             logger.info(s"Extracted $streamFields for $subExpr")
             streamOutputFields += streamFields
           } else {
@@ -387,10 +386,10 @@ class SolrRelation(
 
   private def getStreamMetricField(key: String, alias: Option[String]) : StreamField = {
     return if (key.startsWith("count(")) {
-      new StreamField(key, LongType, alias)
+      StreamField(key, LongType, alias)
     } else {
       // just treat all other metrics as double type
-      new StreamField(key, DoubleType, alias)
+      StreamField(key, DoubleType, alias)
     }
   }
 
@@ -405,7 +404,7 @@ class SolrRelation(
         case p : StreamExpressionNamedParameter =>
           if (p.getName == "fl" || p.getName == "buckets" && subExpr.getFunctionName == "facet") {
             p.getParameter match {
-              case value : StreamExpressionValue => value.getValue.split(",").foreach(v => fields += new StreamField(v, StringType, None))
+              case value : StreamExpressionValue => value.getValue.split(",").foreach(v => fields += StreamField(v, StringType, None))
               case _ => // ugly!
             }
           }
@@ -417,8 +416,8 @@ class SolrRelation(
         case _ => // ugly!
       }
     })
-    if (collection.isDefined && !fields.isEmpty) {
-      val streamFields = new StreamFields(collection.get, fields, metrics)
+    if (collection.isDefined && fields.nonEmpty) {
+      val streamFields = StreamFields(collection.get, fields, metrics)
       logger.info(s"Extracted $streamFields for $subExpr")
       return Some(streamFields)
     }
@@ -965,7 +964,7 @@ object SolrRelation extends LazyLogging {
     fieldsToAddToSolr.toMap
   }
 
-  def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient) = {
+  def addFieldsForInsert(fieldsToAddToSolr: Map[String,AddField], collectionId: String, cloudClient: CloudSolrClient): Unit = {
     logger.info(s"Sending request to Solr schema API to add ${fieldsToAddToSolr.size} fields.")
     val solrParams = new ModifiableSolrParams()
     solrParams.add("updateTimeoutSecs","30")
@@ -986,7 +985,7 @@ object SolrRelation extends LazyLogging {
         val errors = respNL.get("errors")
         if (errors != null) {
           logger.error(s"Request to add ${fieldsToAddToSolr.size} fields failed with errors: ${errors}. Will re-try each add individually ...")
-          fieldsToAddToSolr.foreach((pair) => {
+          fieldsToAddToSolr.foreach(pair => {
             try {
               val resp = pair._2.process(cloudClient, collectionId)
               if (resp.getResponse.get("errors") != null) {
@@ -1015,7 +1014,7 @@ object SolrRelation extends LazyLogging {
       val fname = field.name
       breakable {
         if (fname.equals("_version_")) break()
-        val isChildDocument = (fname == fieldNameForChildDocuments)
+        val isChildDocument = fname == fieldNameForChildDocuments
         val fieldIndex = row.fieldIndex(fname)
         val fieldValue : Option[Any] = if (row.isNullAt(fieldIndex)) None else Some(row.get(fieldIndex))
         if (fieldValue.isDefined) {
@@ -1026,7 +1025,7 @@ object SolrRelation extends LazyLogging {
             while (it.hasNext) {
               val elem = it.next()
               val childDoc = new SolrInputDocument
-              for (i <- 0 until elem.schema.fields.size) {
+              for (i <- elem.schema.fields.indices) {
                 childDoc.setField(elem.schema.fields(i).name, elem.get(i))
               }
 

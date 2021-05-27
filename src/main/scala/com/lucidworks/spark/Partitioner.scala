@@ -73,8 +73,8 @@ case class SolrReplica(
     replicaUrl: String,
     replicaHostName: String,
     locations: Array[InetAddress]) {
-  def getHostAndPort(): String = {replicaHostName.substring(0, replicaHostName.indexOf('_'))}
-  override def toString(): String = {
-    return s"SolrReplica(${replicaNumber}) ${replicaName}: url=${replicaUrl}, hostName=${replicaHostName}, locations="+locations.mkString(",")
+  def getHostAndPort: String = {replicaHostName.substring(0, replicaHostName.indexOf('_'))}
+  override def toString: String = {
+    s"SolrReplica(${replicaNumber}) ${replicaName}: url=${replicaUrl}, hostName=${replicaHostName}, locations="+locations.mkString(",")
   }
 }

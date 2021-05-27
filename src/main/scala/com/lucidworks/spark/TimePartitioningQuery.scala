@@ -52,7 +52,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
 
   def filterRangeQueries(filterQueries: Array[String], timestampFilterPrefix: String): Array[String] = {
     filterQueries
-      .filter(fq => fq != null && !fq.isEmpty)
+      .filter(fq => fq != null && fq.nonEmpty)
       .filter(fq => fq.startsWith(timestampFilterPrefix) && fq.substring(timestampFilterPrefix.length) != "[* TO *]")
   }
 

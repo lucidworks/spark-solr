@@ -38,14 +38,6 @@ abstract class SolrRDD[T: ClassTag](
 
   val uniqueKey: String = if (uKey.isDefined) uKey.get else SolrQuerySupport.getUniqueKey(zkHost, collection.split(",")(0))
 
-  override def getPreferredLocations(split: Partition): Seq[String] = {
-    split match {
-      case partition: SelectSolrRDDPartition => Array(partition.preferredReplica.getHostAndPort())
-      case partition: ExportHandlerPartition => Array(partition.preferredReplica.getHostAndPort())
-      case _: AnyRef => Seq.empty
-    }
-  }
-
   def buildQuery: SolrQuery
 
   def query(q: String): SolrRDD[T]
