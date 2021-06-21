@@ -5,4 +5,5 @@
     <int name="socketTimeout">${socketTimeout:0}</int>
     <int name="connTimeout">${connTimeout:0}</int>
   </shardHandlerFactory>
+  <metrics enabled="${metricsEnabled:false}"/>
 </solr>
