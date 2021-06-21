@@ -22,5 +22,7 @@
     <int name="connTimeout">${connTimeout:15000}</int>
   </shardHandlerFactory>
 
+  <metrics enabled="${metricsEnabled:false}"/>
+
 </solr>
 
