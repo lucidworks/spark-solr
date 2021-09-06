@@ -195,7 +195,7 @@ object SolrSupport extends LazyLogging {
   private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
     val zkHost = cloudClientParams.zkHost
     logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
-    val solrClientBuilder = new CloudSolrClient.Builder(Collections.singletonList(zkHost))
+    val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
       if (authHttpClientBuilder.get != null) {
