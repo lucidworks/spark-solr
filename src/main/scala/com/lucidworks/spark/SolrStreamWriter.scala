@@ -7,7 +7,6 @@ import org.apache.spark.sql.streaming.OutputMode
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.spark.sql.types.StructType
 
-import scala.collection.mutable
 
 /**
   * Writes a Spark stream to Solr
@@ -46,7 +45,7 @@ class SolrStreamWriter(
 
   @volatile private var latestBatchId: Long = -1L
   val acc: SparkSolrAccumulator = new SparkSolrAccumulator
-  val accName = if (solrConf.getAccumulatorName.isDefined) solrConf.getAccumulatorName.get else "Records Written"
+  val accName: String = if (solrConf.getAccumulatorName.isDefined) solrConf.getAccumulatorName.get else "Records Written"
   sparkSession.sparkContext.register(acc, accName)
   SparkSolrAccumulatorContext.add(accName, acc.id)
 

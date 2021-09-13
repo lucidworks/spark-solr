@@ -125,7 +125,7 @@ public class ObjectSizeCalculator {
 
 
   private final Set<Object> alreadyVisited = Sets.newIdentityHashSet();
-  private final Deque<Object> pending = new ArrayDeque<Object>(16 * 1024);
+  private final Deque<Object> pending = new ArrayDeque<>(16 * 1024);
   private long size;
 
   /**
@@ -302,8 +302,7 @@ public class ObjectSizeCalculator {
           calc.enqueue(f.get(obj));
         } catch (IllegalAccessException e) {
           final AssertionError ae = new AssertionError(
-              "Unexpected denial of access to " + f);
-          ae.initCause(e);
+              "Unexpected denial of access to " + f, e);
           throw ae;
         }
       }

@@ -2,17 +2,11 @@ package com.lucidworks.spark.example.query;
 
 import com.lucidworks.spark.SparkApp;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
-import com.lucidworks.spark.rdd.SolrRDD;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.mllib.clustering.KMeans;
-import org.apache.spark.mllib.clustering.KMeansModel;
-import org.apache.spark.mllib.linalg.Vector;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,37 +22,36 @@ public class ReadTermVectors implements SparkApp.RDDProcessor {
 
   public Option[] getOptions() {
     return new Option[]{
-      OptionBuilder
-        .withArgName("QUERY")
+      Option.builder("query")
+        .argName("QUERY")
         .hasArg()
-        .isRequired(false)
-        .withDescription("URL encoded Solr query to send to Solr; default is *:*")
-        .create("query"),
-      OptionBuilder
-        .withArgName("FIELD")
+        .required(false)
+        .desc("URL encoded Solr query to send to Solr; default is *:*")
+        .build(),
+      Option.builder("field")
+        .argName("FIELD")
         .hasArg()
-        .isRequired(true)
-        .withDescription("Field to generate term vectors from")
-        .create("field"),
-      OptionBuilder
-        .withArgName("NUM")
+        .required(true)
+        .desc("Field to generate term vectors from")
+        .build(),
+      Option.builder("numFeatures")
+        .argName("NUM")
         .hasArg()
-        .isRequired(false)
-        .withDescription("Number of features; defaults to 500")
-        .create("numFeatures"),
-      OptionBuilder
-        .withArgName("NUM")
+        .required(false)
+        .desc("Number of features; defaults to 500")
+        .build(),
+      Option.builder("numIterations")
+        .argName("NUM")
         .hasArg()
-        .isRequired(false)
-        .withDescription("Number of iterations for K-Means clustering; defaults to 20")
-        .create("numIterations"),
-      OptionBuilder
-        .withArgName("NUM")
+        .required(false)
+        .desc("Number of iterations for K-Means clustering; defaults to 20")
+        .build(),
+      Option.builder("numClusters")
+        .argName("NUM")
         .hasArg()
-        .isRequired(false)
-        .withDescription("Number of clusters (k) for K-Means clustering; defaults to 5")
-        .create("numClusters")
-
+        .required(false)
+        .desc("Number of clusters (k) for K-Means clustering; defaults to 5")
+        .build()
     };
   }
 

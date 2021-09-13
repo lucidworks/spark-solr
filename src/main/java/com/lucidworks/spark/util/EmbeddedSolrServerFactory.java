@@ -11,9 +11,7 @@ import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.cloud.ZkConfigManager;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.core.SolrResourceLoader;
 
 import org.apache.log4j.Logger;
 

@@ -41,13 +41,13 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def getSplitField: Option[String] = config.get(SOLR_SPLIT_FIELD_PARAM)
 
   def getFields: Array[String] =
-    if (config.get(SOLR_FIELD_PARAM).isDefined && !StringUtils.equals(config(SOLR_FIELD_PARAM), "*"))
+    if (config.contains(SOLR_FIELD_PARAM) && !StringUtils.equals(config(SOLR_FIELD_PARAM), "*"))
       config(SOLR_FIELD_PARAM).split(",").map(_.trim)
     else
       Array.empty
 
   def getFilters: List[String] =
-    if (config.get(SOLR_FILTERS_PARAM).isDefined)
+    if (config.contains(SOLR_FILTERS_PARAM))
       SolrRelationUtil.parseCommaSeparatedValuesToList(config(SOLR_FILTERS_PARAM))
     else List.empty
 
@@ -74,79 +74,79 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
   def getChildDocFieldName: Option[String] = config.get(CHILD_DOC_FIELDNAME)
 
   def skipNonDocValueFields: Option[Boolean] =
-    if (config.get(SKIP_NON_DOCVALUE_FIELDS).isDefined) Some(config(SKIP_NON_DOCVALUE_FIELDS).toBoolean) else None
+    if (config.contains(SKIP_NON_DOCVALUE_FIELDS)) Some(config(SKIP_NON_DOCVALUE_FIELDS).toBoolean) else None
 
   def maxRows: Option[Int] =
-    if (config.get(MAX_ROWS).isDefined) Some(config(MAX_ROWS).toInt) else None
+    if (config.contains(MAX_ROWS)) Some(config(MAX_ROWS).toInt) else None
 
   def getAccumulatorName: Option[String] = config.get(ACCUMULATOR_NAME)
 
   def getRows: Option[Int] =
-    if (config.get(SOLR_ROWS_PARAM).isDefined) Some(config(SOLR_ROWS_PARAM).toInt) else None
+    if (config.contains(SOLR_ROWS_PARAM)) Some(config(SOLR_ROWS_PARAM).toInt) else None
 
   def splits: Option[Boolean] =
-    if (config.get(SOLR_DO_SPLITS).isDefined) Some(config(SOLR_DO_SPLITS).toBoolean) else None
+    if (config.contains(SOLR_DO_SPLITS)) Some(config(SOLR_DO_SPLITS).toBoolean) else None
 
   def docValues: Option[Boolean] =
-    if (config.get(SOLR_DOC_VALUES).isDefined) Some(config(SOLR_DOC_VALUES).toBoolean) else None
+    if (config.contains(SOLR_DOC_VALUES)) Some(config(SOLR_DOC_VALUES).toBoolean) else None
 
   def getSplitsPerShard: Option[Int] =
-    if (config.get(SOLR_SPLITS_PER_SHARD_PARAM).isDefined) Some(config(SOLR_SPLITS_PER_SHARD_PARAM).toInt) else None
+    if (config.contains(SOLR_SPLITS_PER_SHARD_PARAM)) Some(config(SOLR_SPLITS_PER_SHARD_PARAM).toInt) else None
 
   def escapeFieldNames: Option[Boolean] =
-    if (config.get(ESCAPE_FIELDNAMES_PARAM).isDefined) Some(config(ESCAPE_FIELDNAMES_PARAM).toBoolean) else None
+    if (config.contains(ESCAPE_FIELDNAMES_PARAM)) Some(config(ESCAPE_FIELDNAMES_PARAM).toBoolean) else None
 
   def flattenMultivalued: Option[Boolean] =
-    if (config.get(FLATTEN_MULTIVALUED).isDefined) Some(config(FLATTEN_MULTIVALUED).toBoolean) else None
+    if (config.contains(FLATTEN_MULTIVALUED)) Some(config(FLATTEN_MULTIVALUED).toBoolean) else None
 
   def softAutoCommitSecs: Option[Int] =
-    if (config.get(SOFT_AUTO_COMMIT_SECS).isDefined) Some(config(SOFT_AUTO_COMMIT_SECS).toInt) else None
+    if (config.contains(SOFT_AUTO_COMMIT_SECS)) Some(config(SOFT_AUTO_COMMIT_SECS).toInt) else None
 
   def commitWithin: Option[Int] =
-    if (config.get(COMMIT_WITHIN_MILLI_SECS).isDefined) Some(config(COMMIT_WITHIN_MILLI_SECS).toInt) else None
+    if (config.contains(COMMIT_WITHIN_MILLI_SECS)) Some(config(COMMIT_WITHIN_MILLI_SECS).toInt) else None
 
   def batchSize: Option[Int] =
-    if (config.get(BATCH_SIZE).isDefined) Some(config(BATCH_SIZE).toInt) else None
+    if (config.contains(BATCH_SIZE)) Some(config(BATCH_SIZE).toInt) else None
 
   def batchSizeType: Option[String] = config.get(BATCH_SIZE_TYPE)
 
   def useCursorMarks: Option[Boolean] =
-    if (config.get(USE_CURSOR_MARKS).isDefined) Some(config(USE_CURSOR_MARKS).toBoolean) else None
+    if (config.contains(USE_CURSOR_MARKS)) Some(config(USE_CURSOR_MARKS).toBoolean) else None
 
   def genUniqKey: Option[Boolean] =
-    if (config.get(GENERATE_UNIQUE_KEY).isDefined) Some(config(GENERATE_UNIQUE_KEY).toBoolean) else None
+    if (config.contains(GENERATE_UNIQUE_KEY)) Some(config(GENERATE_UNIQUE_KEY).toBoolean) else None
 
   def genUniqChildKey: Option[Boolean] =
-    if (config.get(GENERATE_UNIQUE_CHILD_KEY).isDefined) Some(config(GENERATE_UNIQUE_CHILD_KEY).toBoolean) else None
+    if (config.contains(GENERATE_UNIQUE_CHILD_KEY)) Some(config(GENERATE_UNIQUE_CHILD_KEY).toBoolean) else None
 
   def sampleSeed: Option[Int] =
-    if (config.get(SAMPLE_SEED).isDefined) Some(config(SAMPLE_SEED).toInt) else None
+    if (config.contains(SAMPLE_SEED)) Some(config(SAMPLE_SEED).toInt) else None
 
   def samplePct: Option[Float] =
-    if (config.get(SAMPLE_PCT).isDefined) Some(config(SAMPLE_PCT).toFloat) else None
+    if (config.contains(SAMPLE_PCT)) Some(config(SAMPLE_PCT).toFloat) else None
 
   def schema: Option[String] = config.get(SCHEMA)
 
   def getMaxShardsForSchemaSampling: Option[Int] = {
-    if (config.get(MAX_SHARDS_FOR_SCHEMA_SAMPLING).isDefined) Some(config(MAX_SHARDS_FOR_SCHEMA_SAMPLING).toInt) else None
+    if (config.contains(MAX_SHARDS_FOR_SCHEMA_SAMPLING)) Some(config(MAX_SHARDS_FOR_SCHEMA_SAMPLING).toInt) else None
   }
 
   def requestHandler: Option[String] = {
 
-    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.get(SOLR_STREAMING_EXPR).isDefined) {
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_STREAMING_EXPR) && config.contains(SOLR_STREAMING_EXPR)) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
       logger.debug(s"Set ${REQUEST_HANDLER} to ${QT_STREAM} because the ${SOLR_STREAMING_EXPR} option is set.")
       return Some(QT_STREAM)
     }
 
-    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_SQL_STMT) && config.get(SOLR_SQL_STMT).isDefined) {
+    if (!config.contains(REQUEST_HANDLER) && config.contains(SOLR_SQL_STMT) && config.contains(SOLR_SQL_STMT)) {
       // they didn't specify a request handler but gave us an expression, so we know the request handler should be /stream
       logger.debug(s"Set ${REQUEST_HANDLER} to ${QT_SQL} because the ${SOLR_SQL_STMT} option is set.")
       return Some(QT_SQL)
     }
 
-    if (config.contains(REQUEST_HANDLER) && config.get(REQUEST_HANDLER).isDefined) {
-      return Some(config.get(REQUEST_HANDLER).get)
+    if (config.contains(REQUEST_HANDLER) && config.contains(REQUEST_HANDLER)) {
+      return Some(config(REQUEST_HANDLER))
     }
 
     None
@@ -156,8 +156,8 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
 
   def getArbitrarySolrParams: ModifiableSolrParams = {
     val solrParams = new ModifiableSolrParams()
-    if (config.contains(ARBITRARY_PARAMS_STRING) && config.get(ARBITRARY_PARAMS_STRING).isDefined) {
-      val paramString = config.get(ARBITRARY_PARAMS_STRING).get
+    if (config.contains(ARBITRARY_PARAMS_STRING) && config.contains(ARBITRARY_PARAMS_STRING)) {
+      val paramString = config(ARBITRARY_PARAMS_STRING)
       val params = paramString.split("&")
       for (param <- params) {
         val eqAt = param.indexOf('=')
@@ -176,7 +176,7 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     config.filter(c => extraParams.contains(c._1))
   }
 
-  override def toString = {
+  override def toString: String = {
     val sb = new StringBuilder
     sb ++= "SolrConf("
     sb ++= s"${SOLR_ZK_HOST_PARAM}=${getZkHost}"

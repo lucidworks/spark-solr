@@ -19,7 +19,7 @@ import org.apache.spark.sql.types._
 import org.joda.time.DateTime
 import org.joda.time.format.ISODateTimeFormat
 
-import scala.collection.JavaConversions._
+import scala.collection.convert.ImplicitConversions._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
@@ -196,8 +196,8 @@ object SolrRelationUtil extends LazyLogging {
       } else {
         val fieldName = field.name
         if (fieldMap.contains(fieldName)) {
-          if (fieldMap.get(fieldName).isDefined) {
-            val structField = fieldMap.get(fieldName).get
+          if (fieldMap.contains(fieldName)) {
+            val structField = fieldMap(fieldName)
             if (field.alias.isDefined) {
               // have to use the alias here!!
               listOfFields.add(DataTypes.createStructField(field.alias.get, structField.dataType, structField.nullable, structField.metadata))
@@ -430,8 +430,8 @@ object SolrRelationUtil extends LazyLogging {
     val fieldList = new ListBuffer[String]
     for (field <- fields) {
       if (fieldMap.contains(field)) {
-        if (fieldMap.get(field).isDefined) {
-          val structField = fieldMap.get(field).get
+        if (fieldMap.contains(field)) {
+          val structField = fieldMap(field)
           val metadata = structField.metadata
           val fieldName = if (metadata.contains("name"))  metadata.getString("name") else field
           val isMultiValued = if (metadata.contains("multiValued")) metadata.getBoolean("multiValued") else false

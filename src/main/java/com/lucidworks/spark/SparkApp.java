@@ -9,16 +9,11 @@ import java.io.ObjectOutputStream;
 import java.io.PrintStream;
 import java.io.Serializable;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import com.lucidworks.spark.port.example.events.EventsimIndexer;
+import com.lucidworks.spark.example.events.EventsimIndexer;
 import com.lucidworks.spark.example.hadoop.HdfsToSolrRDDProcessor;
 import com.lucidworks.spark.example.hadoop.Logs2SolrRDDProcessor;
 import com.lucidworks.spark.example.query.KMeansAnomaly;
@@ -26,12 +21,7 @@ import com.lucidworks.spark.example.query.*;
 import com.lucidworks.spark.example.streaming.DocumentFilteringStreamProcessor;
 import com.lucidworks.spark.example.streaming.TwitterToSolrStreamProcessor;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.GnuParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
+import org.apache.commons.cli.*;
 import org.apache.spark.SparkConf;
 import org.apache.spark.streaming.Duration;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
@@ -343,7 +333,7 @@ public class SparkApp implements Serializable {
 
     CommandLine cli = null;
     try {
-      cli = (new GnuParser()).parse(options, args);
+      cli = (new DefaultParser()).parse(options, args);
     } catch (ParseException exp) {
       boolean hasHelpArg = false;
       if (args != null && args.length > 0) {
@@ -420,11 +410,11 @@ public class SparkApp implements Serializable {
       if (dir.isDirectory()) {
         String packagePath = packageName.replace('.',File.separatorChar);
         if (dir.getAbsolutePath().endsWith(packagePath)) {
-          for (File file : dir.listFiles()) {
+          for (File file : Objects.requireNonNull(dir.listFiles())) {
             if (file.getName().endsWith(".class")) {
               String className = file.getName().replaceAll("[$].*", "")
                       .replaceAll("[.]class", "").replace('/', '.');
-              if (className.indexOf("$") == -1)
+              if (!className.contains("$"))
                 classes.add(packageName + "." + className);
             }
           }
@@ -446,16 +436,8 @@ public class SparkApp implements Serializable {
 
   public static Serializable bytes2ser(byte[] objBytes) throws Exception {
     Serializable ser = null;
-    ObjectInputStream ois = null;
-    try {
-      ois = new ObjectInputStream(new ByteArrayInputStream(objBytes));
+    try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(objBytes))) {
       ser = (Serializable) ois.readObject();
-    } finally {
-      if (ois != null) {
-        try {
-          ois.close();
-        } catch (Exception ignore) {}
-      }
     }
     return ser;
   }

@@ -1,7 +1,7 @@
 package com.lucidworks.spark.example.query
 
 import com.lucidworks.spark.SparkApp.RDDProcessor
-import com.lucidworks.spark.rdd.{SelectSolrRDD, SolrRDD}
+import com.lucidworks.spark.rdd.{SelectSolrRDD}
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.commons.cli.{CommandLine, Option}
 import org.apache.solr.common.SolrDocument
