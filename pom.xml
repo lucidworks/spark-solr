@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>3.10.0</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -650,7 +650,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>1.19</version>
+      <version>1.21</version>
     </dependency>
     <dependency> <!-- optional dependency of joda-time that is mandatory in Scala -->
       <groupId>org.joda</groupId>
