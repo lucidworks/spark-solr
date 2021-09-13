@@ -238,10 +238,6 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.0.0-M5</version>
         <configuration>
-          <showSuccess>false</showSuccess>
-          <excludes>
-            <exclude>**/FusionPipelineClientTest.java</exclude>
-          </excludes>
         </configuration>
       </plugin>
       <!-- ScalaTest runs Scala tests -->
