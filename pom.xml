@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>3.10.0-SNAPSHOT</version>
+  <version>4.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -38,7 +38,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.version>1.8</java.version>
     <spark.version>2.4.7</spark.version>
-    <solr.version>8.8.2</solr.version>
+    <solr.version>8.9.0</solr.version>
     <hadoop.version>2.7.5</hadoop.version>
     <fasterxml.version>2.10.1</fasterxml.version>
     <scala.version>2.11.12</scala.version>
@@ -650,7 +650,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>1.19</version>
+      <version>1.21</version>
     </dependency>
     <dependency> <!-- optional dependency of joda-time that is mandatory in Scala -->
       <groupId>org.joda</groupId>

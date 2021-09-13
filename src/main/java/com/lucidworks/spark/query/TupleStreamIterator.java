@@ -100,7 +100,7 @@ public abstract class TupleStreamIterator extends ResultsIterator<Map> {
     currentTuple = null;
     ++numDocs;
     increment();
-    return tempCurrentTuple.getMap();
+    return tempCurrentTuple.getFields();
   }
 
   public synchronized Map next() {
