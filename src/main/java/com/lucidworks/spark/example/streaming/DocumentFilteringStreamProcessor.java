@@ -5,7 +5,6 @@ import com.lucidworks.spark.SparkApp;
 import com.lucidworks.spark.filter.DocFilterContext;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
-import org.apache.commons.cli.OptionBuilder;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.common.SolrInputDocument;
@@ -83,16 +82,14 @@ public class DocumentFilteringStreamProcessor extends SparkApp.StreamProcessor {
 
     // map incoming tweets into SolrInputDocument objects for indexing in Solr
     JavaDStream<SolrInputDocument> docs = tweets.map(
-      new Function<Status,SolrInputDocument>() {
-        public SolrInputDocument call(Status status) {
-          SolrInputDocument doc =
-            SolrSupport.autoMapToSolrInputDoc(idFieldName, "tweet-"+status.getId(), status, null);
-          doc.setField("provider_s", "twitter");
-          doc.setField("author_s", status.getUser().getScreenName());
-          doc.setField("type_s", status.isRetweet() ? "echo" : "post");
-          return doc;
-        }
-      }
+            (Function<Status, SolrInputDocument>) status -> {
+              SolrInputDocument doc =
+                SolrSupport.autoMapToSolrInputDoc(idFieldName, "tweet-"+status.getId(), status, null);
+              doc.setField("provider_s", "twitter");
+              doc.setField("author_s", status.getUser().getScreenName());
+              doc.setField("type_s", status.isRetweet() ? "echo" : "post");
+              return doc;
+            }
     );
 
     // run each doc through a list of filters pulled from our DocFilterContext
@@ -122,26 +119,26 @@ public class DocumentFilteringStreamProcessor extends SparkApp.StreamProcessor {
 
   public Option[] getOptions() {
     return new Option[]{
-      OptionBuilder
-        .withArgName("LIST")
+      Option.builder("tweetFilters")
+        .argName("LIST")
         .hasArg()
-        .isRequired(false)
-        .withDescription("List of Twitter keywords to filter on, separated by commas")
-        .create("tweetFilters"),
-      OptionBuilder
-        .withArgName("NAME")
+        .required(false)
+        .desc("List of Twitter keywords to filter on, separated by commas")
+        .build(),
+      Option.builder("filterCollection")
+        .argName("NAME")
         .hasArg()
-        .isRequired(false)
-        .withDescription("Collection to pull configuration files to create an " +
+        .required(false)
+        .desc("Collection to pull configuration files to create an " +
           "EmbeddedSolrServer for document matching; defaults to the value of the collection option.")
-        .create("filterCollection"),
-      OptionBuilder
-        .withArgName("CLASS")
+        .build(),
+      Option.builder("docFilterContextImplClass")
+        .argName("CLASS")
         .hasArg()
-        .isRequired(false)
-        .withDescription("Name of the DocFilterContext implementation class; defaults to an internal example impl: "+
+        .required(false)
+        .desc("Name of the DocFilterContext implementation class; defaults to an internal example impl: "+
           ExampleDocFilterContextImpl.class.getName())
-        .create("docFilterContextImplClass")
+        .build()
     };
   }
 }

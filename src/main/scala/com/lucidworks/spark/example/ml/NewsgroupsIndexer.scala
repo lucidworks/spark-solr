@@ -14,7 +14,7 @@ import org.joda.time.DateTimeZone
 import org.joda.time.format.{DateTimeFormat, DateTimeFormatterBuilder, ISODateTimeFormat}
 
 import collection.mutable.ListBuffer
-import collection.JavaConversions._
+import scala.collection.convert.ImplicitConversions._
 import scala.io.Source
 import scala.util.control.NonFatal
 

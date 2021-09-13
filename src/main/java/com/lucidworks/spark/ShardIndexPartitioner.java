@@ -72,16 +72,16 @@ public class ShardIndexPartitioner extends Partitioner implements Serializable {
   
   protected final synchronized int getShardIndex(String shardId, DocCollection dc) {
     if (shardIndexCache == null)
-      shardIndexCache = new HashMap<String,Integer>(20);
+      shardIndexCache = new HashMap<>(20);
 
     Integer idx = shardIndexCache.get(shardId);
     if (idx != null)
-      return idx.intValue(); // meh auto-boxing
+      return idx; // meh auto-boxing
 
     int s = 0;
     for (Slice slice : dc.getSlices()) {
       if (shardId.equals(slice.getName())) {
-        shardIndexCache.put(shardId, new Integer(s));
+        shardIndexCache.put(shardId, s);
         return s;
       }
       ++s;

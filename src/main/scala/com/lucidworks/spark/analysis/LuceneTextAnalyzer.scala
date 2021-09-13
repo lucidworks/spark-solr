@@ -19,7 +19,6 @@ package com.lucidworks.spark.analysis
 
 import java.io.{PrintWriter, Reader, StringWriter}
 import java.util.regex.Pattern
-
 import com.lucidworks.spark.util.Utils
 import org.apache.commons.io.IOUtils
 import org.apache.lucene.analysis.custom.CustomAnalyzer
@@ -30,9 +29,11 @@ import org.apache.solr.schema.JsonPreAnalyzedParser
 import org.json4s.jackson.JsonMethods._
 import org.json4s.jackson.Serialization
 
-import scala.collection.JavaConversions._
+import scala.collection.convert.ImplicitConversions.`list asScalaBuffer`
 import scala.collection.immutable
 import scala.collection.mutable
+import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions._
 import scala.util.control.Breaks._
 import scala.util.control.NonFatal
 

@@ -90,7 +90,7 @@ class StreamingSolrRDD(
         query.setRequestHandler(solrRequestHandler)
         logger.debug(s"Using export handler to fetch documents from ${partition.preferredReplica} for query: ${partition.query}")
         val resultsIterator = getExportHandlerBasedIterator(url, query, partition.numWorkers, partition.workerId)
-        context.addTaskCompletionListener { (context) =>
+        context.addTaskCompletionListener[Unit] { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
         resultsIterator
@@ -161,7 +161,7 @@ class StreamingSolrRDD(
 
   override def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
+    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.nonEmpty) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     }
     if (!solrQuery.getRows.eq(null)) {

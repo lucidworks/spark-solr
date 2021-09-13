@@ -5,7 +5,6 @@ import com.lucidworks.spark.ml.feature.LuceneTextAnalyzerTransformer;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.classification.LogisticRegression;
@@ -28,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.spark.sql.SparkSession;
-import scala.collection.JavaConversions$;
+import scala.collection.JavaConverters$;
 
 public class MLPipeline implements SparkApp.RDDProcessor {
 
@@ -168,7 +167,7 @@ public class MLPipeline implements SparkApp.RDDProcessor {
     // This grid will have 3 x 2 x 2 x 2 = 24 parameter settings for CrossValidator to choose from.
     ParamGridBuilder paramGridBuilder = new ParamGridBuilder()
         .addGrid(hashingTF.numFeatures(), new int[]{1000, 5000})
-        .addGrid(analyzer.analysisSchema(), JavaConversions$.MODULE$.collectionAsScalaIterable(analysisSchemas))
+        .addGrid(analyzer.analysisSchema(), JavaConverters$.MODULE$.collectionAsScalaIterable(analysisSchemas))
         .addGrid(analyzer.prefixTokensWithInputCol());
 
     if (estimatorStage instanceof LogisticRegression) {

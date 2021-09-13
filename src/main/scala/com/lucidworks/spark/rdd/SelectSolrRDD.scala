@@ -54,7 +54,7 @@ class SelectSolrRDD(
         query.setRequestHandler(solrRequestHandler)
         logger.debug(s"Using cursorMarks to fetch documents from ${partition.preferredReplica} for query: ${partition.query}")
         val resultsIterator = new StreamingResultsIterator(SolrSupport.getCachedHttpSolrClient(url, zkHost), partition.query, partition.cursorMark)
-        context.addTaskCompletionListener { (context) =>
+        context.addTaskCompletionListener[Unit] { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from shard $url for partition ${split.index}")
         }
         resultsIterator
@@ -69,7 +69,7 @@ class SelectSolrRDD(
         query.setStart(null) // important! must start as null else the Iterator will advance the start position by the row size
         val resultsIterator = new StreamingResultsIterator(SolrSupport.getCachedCloudClient(p.zkhost), query)
         resultsIterator.setMaxSampleDocs(p.maxRows)
-        context.addTaskCompletionListener { (context) =>
+        context.addTaskCompletionListener[Unit] { (context) =>
           logger.info(f"Fetched ${resultsIterator.getNumDocs} rows from the limit (${p.maxRows}) partition of ${p.collection}")
         }
         resultsIterator
@@ -149,7 +149,7 @@ class SelectSolrRDD(
 
   override def buildQuery: SolrQuery = {
     var solrQuery : SolrQuery = SolrQuerySupport.toQuery(query.get)
-    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.length > 0) {
+    if (!solrQuery.getFields.eq(null) && solrQuery.getFields.nonEmpty) {
       solrQuery = solrQuery.setFields(fields.getOrElse(Array.empty[String]):_*)
     }
     if (!solrQuery.getRows.eq(null) && rows.isDefined) {
