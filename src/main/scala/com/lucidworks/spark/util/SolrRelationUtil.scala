@@ -645,7 +645,7 @@ object SolrRelationUtil extends LazyLogging {
                   case any => values.add(Array(any))
                     }
               } else {
-                values.add(None)
+                values.add(null)
               }
           }
         } else {
