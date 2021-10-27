@@ -17,8 +17,8 @@
 
 package com.lucidworks.spark.analysis;
 
-import junit.framework.Assert;
 import org.junit.Test;
+import static org.junit.Assert.assertEquals;
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -323,7 +323,7 @@ public class LuceneTextAnalyzerTest {
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String field, String in, List<String> expected) {
     List<String> output = analyzer.analyzeJava(field, in);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, Reader reader, List<String> expected) {
@@ -332,7 +332,7 @@ public class LuceneTextAnalyzerTest {
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String field, Reader reader, List<String> expected) {
     List<String> output = analyzer.analyzeJava(field, reader);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, List<String> in, List<String> expected) {
@@ -341,33 +341,33 @@ public class LuceneTextAnalyzerTest {
 
   private static void assertExpectedTokens(LuceneTextAnalyzer analyzer, String field, List<String> in, List<String> expected) {
     List<String> output = analyzer.analyzeMVJava(field, in);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedTokens
       (LuceneTextAnalyzer analyzer, Map<String,String> fieldValues, Map<String,List<String>> expected) {
     Map<String,List<String>> output = analyzer.analyzeJava(fieldValues);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedTokensMV // different name because type erasure
       (LuceneTextAnalyzer analyzer, Map<String,List<String>> fieldValues, Map<String,List<String>> expected) {
     Map<String,List<String>> output = analyzer.analyzeMVJava(fieldValues);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedJson
       (LuceneTextAnalyzer analyzer, String field, String in, boolean stored, String expected) {
     // TODO: compare parsed JSON rather than strings; direct string comparison is brittle, e.g. key ordering in JSON objects is not guaranteed
     String output = analyzer.toPreAnalyzedJson(field, in, stored);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private static void assertExpectedJson
       (LuceneTextAnalyzer analyzer, String field, Reader reader, boolean stored, String expected) {
     // TODO: compare parsed JSON rather than strings; direct string comparison is brittle, e.g. key ordering in JSON objects is not guaranteed
     String output = analyzer.toPreAnalyzedJson(field, reader, stored);
-    Assert.assertEquals(expected, output);
+    assertEquals(expected, output);
   }
 
   private String json(String singleQuoted) {
