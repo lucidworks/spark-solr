@@ -91,7 +91,7 @@ class SolrConf(config: Map[String, String]) extends Serializable with LazyLoggin
     if (config.contains(SOLR_DOC_VALUES)) Some(config(SOLR_DOC_VALUES).toBoolean) else None
 
   def getSplitsPerShard: Option[Int] =
-    if (config.contains(SOLR_SPLITS_PER_SHARD_PARAM)) Some(config(SOLR_SPLITS_PER_SHARD_PARAM).toInt) else None
+    if (config.contains(SOLR_SPLITS_PER_SHARD_PARAM)) Some(config(SOLR_SPLITS_PER_SHARD_PARAM).toInt) else Some(1)
 
   def escapeFieldNames: Option[Boolean] =
     if (config.contains(ESCAPE_FIELDNAMES_PARAM)) Some(config(ESCAPE_FIELDNAMES_PARAM).toBoolean) else None
