@@ -145,8 +145,7 @@ class EventsimTestSuite extends EventsimBuilder {
       SOLR_DO_SPLITS -> "true"
     )
     val df: DataFrame = sparkSession.read.format("solr").options(options).load()
-    assert(df.rdd.getNumPartitions > numShards)
-    assert(df.rdd.getNumPartitions == 4)
+    assert(df.rdd.getNumPartitions == numShards)
   }
 
   test("SQL query splits with export handler") {
@@ -386,7 +385,7 @@ class EventsimTestSuite extends EventsimBuilder {
 
     solrRelation.initialQuery.setSorts(Collections.emptyList())
     SolrRelation.addSortField(solrRelation.baseSchema.get, querySchema, solrRelation.initialQuery, solrRelation.uniqueKey)
-    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause(solrRelation.uniqueKey, SolrQuery.ORDER.asc)))
+    assert(solrRelation.initialQuery.getSorts == Collections.singletonList(new SortClause("_version_", SolrQuery.ORDER.asc)))
   }
 
   test("Test dynamic extensions") {

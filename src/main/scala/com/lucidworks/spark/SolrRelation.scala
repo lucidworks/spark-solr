@@ -871,7 +871,7 @@ object SolrRelation extends LazyLogging {
     //Always sort on _version_ asc
     query.addSort("_version_", SolrQuery.ORDER.asc)
     return
-    
+
     //Dead code below, but leaving in case we want to bring it back to life.
     // if doc values enabled for the uniqueKey field, use that for sorting
     if (baseSchema.fieldNames.contains(uniqueKey)) {
