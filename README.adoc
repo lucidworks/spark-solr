@@ -261,7 +261,7 @@ Keep in mind that this is only a hint to the split calculator and you may end up
 
 Usage: `option("splits_per_shard", "30")`
 
-Default: default value is calculated automatically based on the number of docs for Solr query
+Default: 1
 
 ==== flatten_multivalued
 
