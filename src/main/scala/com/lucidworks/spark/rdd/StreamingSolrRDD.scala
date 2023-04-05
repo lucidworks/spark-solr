@@ -20,7 +20,7 @@ class StreamingSolrRDD(
     fields: Option[Array[String]] = None,
     rows: Option[Int] = Option(DEFAULT_PAGE_SIZE),
     splitField: Option[String] = None,
-    splitsPerShard: Option[Int] = None,
+    splitsPerShard: Option[Int] = Some(1),
     solrQuery: Option[SolrQuery] = None,
     uKey: Option[String] = None,
     val accumulator: Option[SparkSolrAccumulator] = None)
