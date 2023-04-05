@@ -871,30 +871,6 @@ object SolrRelation extends LazyLogging {
     //Always sort on _version_ asc
     query.addSort("_version_", SolrQuery.ORDER.asc)
     return
-
-    //Dead code below, but leaving in case we want to bring it back to life.
-    // if doc values enabled for the uniqueKey field, use that for sorting
-    if (baseSchema.fieldNames.contains(uniqueKey)) {
-      if (baseSchema(uniqueKey).metadata.getBoolean("docValues")) {
-        query.addSort(uniqueKey, SolrQuery.ORDER.asc)
-        return
-      }
-    }
-
-    querySchema.fields.foreach(field => {
-      val solrFieldName = if (field.metadata.contains("name")) field.metadata.getString("name") else field.name
-      // The field only contains 'multiValued' in the schema if 'flattenMultivalued' is false (it is true by default)
-      // Hence, this is not always reliable. It is possible a multiValued field ends up being a sort field
-      if (field.metadata.contains("multiValued")) {
-        if (!field.metadata.getBoolean("multiValued")) {
-          query.addSort(solrFieldName, SolrQuery.ORDER.asc)
-          return
-        }
-      } else {
-        query.addSort(solrFieldName, SolrQuery.ORDER.asc)
-        return
-      }
-    })
   }
 
   def parseSortParamFromString(sortParam: String):  List[SortClause] = {
