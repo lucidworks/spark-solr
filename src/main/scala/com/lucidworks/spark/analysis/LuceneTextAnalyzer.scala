@@ -312,11 +312,11 @@ private class AnalyzerSchema(val analysisSchema: String) {
   var invalidMessages : StringBuilder = new StringBuilder()
   try {
     schemaConfig.defaultLuceneMatchVersion.foreach { version =>
-      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_7_0_0)) {
+      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.parse("7.0.0"))) {
         isValid = false
         invalidMessages.append(
           s"""defaultLuceneMatchVersion "${schemaConfig.defaultLuceneMatchVersion}"""")
-          .append(" is not on or after ").append(LuceneVersion.LUCENE_7_0_0).append("\n")
+          .append(" is not on or after ").append(LuceneVersion.parse("7.0.0")).append("\n")
       }
     }
   } catch {
@@ -382,9 +382,11 @@ private class AnalyzerSchema(val analysisSchema: String) {
           try {
             val clazz = Utils.classForName(fieldConfig.get.analyzer)
             analyzer = Some(clazz.newInstance.asInstanceOf[Analyzer])
+/*
             schemaConfig.defaultLuceneMatchVersion foreach { version =>
               analyzer.get.setVersion(LuceneVersion.parseLeniently(version))
             }
+*/
           } catch {
             case NonFatal(e) => isValid = false
               val writer = new StringWriter

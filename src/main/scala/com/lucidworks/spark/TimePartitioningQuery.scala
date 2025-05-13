@@ -1,22 +1,20 @@
 package com.lucidworks.spark
 
-import java.text.SimpleDateFormat
-import java.util.{Date, TimeZone}
-import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
-
-import org.apache.solr.client.solrj.SolrQuery
-
-import scala.collection.JavaConverters._
+import com.lucidworks.spark.TimePartitioningQuery._
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{ConfigurationConstants, SolrQuerySupport, SolrSupport}
-import TimePartitioningQuery._
-import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
 import org.apache.lucene.search.{Query, TermRangeQuery}
 import org.apache.lucene.util.BytesRef
+import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
+import org.apache.solr.client.solrj.SolrQuery
 import org.apache.solr.util.DateMathParser
 
+import java.text.SimpleDateFormat
+import java.util.concurrent.TimeUnit
+import java.util.regex.Pattern
+import java.util.{Date, TimeZone}
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters.asScalaSetConverter
 
 class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Option[List[String]] = None) extends LazyLogging {
 
@@ -81,7 +79,7 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
 
   def findAllPartitions: List[String] = {
     val collections: Set[String] = SolrSupport.getCachedCloudClient(solrConf.getZkHost.get)
-        .getZkStateReader.getClusterState.getCollectionsMap.keySet().asScala.toSet
+        .getClusterState.getCollectionsMap.keySet().asScala.toSet
     val partitionMatchRegex: Pattern = getPartitionMatchRegex
 
     val partitionListBuffer: ListBuffer[String] = ListBuffer.empty[String]

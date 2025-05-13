@@ -2,12 +2,12 @@ package com.lucidworks.spark
 
 import java.io.File
 import java.util.UUID
-
 import com.lucidworks.spark.example.ml.DateConverter
 import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil, SolrSupport}
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
+import org.apache.solr.common.cloud.ZkStateReader
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.udf
@@ -44,8 +44,7 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Su
       testWorkingDir.toPath, solrXmlContents, extraServlets, null /* extra filters */)
     cloudClient = cluster.getSolrClient
     cloudClient.connect()
-
-    assertTrue(!cloudClient.getZkStateReader.getClusterState.getLiveNodes.isEmpty)
+    assertTrue(!ZkStateReader.from(cloudClient).getClusterState.getLiveNodes.isEmpty)
     zkHost = cluster.getZkServer.getZkAddress
   }
 

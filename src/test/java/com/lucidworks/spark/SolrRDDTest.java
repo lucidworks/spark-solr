@@ -6,6 +6,7 @@ import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.Aliases;
+import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -40,7 +41,7 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     request.setPath("/admin/collections");
     cloudSolrServer.request(request);
 
-    Aliases aliases = cloudSolrServer.getZkStateReader().getAliases();
+    Aliases aliases = ZkStateReader.from(cloudSolrServer).getAliases();
     assertEquals(createAliasCollectionsList, aliases.getCollectionAliasMap().get(aliasName));
 
     // ok, alias is setup ... now fire a query against it

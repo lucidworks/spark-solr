@@ -38,13 +38,12 @@
   </distributionManagement>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
-    <spark.version>3.1.2</spark.version>
-    <solr.version>8.11.0</solr.version>
-    <hadoop.version>3.2.2</hadoop.version>
+    <java.version>11</java.version>
+    <spark.version>3.5.5</spark.version>
+    <solr.version>9.8.1</solr.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <fasterxml.version>2.12.3</fasterxml.version>
-    <scala.version>2.12.12</scala.version>
-    <scala.binary.version>2.12</scala.binary.version>
+    <scala.version>2.12.20</scala.version>
     <scala.binary.version>2.12</scala.binary.version>
     <scoverage.plugin.version>1.4.1</scoverage.plugin.version>
     <MaxPermSize>128m</MaxPermSize>
@@ -172,7 +171,7 @@
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.2.2</version>
+        <version>4.9.5</version>
         <executions>
           <execution>
             <id>eclipse-add-source</id>
@@ -488,6 +487,12 @@
       <artifactId>commons-io</artifactId>
       <version>2.8.0</version>
     </dependency>
+    <!-- https://mvnrepository.com/artifact/org.apache.lucene/lucene-queryparser -->
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>9.12.1</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>
       <artifactId>solr-solrj</artifactId>
@@ -607,7 +612,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
-      <version>3.10</version>
+      <version>3.17.0</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -657,13 +662,13 @@
     <dependency>
       <groupId>org.scalatest</groupId>
       <artifactId>scalatest_${scala.binary.version}</artifactId>
-      <version>3.2.0</version>
+      <version>3.3.0-SNAP4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.scalatest</groupId>
       <artifactId>scalatest-funsuite_${scala.binary.version}</artifactId>
-      <version>3.2.0</version>
+      <version>3.3.0-SNAP4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -675,11 +680,6 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
       <version>1.21</version>
-    </dependency>
-    <dependency> <!-- optional dependency of joda-time that is mandatory in Scala -->
-      <groupId>org.joda</groupId>
-      <artifactId>joda-convert</artifactId>
-      <version>2.2.1</version>
     </dependency>
     <dependency>
       <groupId>com.github.tomakehurst</groupId>

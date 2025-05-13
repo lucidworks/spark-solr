@@ -33,21 +33,21 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.control.Breaks._
 
 object CacheCloudSolrClient {
-  private val loader = new CacheLoader[CloudClientParams, CloudSolrClient]() {
-    def load(cloudClientParams: CloudClientParams): CloudSolrClient = {
+  private val loader = new CacheLoader[CloudClientParams, CloudLegacySolrClient]() {
+    def load(cloudClientParams: CloudClientParams): CloudLegacySolrClient = {
       SolrSupport.getNewSolrCloudClient(cloudClientParams)
     }
   }
 
-  private val listener = new RemovalListener[CloudClientParams, CloudSolrClient]() {
-    def onRemoval(rn: RemovalNotification[CloudClientParams, CloudSolrClient]): Unit = {
+  private val listener = new RemovalListener[CloudClientParams, CloudLegacySolrClient]() {
+    def onRemoval(rn: RemovalNotification[CloudClientParams, CloudLegacySolrClient]): Unit = {
       if (rn != null && rn.getValue != null) {
         rn.getValue.close()
       }
     }
   }
 
-  val cache: LoadingCache[CloudClientParams, CloudSolrClient] = CacheBuilder
+  val cache: LoadingCache[CloudClientParams, CloudLegacySolrClient] = CacheBuilder
     .newBuilder()
     .removalListener(listener)
     .build(loader)
@@ -192,10 +192,10 @@ object SolrSupport extends LazyLogging {
   }
 
   // This method should not be used directly. The method [[SolrSupport.getCachedCloudClient]] should be used instead
-  private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
+  private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudLegacySolrClient =  {
     val zkHost = cloudClientParams.zkHost
     logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
-    val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
+    val solrClientBuilder = new CloudLegacySolrClient.Builder(List(zkHost))
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
       if (authHttpClientBuilder.get != null) {
@@ -209,17 +209,18 @@ object SolrSupport extends LazyLogging {
     val params = new ModifiableSolrParams(cloudClientParams.solrParams.orNull)
     params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
     if (isKerberosNeeded(zkHost)) {
-      val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
+      val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(null)
       HttpClientUtil.setHttpClientBuilder(krb5HttpClientBuilder)
     }
     if (isBasicAuthNeeded(zkHost)) {
-      val basicAuthBuilder = new PreemptiveBasicAuthClientBuilderFactory().getHttpClientBuilder(java.util.Optional.empty())
+      val basicAuthBuilder = new PreemptiveBasicAuthClientBuilderFactory().getHttpClientBuilder(null)
       HttpClientUtil.setHttpClientBuilder(basicAuthBuilder)
     }
     val httpClient = HttpClientUtil.createClient(params)
-    val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
-    solrClient.setZkClientTimeout(cloudClientParams.zkClientTimeout)
-    solrClient.setZkConnectTimeout(cloudClientParams.zkConnectTimeout)
+    val solrClient = solrClientBuilder
+      .withZkClientTimeout(cloudClientParams.zkClientTimeout, TimeUnit.MILLISECONDS)
+      .withZkConnectTimeout(cloudClientParams.zkConnectTimeout, TimeUnit.MILLISECONDS)
+      .withHttpClient(httpClient).build()
     solrClient.connect()
     logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
@@ -238,26 +239,28 @@ object SolrSupport extends LazyLogging {
   }
 
   // Use this only if you want a new SolrCloudClient instance. This new instance should be closed by the methods downstream
-  def getNewSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient = {
+  def getNewSolrCloudClient(cloudClientParams: CloudClientParams): CloudLegacySolrClient = {
     getSolrCloudClient(cloudClientParams)
   }
 
-  def getCachedCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient = {
+  def getCachedCloudClient(cloudClientParams: CloudClientParams): CloudLegacySolrClient = {
     CacheCloudSolrClient.cache.get(cloudClientParams)
   }
 
-  def getCachedCloudClient(zkHost: String): CloudSolrClient = {
+  def getCachedCloudClient(zkHost: String): CloudLegacySolrClient = {
     CacheCloudSolrClient.cache.get(CloudClientParams(zkHost))
   }
 
   def getSolrBaseUrl(zkHost: String): String = {
     val solrClient = getCachedCloudClient(zkHost)
-    val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
+    val liveNodes = solrClient.getClusterState.getLiveNodes
     if (liveNodes.isEmpty) {
       throw new RuntimeException("No live nodes found for cluster: " + zkHost)
     }
-    var solrBaseUrl = solrClient.getZkStateReader.getBaseUrlForNodeName(liveNodes.iterator().next())
-    if (!solrBaseUrl.endsWith("?")) solrBaseUrl += "/"
+    var solrBaseUrl: String = ZkStateReader.from(solrClient).getBaseUrlForNodeName(liveNodes.iterator().next())
+    if (!solrBaseUrl.endsWith("?")) {
+      solrBaseUrl = solrBaseUrl + "/"
+    }
     solrBaseUrl
   }
 
@@ -684,7 +687,7 @@ object SolrSupport extends LazyLogging {
 
   def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
     val solrClient = getCachedCloudClient(zkHost)
-    val zkStateReader: ZkStateReader = solrClient.getZkStateReader
+    val zkStateReader: ZkStateReader = ZkStateReader.from(solrClient)
     val clusterState: ClusterState = zkStateReader.getClusterState
     var collections = Array.empty[String]
     for(col <- collection.split(",")) {

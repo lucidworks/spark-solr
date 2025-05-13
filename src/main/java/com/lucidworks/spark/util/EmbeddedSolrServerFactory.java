@@ -1,21 +1,18 @@
 package com.lucidworks.spark.util;
 
+import org.apache.commons.io.FileUtils;
+import org.apache.log4j.Logger;
+import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
+import org.apache.solr.client.solrj.impl.CloudLegacySolrClient;
+import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.core.CoreContainer;
+import org.apache.solr.core.SolrCore;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
-import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.common.cloud.ZkConfigManager;
-import org.apache.solr.common.cloud.ZkStateReader;
-import org.apache.solr.core.CoreContainer;
-import org.apache.solr.core.SolrCore;
-
-import org.apache.log4j.Logger;
-
-import org.apache.commons.io.FileUtils;
 
 /**
  * Supports one or more embedded Solr servers in the same JVM
@@ -53,14 +50,14 @@ public class EmbeddedSolrServerFactory implements Serializable {
 
   private EmbeddedSolrServer bootstrapEmbeddedSolrServer(String zkHost, String collection, String solrConfigXml, String solrXml) throws Exception {
 
-    CloudSolrClient cloudClient = SolrSupport.getCachedCloudClient(zkHost);
+    CloudLegacySolrClient cloudClient = SolrSupport.getCachedCloudClient(zkHost);
     cloudClient.connect();
 
-    ZkStateReader zkStateReader = cloudClient.getZkStateReader();
+    ZkStateReader zkStateReader = ZkStateReader.from(cloudClient);
     if (!zkStateReader.getClusterState().hasCollection(collection))
       throw new IllegalStateException("Collection '"+collection+"' not found!");
 
-    String configName = zkStateReader.readConfigName(collection);
+    String configName = zkStateReader.getCollection(collection).getConfigName();
     if (configName == null)
       throw new IllegalStateException("No configName found for Collection: "+collection);
 
@@ -79,9 +76,7 @@ public class EmbeddedSolrServerFactory implements Serializable {
     FileUtils.forceMkdir(instanceDir);
 
     File confDir = new File(instanceDir, "conf");
-    ZkConfigManager zkConfigManager =
-      new ZkConfigManager(cloudClient.getZkStateReader().getZkClient());
-    zkConfigManager.downloadConfigDir(configName, confDir.toPath());
+    ZkStateReader.from(cloudClient).getZkClient().downConfig(configName, confDir.toPath());
     if (!confDir.isDirectory())
       throw new IOException("Failed to download /configs/"+configName+" from ZooKeeper!");
 
