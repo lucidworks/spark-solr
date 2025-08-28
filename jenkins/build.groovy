@@ -1,3 +1,5 @@
+@Library("one-platform-lib") _
+
 pipeline {
     agent {
         kubernetes {
