@@ -50,26 +50,18 @@ pipeline {
                 checkout scm
             }
         }
-        
+
         stage("Build") {
             steps {
                 script {
-                    withCredentials([
-                      [$class: 'FileBinding', credentialsId: 'spark-solr-pubring', variable: 'PUBRING'],
-                      [$class: 'FileBinding', credentialsId: 'spark-solr-secring', variable: 'SECRING']
-                    ]){
-                        dir("${env.WORKSPACE}"){
-                          docker.withRegistry('https://fusion-dev-docker.ci-artifactory.lucidworks.com', 'ARTIFACTORY_JENKINS') {
-                              docker.image('fusion-dev-docker.ci-artifactory.lucidworks.com/maven-docker-builder:v0.0.1').inside("-v ${env.WORKSPACE}:/root -w /root") {
-                                sh """
-                                  mkdir -p gnupg
-                                  cp ${PUBRING} gnupg/pubring.gpg
-                                  cp ${SECRING} gnupg/secring.gpg
-                                  chmod go-rwx gnupg
-                                  mvn --version
-                                  mvn clean package -DskipTests
-                                """
-                            }
+                    container('jdk-docker-builder') {
+                        withCredentials([
+                                [$class: 'UsernamePasswordMultiBinding', credentialsId: 'artifactory_jenkins', usernameVariable: 'ORG_GRADLE_PROJECT_lucidArtifactoryUsername', passwordVariable: 'ORG_GRADLE_PROJECT_lucidArtifactoryPassword']
+                        ]){
+                            sh """
+                                mvn --version
+                                mvn clean package -DskipTests
+                            """
                         }
                     }
                 }
