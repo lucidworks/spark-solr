@@ -90,9 +90,6 @@ pipeline {
         }
     }
     post {
-        always{
-          cleanWs()
-        }
         success {
             slackSend (message: "Build <${env.BUILD_URL}|#${env.BUILD_NUMBER}> spark-solr release passed " +\
                 "in ${currentBuild.durationString - ~/and counting/}", \
