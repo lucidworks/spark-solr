@@ -50,7 +50,7 @@ pipeline {
                 checkout scm
             }
         }
-
+        
         stage("Build") {
             steps {
                 script {
@@ -66,13 +66,12 @@ pipeline {
                     }
                 }
             }
-          }
-          post {
-            success {
+            post {
+                success {
 
-                  archiveArtifacts 'target/*.jar'
+                    archiveArtifacts 'target/*.jar'
+                }
             }
-          }
         }
     }
     post {
