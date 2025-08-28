@@ -1,5 +1,16 @@
 pipeline {
-    agent { node { label  'fusionBuildWorker' } }
+    agent {
+        kubernetes {
+            workspaceVolume dynamicPVC(accessModes: 'ReadWriteOnce', requestsSize: "50Gi", storageClassName: "standard-rwo")
+            yaml containers.withContainers([
+                    "kaniko",
+                    "containerdiff",
+                    "utility",
+                    "helm",
+                    "jdkDockerBuilder(maven-8)"
+            ])
+        }
+    }
     options{
       buildDiscarder(logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '14', numToKeepStr: '28'))
       timestamps()
