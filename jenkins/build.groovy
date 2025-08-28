@@ -47,18 +47,10 @@ pipeline {
     stages {
         stage("Git Checkout") {
             steps {
-                slackSend (message: "Build spark-solr release process started", \
-                    channel: env.SLACK_CHANNEL, color: env.COLOUR_STARTED)
-
-                checkout([$class: 'GitSCM',
-                        branches: [[name: params.USE_GIT_BRANCH]],
-                        doGenerateSubmoduleConfigurations: false,
-                        extensions: [],
-                        gitTool: 'Default',
-                        submoduleCfg: [],
-                        userRemoteConfigs: [[credentialsId: '1d4dd6a4-2e4f-4bb3-91ad-bac4054d9d45', refspec: "+refs/heads/*:refs/remotes/origin/*", url: 'git@github.com:lucidworks/spark-solr.git']]])
+                checkout scm
             }
         }
+        
         stage("Build") {
             steps {
                 script {
