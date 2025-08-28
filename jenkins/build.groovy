@@ -40,10 +40,6 @@ pipeline {
       COLOUR_FAILED  = '#ff0000'
 
     }
-    parameters {
-        string(defaultValue: "", name: 'USE_GIT_BRANCH', description: 'The git branch to use')
-    }
-
     stages {
         stage("Git Checkout") {
             steps {
