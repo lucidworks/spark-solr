@@ -1,2 +1,2 @@
-@Library("one-platform-lib@DEVX-367") _
+@Library("one-platform-lib") _
 buildFusionSparkSolr()
