@@ -7,10 +7,7 @@ import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.client.solrj.io.stream.StreamContext;
 import org.apache.solr.client.solrj.io.stream.TupleStream;
-import org.apache.solr.common.cloud.Replica;
-import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.ZkCoreNodeProps;
-import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
@@ -98,7 +95,8 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
 
   protected Replica getRandomReplica() {
     ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
-    Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection.split(",")[0]).getActiveSlices();
+    final String concreteCollection = findAnyConcreteBackingCollection(zkStateReader);
+    Collection<Slice> slices = zkStateReader.getClusterState().getCollection(concreteCollection).getActiveSlices();
     if (slices == null || slices.size() == 0)
       throw new IllegalStateException("No active shards found "+collection);
 
@@ -107,5 +105,20 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
       shuffler.addAll(slice.getReplicas());
     }
     return shuffler.get(random.nextInt(shuffler.size()));
+  }
+
+  private String findAnyConcreteBackingCollection(ZkStateReader zkStateReader) {
+    final String[] collectionsOrAliases = collection.split(",");
+
+    for (String collectionOrAlias : collectionsOrAliases) {
+      if (zkStateReader.getClusterState().hasCollection(collectionOrAlias)) {
+        return collectionOrAlias;
+      } else if (zkStateReader.getAliases().hasAlias(collectionOrAlias)) {
+        final List<String> backingCollections = zkStateReader.getAliases().resolveAliases(collectionOrAlias);
+        return backingCollections.get(random.nextInt(backingCollections.size()));
+      }
+    }
+
+    throw new IllegalStateException("Could not find any concrete (non-alias) collection underlying [" + collection + "]");
   }
 }
