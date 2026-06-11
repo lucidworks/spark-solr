@@ -2,11 +2,12 @@ package com.lucidworks.spark.query;
 
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.impl.Http2SolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.client.solrj.io.stream.StreamContext;
 import org.apache.solr.client.solrj.io.stream.TupleStream;
+import org.apache.solr.client.solrj.impl.ZkClientClusterStateProvider;
 import org.apache.solr.common.cloud.Replica;
 import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.ZkCoreNodeProps;
@@ -28,12 +29,12 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   protected String collection;
   protected String qt;
   protected CloudSolrClient cloudSolrClient;
-  protected HttpSolrClient httpSolrClient;
+  protected Http2SolrClient httpSolrClient;
   protected SolrClientCache solrClientCache;
 
   private final Random random = new Random(5150L);
 
-  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, HttpSolrClient httpSolrClient, String collection, SolrParams solrParams) {
+  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, Http2SolrClient httpSolrClient, String collection, SolrParams solrParams) {
     super(solrParams);
     this.cloudSolrClient = cloudSolrClient;
     this.httpSolrClient = httpSolrClient;
@@ -91,13 +92,14 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   // We have to set the streaming context so that we can pass our own cloud client with authentication
   protected StreamContext getStreamContext() {
     StreamContext context = new StreamContext();
-    solrClientCache = new SparkSolrClientCache(cloudSolrClient, httpSolrClient);
+    solrClientCache = new SparkSolrClientCache(cloudSolrClient);
     context.setSolrClientCache(solrClientCache);
     return context;
   }
 
   protected Replica getRandomReplica() {
-    ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
+    ZkClientClusterStateProvider zkProvider = (ZkClientClusterStateProvider) cloudSolrClient.getClusterStateProvider();
+    ZkStateReader zkStateReader = zkProvider.getZkStateReader();
     Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection.split(",")[0]).getActiveSlices();
     if (slices == null || slices.size() == 0)
       throw new IllegalStateException("No active shards found "+collection);

@@ -12,6 +12,7 @@ import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{ConfigurationConstants, SolrQuerySupport, SolrSupport}
 import TimePartitioningQuery._
 import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser
+import com.lucidworks.spark.util.SolrSupport
 import org.apache.lucene.search.{Query, TermRangeQuery}
 import org.apache.lucene.util.BytesRef
 import org.apache.solr.util.DateMathParser
@@ -80,8 +81,9 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def findAllPartitions: List[String] = {
-    val collections: Set[String] = SolrSupport.getCachedCloudClient(solrConf.getZkHost.get)
-        .getZkStateReader.getClusterState.getCollectionsMap.keySet().asScala.toSet
+    val client = SolrSupport.getCachedCloudClient(solrConf.getZkHost.get)
+    val collections: Set[String] = SolrSupport.getZkStateReader(client)
+        .getClusterState.getCollectionsMap.keySet().asScala.toSet
     val partitionMatchRegex: Pattern = getPartitionMatchRegex
 
     val partitionListBuffer: ListBuffer[String] = ListBuffer.empty[String]

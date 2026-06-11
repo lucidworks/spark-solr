@@ -13,11 +13,11 @@ import com.lucidworks.spark.filter.DocFilterContext
 import com.lucidworks.spark.fusion.FusionPipelineClient
 import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
 import com.lucidworks.spark.{BatchSizeType, LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
-import org.apache.http.NoHttpResponseException
-import org.apache.solr.client.solrj.impl.{CloudSolrClient, _}
+import org.apache.solr.client.solrj.impl.{CloudSolrClient, Http2SolrClient, ZkClientClusterStateProvider, _}
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
 import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
+import org.apache.solr.common.params.SolrParams
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.params.ModifiableSolrParams
@@ -54,21 +54,21 @@ object CacheCloudSolrClient {
 }
 
 object CacheHttpSolrClient {
-  private val loader = new CacheLoader[ShardInfo, HttpSolrClient]() {
-    def load(shardUrl: ShardInfo): HttpSolrClient = {
-      SolrSupport.getNewHttpSolrClient(shardUrl.shardUrl, shardUrl.zkHost)
+  private val loader = new CacheLoader[ShardInfo, Http2SolrClient]() {
+    def load(shardUrl: ShardInfo): Http2SolrClient = {
+      SolrSupport.getNewHttpSolrClient(shardUrl.shardUrl)
     }
   }
 
-  private val listener = new RemovalListener[ShardInfo, HttpSolrClient]() {
-    def onRemoval(rn: RemovalNotification[ShardInfo, HttpSolrClient]): Unit = {
+  private val listener = new RemovalListener[ShardInfo, Http2SolrClient]() {
+    def onRemoval(rn: RemovalNotification[ShardInfo, Http2SolrClient]): Unit = {
       if (rn != null && rn.getValue != null) {
         rn.getValue.close()
       }
     }
   }
 
-  val cache: LoadingCache[ShardInfo, HttpSolrClient] = CacheBuilder
+  val cache: LoadingCache[ShardInfo, Http2SolrClient] = CacheBuilder
     .newBuilder()
     .removalListener(listener)
     .build(loader)
@@ -84,9 +84,9 @@ object SolrSupport extends LazyLogging {
     sysQuery.setRequestHandler("/admin/info/system")
 
     val baseUrl = getSolrBaseUrl(zkHost)
-    val httpSolrClient = getHttpSolrClient(baseUrl, zkHost)
-    val rsp = httpSolrClient.query(sysQuery)
-    String.valueOf(rsp.getResponse.get("lucene").asInstanceOf[SimpleOrderedMap[_]].get("solr-spec-version"))
+    val httpSolrClient = getCachedHttpSolrClient(baseUrl, zkHost)
+    val rsp = httpSolrClient.query(sysQuery: SolrParams)
+    String.valueOf(rsp.getResponse.get("lucene").asInstanceOf[org.apache.solr.common.util.NamedList[AnyRef]].get("solr-spec-version"))
   }
 
   def isSolrVersionAtleast(solrVersion: String, major: Int, minor: Int, trivial: Int): Boolean = {
@@ -163,31 +163,18 @@ object SolrSupport extends LazyLogging {
     logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
   }
 
-  private def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
-    val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
-    if (fusionAuthClass.isDefined) {
-      val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
-      if (authHttpClientBuilder.isDefined) {
-        logger.info("Custom http client defined: {}", authHttpClientBuilder)
-        return authHttpClientBuilder.get
-          .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
-          .withBaseSolrUrl(shardUrl).build()
-      }
-    }
-    new HttpSolrClient.Builder()
-      .withBaseSolrUrl(shardUrl)
-      .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
-      .build()
+  private def createHttp2SolrClient(shardUrl: String): Http2SolrClient = {
+    new Http2SolrClient.Builder(shardUrl).build()
   }
 
   case class ShardInfo(shardUrl: String, zkHost: String)
   case class CloudClientParams(zkHost: String, zkClientTimeout: Int=30000, zkConnectTimeout: Int=60000, solrParams: Option[ModifiableSolrParams] = None)
 
-  def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
-    getHttpSolrClient(shardUrl, zkHost)
+  def getNewHttpSolrClient(shardUrl: String): Http2SolrClient = {
+    createHttp2SolrClient(shardUrl)
   }
 
-  def getCachedHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+  def getCachedHttpSolrClient(shardUrl: String, zkHost: String): Http2SolrClient = {
     CacheHttpSolrClient.cache.get(ShardInfo(shardUrl, zkHost))
   }
 
@@ -195,46 +182,26 @@ object SolrSupport extends LazyLogging {
   private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
     val zkHost = cloudClientParams.zkHost
     logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
-    val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
-    val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
-    if (authHttpClientBuilder.isDefined) {
-      if (authHttpClientBuilder.get != null) {
-        logger.info("Configured auth http client builder")
-        solrClientBuilder.withLBHttpSolrClientBuilder(
-          new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
-      } else {
-        logger.error("No custom builder found for configured zkhost")
-      }
+
+    // Parse zkHost into host list and optional chroot
+    val zkHosts = new java.util.ArrayList[String]()
+    var zkChroot: java.util.Optional[String] = java.util.Optional.empty()
+    val chrootIdx = zkHost.indexOf("/")
+    if (chrootIdx > 0) {
+      zkHosts.addAll(java.util.Arrays.asList(zkHost.substring(0, chrootIdx).split(","): _*))
+      zkChroot = java.util.Optional.of(zkHost.substring(chrootIdx))
+    } else {
+      zkHosts.addAll(java.util.Arrays.asList(zkHost.split(","): _*))
     }
-    val params = new ModifiableSolrParams(cloudClientParams.solrParams.orNull)
-    params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
-    if (isKerberosNeeded(zkHost)) {
-      val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
-      HttpClientUtil.setHttpClientBuilder(krb5HttpClientBuilder)
-    }
-    if (isBasicAuthNeeded(zkHost)) {
-      val basicAuthBuilder = new PreemptiveBasicAuthClientBuilderFactory().getHttpClientBuilder(java.util.Optional.empty())
-      HttpClientUtil.setHttpClientBuilder(basicAuthBuilder)
-    }
-    val httpClient = HttpClientUtil.createClient(params)
-    val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
-    solrClient.setZkClientTimeout(cloudClientParams.zkClientTimeout)
-    solrClient.setZkConnectTimeout(cloudClientParams.zkConnectTimeout)
+
+    val solrClientBuilder = new CloudSolrClient.Builder(zkHosts, zkChroot)
+    solrClientBuilder.withZkClientTimeout(cloudClientParams.zkClientTimeout, TimeUnit.MILLISECONDS)
+    solrClientBuilder.withZkConnectTimeout(cloudClientParams.zkConnectTimeout, TimeUnit.MILLISECONDS)
+
+    val solrClient = solrClientBuilder.build()
     solrClient.connect()
     logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
-  }
-
-  private def getAuthHttpClientBuilder(zkHost: String): Option[HttpSolrClient.Builder] = {
-    val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
-    if (fusionAuthClass.isDefined) {
-      logger.info("Custom class '{}' configured for auth", fusionAuthClass.get)
-      val authClass: Class[_ <: FusionAuthHttpClient] = fusionAuthClass.get
-      val constructor = authClass.getDeclaredConstructor(classOf[java.lang.String])
-      val authHttpClient: FusionAuthHttpClient = constructor.newInstance(zkHost)
-      return Some(authHttpClient.getHttpClientBuilder)
-    }
-    None
   }
 
   // Use this only if you want a new SolrCloudClient instance. This new instance should be closed by the methods downstream
@@ -250,13 +217,25 @@ object SolrSupport extends LazyLogging {
     CacheCloudSolrClient.cache.get(CloudClientParams(zkHost))
   }
 
+  /** In Solr 9, getZkStateReader() was removed from CloudSolrClient.
+   *  Access it via ZkClientClusterStateProvider for ZK-based clients. */
+  def getZkStateReader(client: CloudSolrClient): ZkStateReader = {
+    client.getClusterStateProvider match {
+      case zk: ZkClientClusterStateProvider => zk.getZkStateReader
+      case other => throw new IllegalStateException(
+        "Expected ZkClientClusterStateProvider but got: " + other.getClass.getName +
+        ". This connector requires ZooKeeper-based Solr cluster connectivity.")
+    }
+  }
+
   def getSolrBaseUrl(zkHost: String): String = {
     val solrClient = getCachedCloudClient(zkHost)
-    val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
+    val zkStateReader = getZkStateReader(solrClient)
+    val liveNodes = zkStateReader.getClusterState.getLiveNodes
     if (liveNodes.isEmpty) {
       throw new RuntimeException("No live nodes found for cluster: " + zkHost)
     }
-    var solrBaseUrl = solrClient.getZkStateReader.getBaseUrlForNodeName(liveNodes.iterator().next())
+    var solrBaseUrl = zkStateReader.getBaseUrlForNodeName(liveNodes.iterator().next())
     if (!solrBaseUrl.endsWith("?")) solrBaseUrl += "/"
     solrBaseUrl
   }
@@ -474,9 +453,9 @@ object SolrSupport extends LazyLogging {
   def shouldRetry(exc: Exception): Boolean = {
     val rootCause = SolrException.getRootCause(exc)
     rootCause match {
-      case e: ConnectException => true
-      case e: NoHttpResponseException => true
-      case e: SocketException => true
+      case _: ConnectException => true
+      case _: SocketException => true
+      case _: java.io.IOException if rootCause.getMessage != null && rootCause.getMessage.contains("No HTTP response") => true
       case _ => false
     }
   }
@@ -684,7 +663,7 @@ object SolrSupport extends LazyLogging {
 
   def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
     val solrClient = getCachedCloudClient(zkHost)
-    val zkStateReader: ZkStateReader = solrClient.getZkStateReader
+    val zkStateReader: ZkStateReader = getZkStateReader(solrClient)
     val clusterState: ClusterState = zkStateReader.getClusterState
     var collections = Array.empty[String]
     for(col <- collection.split(",")) {
