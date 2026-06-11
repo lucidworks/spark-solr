@@ -521,7 +521,7 @@ object SolrQuerySupport extends LazyLogging {
     }
   }
 
-  def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
+  def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: SolrClient): Set[String] = {
     val lukeRequest = new LukeRequestWithoutIndexFlags()
     lukeRequest.setNumTerms(0)
     val lukeResponse = lukeRequest.process(httpSolrClient)

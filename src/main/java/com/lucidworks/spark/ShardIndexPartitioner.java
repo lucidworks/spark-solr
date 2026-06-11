@@ -2,6 +2,7 @@ package com.lucidworks.spark;
 
 import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
+import org.apache.solr.client.solrj.impl.ZkClientClusterStateProvider;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.*;
 import org.apache.spark.Partitioner;
@@ -91,7 +92,7 @@ public class ShardIndexPartitioner extends Partitioner implements Serializable {
 
   protected final synchronized DocCollection getDocCollection() {
     if (docCollection == null) {
-      ZkStateReader zkStateReader = getCloudSolrServer().getZkStateReader();
+      ZkStateReader zkStateReader = ((ZkClientClusterStateProvider) getCloudSolrServer().getClusterStateProvider()).getZkStateReader();
       docCollection = zkStateReader.getClusterState().getCollection(collection);
 
       // do basic checks once

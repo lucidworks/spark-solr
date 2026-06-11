@@ -38,9 +38,9 @@
   </distributionManagement>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
+    <java.version>11</java.version>
     <spark.version>3.1.2</spark.version>
-    <solr.version>8.11.0</solr.version>
+    <solr.version>9.9.0</solr.version>
     <hadoop.version>3.2.2</hadoop.version>
     <fasterxml.version>2.12.3</fasterxml.version>
     <scala.version>2.12.12</scala.version>
@@ -160,7 +160,7 @@
             <artifactId>maven-surefire-plugin</artifactId>
             <version>2.22.1</version>
             <configuration>
-              <argLine>${argLine} -XX:MaxPermSize=${MaxPermSize}</argLine>
+              <argLine>${argLine}</argLine>
             </configuration>
           </plugin>
         </plugins>
@@ -172,7 +172,7 @@
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.2.2</version>
+        <version>4.5.6</version>
         <executions>
           <execution>
             <id>eclipse-add-source</id>
@@ -251,7 +251,7 @@
           <junitxml>.</junitxml>
           <!-- Directory/ies for JUnit XML -->
           <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
-          <argLine>-ea -XX:MaxPermSize=${MaxPermSize}</argLine>
+          <argLine>-ea</argLine>
           <systemProperties>
             <java.awt.headless>true</java.awt.headless>
             <java.io.tmpdir>${project.build.directory}/tmp</java.io.tmpdir>
@@ -302,8 +302,9 @@
                   <exclude>org.spark-project.akka:*</exclude>
                   <exclude>org.spark-project:*</exclude>
                   <exclude>net.java.dev.jets3t:jets3t</exclude>
-                  <exclude>org.eclipse.jetty:*</exclude>
-                  <exclude>org.eclipse.jetty.orbit:*</exclude>
+                  <!-- Jetty exclusions removed: Solr 9 SolrJ HTTP/2 client requires Jetty -->
+                  <!-- <exclude>org.eclipse.jetty:*</exclude> -->
+                  <!-- <exclude>org.eclipse.jetty.orbit:*</exclude> -->
                   <exclude>org.slf4j:*</exclude>
                   <exclude>org.scala-lang:scala-library</exclude>
                   <exclude>commons-httpclient:commons-httpclient</exclude>
@@ -493,6 +494,30 @@
       <artifactId>solr-solrj</artifactId>
       <version>${solr.version}</version>
       <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.solr</groupId>
+      <artifactId>solr-solrj-zookeeper</artifactId>
+      <version>${solr.version}</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.solr</groupId>
+      <artifactId>solr-solrj-streaming</artifactId>
+      <version>${solr.version}</version>
+      <type>jar</type>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>${solr.version}</version>
+    </dependency>
+    <!-- jetty-client is runtime scope in solr-solrj but needed at compile time for Http2SolrClient -->
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-client</artifactId>
+      <version>10.0.22</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>

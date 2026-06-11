@@ -65,7 +65,7 @@ class StreamingSolrRDD(
         "; this is probably incorrect so you should provide your own sort criteria.")
     }
 
-    new SolrStreamIterator(shardUrl, SolrSupport.getCachedCloudClient(zkHost), SolrSupport.getCachedHttpSolrClient(shardUrl, zkHost), query, numWorkers, workerId)
+    new SolrStreamIterator(shardUrl, SolrSupport.getCachedCloudClient(zkHost), query, numWorkers, workerId)
   }
 
 
@@ -77,7 +77,7 @@ class StreamingSolrRDD(
         logger.info(s"Using StreamingExpressionResultIterator to process streaming expression for $partition")
         val resultsIterator = new StreamingExpressionResultIterator(
           SolrSupport.getCachedCloudClient(zkHost),
-          SolrSupport.getCachedHttpSolrClient(SolrSupport.getSolrBaseUrl(zkHost) + partition.collection, zkHost), // the baseUrl is just a dummy. It will be later replaced with valid host name at {@code SparkSolrClientCache#getHttpSolrClient}
+          SolrSupport.getCachedHttpSolrClient(SolrSupport.getSolrBaseUrl(zkHost) + partition.collection, zkHost),
           partition.collection,
           partition.params)
         resultsIterator
