@@ -5,7 +5,7 @@ import java.util.{Date, TimeZone}
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 
 import scala.collection.JavaConverters._
 import com.lucidworks.spark.util.QueryConstants._
@@ -80,8 +80,8 @@ class TimePartitioningQuery(solrConf: SolrConf, query: SolrQuery, partitions: Op
   }
 
   def findAllPartitions: List[String] = {
-    val collections: Set[String] = SolrSupport.getCachedCloudClient(solrConf.getZkHost.get)
-        .getZkStateReader.getClusterState.getCollectionsMap.keySet().asScala.toSet
+    val collections: Set[String] = SolrSupport.getZkStateReader(SolrSupport.getCachedCloudClient(solrConf.getZkHost.get))
+        .getClusterState.getCollectionNames.asScala.toSet
     val partitionMatchRegex: Pattern = getPartitionMatchRegex
 
     val partitionListBuffer: ListBuffer[String] = ListBuffer.empty[String]

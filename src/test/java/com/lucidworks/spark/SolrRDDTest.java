@@ -1,7 +1,8 @@
 package com.lucidworks.spark;
 
 import com.lucidworks.spark.rdd.SolrJavaRDD;
-import org.apache.solr.client.solrj.SolrQuery;
+import com.lucidworks.spark.util.SolrSupport;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
@@ -40,7 +41,7 @@ public class SolrRDDTest extends RDDProcessorTestBase {
     request.setPath("/admin/collections");
     cloudSolrServer.request(request);
 
-    Aliases aliases = cloudSolrServer.getZkStateReader().getAliases();
+    Aliases aliases = SolrSupport.getZkStateReader(cloudSolrServer).getAliases();
     assertEquals(createAliasCollectionsList, aliases.getCollectionAliasMap().get(aliasName));
 
     // ok, alias is setup ... now fire a query against it

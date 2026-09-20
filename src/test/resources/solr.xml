@@ -2,17 +2,14 @@
 
   <str name="shareSchema">${shareSchema:false}</str>
 
+  <!-- Solr 10's SolrXmlConfig.fillSolrCloudSection() hard-rejects any <solrcloud> parameter it
+       doesn't recognize (hostContext, genericCoreNodeNames, distribUpdateConnTimeout, and
+       distribUpdateSoTimeout were all removed), so this section is trimmed to the still-valid
+       set: host, hostPort, zkClientTimeout. -->
   <solrcloud>
     <str name="host">127.0.0.1</str>
-    <str name="hostContext">${hostContext:solr}</str>
     <int name="hostPort">${hostPort:8983}</int>
     <int name="zkClientTimeout">${solr.zkclienttimeout:30000}</int>
-    <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
-    <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:45000}</int>
-    <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:340000}</int>
-    <int name="autoReplicaFailoverWaitAfterExpiration">${autoReplicaFailoverWaitAfterExpiration:10000}</int>
-    <int name="autoReplicaFailoverWorkLoopDelay">${autoReplicaFailoverWorkLoopDelay:10000}</int>
-    <int name="autoReplicaFailoverBadNodeExpiration">${autoReplicaFailoverBadNodeExpiration:60000}</int>
   </solrcloud>
 
   <shardHandlerFactory name="shardHandlerFactory"

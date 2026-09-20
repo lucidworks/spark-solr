@@ -4,7 +4,7 @@ import com.lucidworks.spark.SparkApp
 import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.SolrSupport
 import org.apache.commons.cli.{CommandLine, Option}
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.client.solrj.request.CollectionAdminRequest
 import org.apache.spark.{SparkConf, SparkContext}
 

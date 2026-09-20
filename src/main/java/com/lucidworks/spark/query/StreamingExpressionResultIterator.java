@@ -1,8 +1,9 @@
 package com.lucidworks.spark.query;
 
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.log4j.Logger;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.jetty.HttpJettySolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.client.solrj.io.stream.StreamContext;
@@ -28,12 +29,12 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   protected String collection;
   protected String qt;
   protected CloudSolrClient cloudSolrClient;
-  protected HttpSolrClient httpSolrClient;
+  protected HttpJettySolrClient httpSolrClient;
   protected SolrClientCache solrClientCache;
 
   private final Random random = new Random(5150L);
 
-  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, HttpSolrClient httpSolrClient, String collection, SolrParams solrParams) {
+  public StreamingExpressionResultIterator(CloudSolrClient cloudSolrClient, HttpJettySolrClient httpSolrClient, String collection, SolrParams solrParams) {
     super(solrParams);
     this.cloudSolrClient = cloudSolrClient;
     this.httpSolrClient = httpSolrClient;
@@ -97,7 +98,7 @@ public class StreamingExpressionResultIterator extends TupleStreamIterator {
   }
 
   protected Replica getRandomReplica() {
-    ZkStateReader zkStateReader = cloudSolrClient.getZkStateReader();
+    ZkStateReader zkStateReader = SolrSupport.getZkStateReader(cloudSolrClient);
     Collection<Slice> slices = zkStateReader.getClusterState().getCollection(collection.split(",")[0]).getActiveSlices();
     if (slices == null || slices.size() == 0)
       throw new IllegalStateException("No active shards found "+collection);

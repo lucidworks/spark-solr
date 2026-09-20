@@ -10,11 +10,12 @@ import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util._
 import org.apache.commons.lang.StringUtils
 import org.apache.commons.text.StringEscapeUtils
-import org.apache.solr.client.solrj.SolrQuery.SortClause
+import org.apache.solr.client.solrj.request.SolrQuery.SortClause
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.io.stream.expr._
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.{AddField, MultiUpdate, Update}
-import org.apache.solr.client.solrj.{SolrQuery, SolrServerException}
+import org.apache.solr.client.solrj.SolrServerException
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.common.SolrException.ErrorCode
 import org.apache.solr.common.params.{CommonParams, ModifiableSolrParams}
 import org.apache.solr.common.{SolrException, SolrInputDocument}

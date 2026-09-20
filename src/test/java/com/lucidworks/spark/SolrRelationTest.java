@@ -4,7 +4,7 @@ import com.lucidworks.spark.util.ConfigurationConstants;
 import com.lucidworks.spark.util.Constants;
 import com.lucidworks.spark.util.SolrRelationUtil;
 import com.lucidworks.spark.util.SolrSupport;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.sql.*;

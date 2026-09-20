@@ -1,6 +1,6 @@
 package com.lucidworks.spark
 
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.common.params.SolrParams
 import org.apache.spark.Partition
 

@@ -25,7 +25,6 @@ import org.apache.lucene.analysis.custom.CustomAnalyzer
 import org.apache.lucene.analysis.tokenattributes.{CharTermAttribute, OffsetAttribute, PositionIncrementAttribute}
 import org.apache.lucene.analysis.{Analyzer, DelegatingAnalyzerWrapper, TokenStream}
 import org.apache.lucene.util.{Version => LuceneVersion}
-import org.apache.solr.schema.JsonPreAnalyzedParser
 import org.json4s.jackson.JsonMethods._
 import org.json4s.jackson.Serialization
 
@@ -82,6 +81,19 @@ import scala.util.control.NonFatal
   * }
   * }}}
   */
+// Inlined from the now-removed org.apache.solr.schema.JsonPreAnalyzedParser (Solr 10 dropped
+// PreAnalyzedField support entirely). Values copied from Solr 9's JsonPreAnalyzedParser.
+private object JsonPreAnalyzedFormat {
+  val VERSION = "1"
+  val VERSION_KEY = "v"
+  val STRING_KEY = "str"
+  val TOKENS_KEY = "tokens"
+  val TOKEN_KEY = "t"
+  val OFFSET_START_KEY = "s"
+  val OFFSET_END_KEY = "e"
+  val POSINCR_KEY = "i"
+}
+
 class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
   @transient private lazy val analyzerSchema = new AnalyzerSchema(analysisSchema)
   @transient private lazy val analyzerCache = mutable.Map.empty[String, Analyzer]
@@ -252,6 +264,9 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
     //
     // The code below constructs JSON with a fixed set of serialized attributes.
 
+    // org.apache.solr.schema.JsonPreAnalyzedParser was removed in Solr 10 along with the rest of
+    // PreAnalyzedField support. Its JSON key/version constants are inlined here since they are a
+    // fixed, documented format that we still need to produce.
     val termAtt = stream.addAttribute(classOf[CharTermAttribute])
     val offsetAtt = stream.addAttribute(classOf[OffsetAttribute])
     val posIncAtt = stream.addAttribute(classOf[PositionIncrementAttribute])
@@ -261,10 +276,10 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
       stream.reset()
       while (stream.incrementToken) {
         token.clear()
-        token += (JsonPreAnalyzedParser.TOKEN_KEY -> new String(termAtt.buffer, 0, termAtt.length))
-        token += (JsonPreAnalyzedParser.OFFSET_START_KEY -> offsetAtt.startOffset)
-        token += (JsonPreAnalyzedParser.OFFSET_END_KEY -> offsetAtt.endOffset)
-        token += (JsonPreAnalyzedParser.POSINCR_KEY -> posIncAtt.getPositionIncrement)
+        token += (JsonPreAnalyzedFormat.TOKEN_KEY -> new String(termAtt.buffer, 0, termAtt.length))
+        token += (JsonPreAnalyzedFormat.OFFSET_START_KEY -> offsetAtt.startOffset)
+        token += (JsonPreAnalyzedFormat.OFFSET_END_KEY -> offsetAtt.endOffset)
+        token += (JsonPreAnalyzedFormat.POSINCR_KEY -> posIncAtt.getPositionIncrement)
         tokens += token.result
       }
       stream.end()
@@ -272,9 +287,9 @@ class LuceneTextAnalyzer(analysisSchema: String) extends Serializable {
       stream.close()
     }
     val topLevel = immutable.ListMap.newBuilder[String, Any]
-    topLevel += (JsonPreAnalyzedParser.VERSION_KEY -> JsonPreAnalyzedParser.VERSION)
-    if (str.isDefined) topLevel += (JsonPreAnalyzedParser.STRING_KEY -> str)
-    topLevel += (JsonPreAnalyzedParser.TOKENS_KEY -> tokens.result)
+    topLevel += (JsonPreAnalyzedFormat.VERSION_KEY -> JsonPreAnalyzedFormat.VERSION)
+    if (str.isDefined) topLevel += (JsonPreAnalyzedFormat.STRING_KEY -> str)
+    topLevel += (JsonPreAnalyzedFormat.TOKENS_KEY -> tokens.result)
     implicit val formats = org.json4s.DefaultFormats // required by Serialization.write()
     Serialization.write(topLevel.result)
   }
@@ -312,11 +327,11 @@ private class AnalyzerSchema(val analysisSchema: String) {
   var invalidMessages : StringBuilder = new StringBuilder()
   try {
     schemaConfig.defaultLuceneMatchVersion.foreach { version =>
-      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_7_0_0)) {
+      if ( ! LuceneVersion.parseLeniently(version).onOrAfter(LuceneVersion.LUCENE_9_0_0)) {
         isValid = false
         invalidMessages.append(
           s"""defaultLuceneMatchVersion "${schemaConfig.defaultLuceneMatchVersion}"""")
-          .append(" is not on or after ").append(LuceneVersion.LUCENE_7_0_0).append("\n")
+          .append(" is not on or after ").append(LuceneVersion.LUCENE_9_0_0).append("\n")
       }
     }
   } catch {
@@ -382,8 +397,13 @@ private class AnalyzerSchema(val analysisSchema: String) {
           try {
             val clazz = Utils.classForName(fieldConfig.get.analyzer)
             analyzer = Some(clazz.newInstance.asInstanceOf[Analyzer])
+            // Analyzer#setVersion was removed in Lucene 9+: the match version is no longer a
+            // mutable property that can be applied after construction to an arbitrary,
+            // directly-instantiated Analyzer subclass. We still parse the configured version
+            // here (mainly to preserve the prior format-validation behavior), but it can no
+            // longer be pushed into the analyzer instance itself.
             schemaConfig.defaultLuceneMatchVersion foreach { version =>
-              analyzer.get.setVersion(LuceneVersion.parseLeniently(version))
+              LuceneVersion.parseLeniently(version)
             }
           } catch {
             case NonFatal(e) => isValid = false

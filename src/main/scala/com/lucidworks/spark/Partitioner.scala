@@ -4,7 +4,7 @@ import java.net.InetAddress
 
 import com.lucidworks.spark.rdd.SolrRDD
 import com.lucidworks.spark.util.SolrSupport
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.spark.Partition
 
 import scala.collection.mutable.ArrayBuffer

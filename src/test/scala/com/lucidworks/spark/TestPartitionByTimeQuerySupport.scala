@@ -1,7 +1,7 @@
 package com.lucidworks.spark
 
 import com.lucidworks.spark.util.{SolrCloudUtil, SolrSupport}
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.spark.sql.SaveMode._
 import com.lucidworks.spark.util.ConfigurationConstants._
 import org.apache.solr.client.solrj.request.CollectionAdminRequest

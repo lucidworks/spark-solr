@@ -2,7 +2,7 @@ package com.lucidworks.spark.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.SparkSession;

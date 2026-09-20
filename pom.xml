@@ -5,7 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.lucidworks.spark</groupId>
   <artifactId>spark-solr</artifactId>
-  <version>4.0.4-SNAPSHOT</version>
+  <version>4.1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>spark-solr</name>
   <description>Tools for reading data from Spark into Solr</description>
@@ -38,12 +38,23 @@
   </distributionManagement>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <java.version>1.8</java.version>
-    <spark.version>3.1.2</spark.version>
-    <solr.version>8.11.0</solr.version>
-    <hadoop.version>3.2.2</hadoop.version>
-    <fasterxml.version>2.12.3</fasterxml.version>
-    <scala.version>2.12.12</scala.version>
+    <java.version>25</java.version>
+    <!-- Spark 3.1.2 cannot run at all on Java 17+/25 (its DirectByteBuffer allocation hack
+         relies on a reflective constructor that no longer exists on modern JDKs, failing with
+         NoSuchMethodException at SparkConf's static init). Bumped to 3.4.1 to match the version
+         fusion-distributed-compute's job-impl already uses successfully on Java 25. -->
+    <spark.version>3.4.1</spark.version>
+    <solr.version>10.0.0</solr.version>
+    <lucene.version>10.3.2</lucene.version>
+    <!-- Bumped well past job-impl's 3.3.4: Hadoop only became genuinely usable on Java 25 with
+         HADOOP-19212 ("Hadoop UGI compatible with Java 25"), which shipped in Hadoop 3.5.0. On
+         3.3.x/3.4.x, UserGroupInformation still calls javax.security.auth.Subject.getSubject(),
+         which JDK 24+ (JEP 486, SecurityManager removal) makes unconditionally throw
+         UnsupportedOperationException("getSubject is not supported"), which broke any local
+         SparkContext startup in this repo's tests. -->
+    <hadoop.version>3.5.0</hadoop.version>
+    <fasterxml.version>2.20.0</fasterxml.version>
+    <scala.version>2.12.20</scala.version>
     <scala.binary.version>2.12</scala.binary.version>
     <scala.binary.version>2.12</scala.binary.version>
     <scoverage.plugin.version>1.4.1</scoverage.plugin.version>
@@ -172,7 +183,7 @@
       <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.2.2</version>
+        <version>4.9.2</version>
         <executions>
           <execution>
             <id>eclipse-add-source</id>
@@ -205,7 +216,6 @@
         <configuration>
           <scalaVersion>${scala.version}</scalaVersion>
           <recompileMode>incremental</recompileMode>
-          <useZincServer>true</useZincServer>
           <javacArgs>
             <javacArg>-source</javacArg>
             <javacArg>${java.version}</javacArg>
@@ -216,15 +226,14 @@
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.8.1</version>
+        <version>3.13.0</version>
         <configuration>
-          <source>${java.version}</source>
-          <target>${java.version}</target>
+          <release>${java.version}</release>
           <showDeprecation>true</showDeprecation>
-          <compilerArguments>
-            <Xlint:unchecked />
-            <Xlint:deprecation />
-          </compilerArguments>
+          <compilerArgs>
+            <arg>-Xlint:unchecked</arg>
+            <arg>-Xlint:deprecation</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
       <plugin>
@@ -269,7 +278,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
-        <version>3.2.4</version>
+        <version>3.6.2</version>
         <executions>
           <execution>
             <phase>package</phase>
@@ -413,13 +422,43 @@
       </plugin>
     </plugins>
   </build>
+  <!-- Solr 10's solr-core POM omits explicit versions for its own runtime-scope Jackson
+       dependencies (jackson-annotations/core/databind, jackson-dataformat-smile/cbor),
+       relying on a jackson-bom import that is only declared in solr-solrj's POM, not
+       solr-core's. Import the same BOM here so Maven can build solr-core's effective
+       model and resolve its full transitive graph (Lucene, Jetty, ZooKeeper, etc). -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>2.20.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies>
+    <!-- Bumped from the old 2.16.0 pin: Solr 10 pulls in log4j-slf4j2-impl 2.19.0, and mixing
+         that with a much older log4j-core/log4j-api causes NoSuchMethodError at runtime
+         (StackLocatorUtil.getCallerClassLoader(int) etc. are newer log4j-api additions). -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-      <version>2.16.0</version>
+      <version>2.24.3</version>
     </dependency>
 
+    <!-- Solr 10's embedded Jetty 12 pieces (solr-solrj-jetty / solr-test-framework's
+         MiniSolrCloudCluster) require Jakarta Servlet 6.x (the jakarta.servlet package).
+         Spark's dependency tree transitively pulls in jakarta.servlet-api 4.0.3, which despite
+         its jakarta groupId still ships classes under the OLD javax.servlet package, causing
+         NoClassDefFoundError for jakarta.servlet.* classes at test runtime. Declare a direct
+         dependency here so Maven's "nearest wins" resolution picks the real Jakarta 6.x jar. -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <version>6.0.0</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_${scala.binary.version}</artifactId>
@@ -429,6 +468,19 @@
         <exclusion>
           <groupId>org.eclipse.jetty.orbit</groupId>
           <artifactId>javax.servlet</artifactId>
+        </exclusion>
+        <!-- Spark ships its own shaded hadoop-client-api/-runtime pinned to Hadoop 3.3.4,
+             which lacks HADOOP-19212 (Java 25 UGI compatibility) and makes any local
+             SparkContext startup fail with "getSubject is not supported" under JDK 24+.
+             Exclude Spark's copies so our own hadoop-client-api/-runtime 3.5.0 declarations
+             below are used instead. -->
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>hadoop-client-runtime</artifactId>
         </exclusion>
         <exclusion>
           <groupId>io.dropwizard.metrics</groupId>
@@ -453,6 +505,38 @@
         <exclusion>
           <groupId>org.apache.curator</groupId>
           <artifactId>curator-recipes</artifactId>
+        </exclusion>
+        <!-- Spark's own web UI pulls in Jersey 2.x, which depends on a "jakarta.ws.rs-api"
+             artifact (version 2.1.6) that, despite its jakarta groupId, still ships classes
+             under the OLD javax.ws.rs package (pre Jakarta-EE-9 rename). Solr 10 needs the real
+             jakarta.ws.rs-api 3.x (true jakarta.ws.rs package). Maven's version mediation picks
+             one jakarta.ws.rs-api version for the whole classpath, so mixing these two makes
+             either Spark's UI or Solr's embedded Jersey-based admin API fail with
+             ClassNotFoundException at runtime. We don't need Spark's web UI for this library
+             (tests already disable it via spark.ui.enabled=false), so drop Jersey 2.x here. -->
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-common</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-server</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.inject</groupId>
+          <artifactId>jersey-hk2</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -493,6 +577,24 @@
       <artifactId>solr-solrj</artifactId>
       <version>${solr.version}</version>
       <type>jar</type>
+    </dependency>
+    <!-- solr-solrj declares solr-solrj-jetty (which provides the concrete
+         HttpJettySolrClient replacing the removed HttpSolrClient) and
+         lucene-queryparser at "runtime" scope only. We need both at compile
+         scope: HttpJettySolrClient is used directly in SolrSupport/query code,
+         and StandardQueryParser/TermRangeQuery are used in TimePartitioningQuery. -->
+    <dependency>
+      <groupId>org.apache.solr</groupId>
+      <artifactId>solr-solrj-jetty</artifactId>
+      <version>${solr.version}</version>
+      <type>jar</type>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-queryparser</artifactId>
+      <version>${lucene.version}</version>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.solr</groupId>
@@ -580,6 +682,20 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <!-- Explicit replacements for the Spark-bundled hadoop-client-api/-runtime 3.3.4 excluded
+         from spark-core above; see the note on that exclusion for why. -->
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client-api</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client-runtime</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>runtime</scope>
+    </dependency>
     <dependency>
       <groupId>org.apache.hadoop</groupId>
       <artifactId>hadoop-common</artifactId>
@@ -602,6 +718,36 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>jsp-api</artifactId>
         </exclusion>
+        <!-- hadoop-common still uses Jersey 2.x (javax.ws.rs package) for its own NameNode/
+             ResourceManager web UI, which we never start here; it collides with Solr's
+             jakarta.ws.rs-api 3.x on the "jakarta.ws.rs:jakarta.ws.rs-api" GA coordinate (Maven
+             can only pick one version, and Jersey 2.x needs the pre-rename javax.ws.rs classes
+             that only ship in the old, non-jakarta-package 2.1.6 release). Drop Hadoop's web UI
+             Jersey stack entirely since this library doesn't use it. -->
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-common</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-server</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.inject</groupId>
+          <artifactId>jersey-hk2</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -615,20 +761,21 @@
       <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
+    <!-- Versions for jackson-core/jackson-databind/jackson-annotations come from the
+         jackson-bom import in dependencyManagement above. jackson-annotations in
+         particular uses a different version scheme (e.g. "2.20" not "2.20.0") since
+         2.18+, so it must NOT be hardcoded to ${fasterxml.version} here. -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
-      <version>${fasterxml.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>${fasterxml.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
-      <version>${fasterxml.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.module</groupId>
@@ -646,6 +793,35 @@
       <version>${spark.version}</version>
       <classifier>tests</classifier>
       <scope>test</scope>
+      <!-- Same Jersey 2.x / javax.ws.rs vs Solr's jakarta.ws.rs-api 3.x conflict as the main
+           spark-core dependency above; the "tests" classifier jar re-declares the same
+           transitive deps so needs the same exclusions. -->
+      <exclusions>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-client</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-common</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.core</groupId>
+          <artifactId>jersey-server</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.containers</groupId>
+          <artifactId>jersey-container-servlet-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.glassfish.jersey.inject</groupId>
+          <artifactId>jersey-hk2</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.spark</groupId>

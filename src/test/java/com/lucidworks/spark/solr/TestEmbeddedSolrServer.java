@@ -3,7 +3,7 @@ package com.lucidworks.spark.solr;
 import com.lucidworks.spark.BatchSizeType;
 import com.lucidworks.spark.RDDProcessorTestBase;
 import com.lucidworks.spark.util.EmbeddedSolrServerFactory;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.junit.Test;

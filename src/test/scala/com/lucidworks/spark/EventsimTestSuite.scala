@@ -6,8 +6,8 @@ import com.lucidworks.spark.rdd.SelectSolrRDD
 import com.lucidworks.spark.util.ConfigurationConstants._
 import com.lucidworks.spark.util.SolrDataFrameImplicits._
 import com.lucidworks.spark.util.{QueryField, SolrRelationUtil}
-import org.apache.solr.client.solrj.SolrQuery
-import org.apache.solr.client.solrj.SolrQuery.SortClause
+import org.apache.solr.client.solrj.request.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery.SortClause
 import org.apache.spark.solr.SparkInternalObjects
 import org.apache.spark.sql.DataFrame
 

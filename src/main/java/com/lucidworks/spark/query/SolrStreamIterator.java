@@ -1,9 +1,9 @@
 package com.lucidworks.spark.query;
 
 import org.apache.log4j.Logger;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.jetty.HttpJettySolrClient;
 import org.apache.solr.client.solrj.io.SolrClientCache;
 import org.apache.solr.client.solrj.io.stream.SolrStream;
 import org.apache.solr.client.solrj.io.stream.StreamContext;
@@ -28,12 +28,12 @@ public class SolrStreamIterator extends TupleStreamIterator {
   protected int numWorkers;
   protected int workerId;
   protected SolrClientCache solrClientCache;
-  protected HttpSolrClient httpSolrClient;
+  protected HttpJettySolrClient httpSolrClient;
   protected CloudSolrClient cloudSolrClient;
 
   // Remove the whole code around StreamContext, numWorkers, workerId once SOLR-10490 is fixed.
   // It should just work if an 'fq' passed in the params with HashQ filter
-  public SolrStreamIterator(String shardUrl, CloudSolrClient cloudSolrClient, HttpSolrClient httpSolrClient, SolrQuery solrQuery, int numWorkers, int workerId) {
+  public SolrStreamIterator(String shardUrl, CloudSolrClient cloudSolrClient, HttpJettySolrClient httpSolrClient, SolrQuery solrQuery, int numWorkers, int workerId) {
     super(solrQuery);
 
     this.shardUrl = shardUrl;

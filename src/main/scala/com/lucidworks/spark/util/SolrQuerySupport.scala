@@ -9,13 +9,15 @@ import com.lucidworks.spark.rdd.SolrRDD
 import org.apache.solr.client.solrj.SolrRequest.METHOD
 import org.apache.solr.client.solrj._
 import org.apache.solr.client.solrj.impl._
+import org.apache.solr.client.solrj.jetty.HttpJettySolrClient
 import org.apache.solr.client.solrj.request.CollectionAdminRequest.ListAliases
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.client.solrj.request.schema.SchemaRequest
 import org.apache.solr.client.solrj.request.schema.SchemaRequest.UniqueKey
 import org.apache.solr.client.solrj.request.{CoreAdminRequest, LukeRequest, QueryRequest}
 import org.apache.solr.client.solrj.response.schema.SchemaResponse
 import org.apache.solr.client.solrj.response.schema.SchemaResponse.UniqueKeyResponse
-import org.apache.solr.client.solrj.response.{CoreAdminResponse, QueryResponse}
+import org.apache.solr.client.solrj.response.{CoreAdminResponse, InputStreamResponseParser, QueryResponse, ResponseParser, StreamingJavaBinResponseParser, StreamingResponseCallback}
 import org.apache.solr.common.SolrDocument
 import org.apache.solr.common.params.{CommonParams, CoreAdminParams, ModifiableSolrParams, SolrParams}
 import org.apache.solr.common.util.NamedList
@@ -173,7 +175,8 @@ object SolrQuerySupport extends LazyLogging {
 
   // Use this method instead of [[SolrClient.queryAndStreamResponse]] to use POST method for queries
   def queryAndStreamResponsePost(params: SolrParams, callback: StreamingResponseCallback, cloudClient: SolrClient): QueryResponse = {
-    val parser: ResponseParser = new StreamingBinaryResponseParser(callback)
+    // StreamingBinaryResponseParser was renamed to StreamingJavaBinResponseParser in Solr 10 (SOLR-17703)
+    val parser: ResponseParser = new StreamingJavaBinResponseParser(callback)
     val req: QueryRequest = new QueryRequest(params, METHOD.POST)
     req.setStreamingResponseCallback(callback)
     req.setResponseParser(parser)
@@ -521,7 +524,7 @@ object SolrQuerySupport extends LazyLogging {
     }
   }
 
-  def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpSolrClient): Set[String] = {
+  def getFieldsFromLukePerShard(zkHost: String, httpSolrClient: HttpJettySolrClient): Set[String] = {
     val lukeRequest = new LukeRequestWithoutIndexFlags()
     lukeRequest.setNumTerms(0)
     val lukeResponse = lukeRequest.process(httpSolrClient)
@@ -753,24 +756,23 @@ object SolrQuerySupport extends LazyLogging {
     val queryRequest: QueryRequest = new QueryRequest(cloneQuery)
     queryRequest.setMethod(SolrRequest.METHOD.POST)
 
-    queryRequest.setResponseParser(new NoOpResponseParser("json"))
+    // NoOpResponseParser was removed in Solr 10 (SOLR-17935); InputStreamResponseParser plus
+    // its consumeResponseToString(NamedList) helper is the modern way to get the raw response body.
+    queryRequest.setResponseParser(new InputStreamResponseParser("json"))
     val namedList = solrClient.request(queryRequest, collection)
+    val rawString = InputStreamResponseParser.consumeResponseToString(namedList)
 
-    if (namedList.get("response") != null) {
-      logger.trace(s"Query response for JSON facet query: ${namedList}")
-      namedList.get("response") match {
-        case rawString : String =>
-          val jsonResp = parse(rawString)
-          if ((jsonResp \ "responseHeader" \ "status") != JNothing) {
-            val status = (jsonResp \ "responseHeader" \ "status").extract[Integer]
-            if (status != 0) {
-              throw new RuntimeException("Solr request returned with status code '" + status + "'. Response: '" + rawString)
-            }
-          }
-          if ((jsonResp \ "facets") != JNothing) {
-            return JsonFacetUtil.parseFacetResponse(jsonResp \ "facets", spark)
-          }
-        case a: Any => logger.info(s"Response is not a String. Response type ${a.getClass}. Returning empty dataframe")
+    if (rawString != null) {
+      logger.trace(s"Query response for JSON facet query: ${rawString}")
+      val jsonResp = parse(rawString)
+      if ((jsonResp \ "responseHeader" \ "status") != JNothing) {
+        val status = (jsonResp \ "responseHeader" \ "status").extract[Integer]
+        if (status != 0) {
+          throw new RuntimeException("Solr request returned with status code '" + status + "'. Response: '" + rawString)
+        }
+      }
+      if ((jsonResp \ "facets") != JNothing) {
+        return JsonFacetUtil.parseFacetResponse(jsonResp \ "facets", spark)
       }
       spark.emptyDataFrame
     } else {
@@ -785,9 +787,9 @@ object SolrQuerySupport extends LazyLogging {
     implicit val formats: DefaultFormats.type = DefaultFormats // needed for json4s
     val coreAdminRequest = new CoreAdminRequest()
     coreAdminRequest.setAction(CoreAdminParams.CoreAdminAction.STATUS)
-    coreAdminRequest.setResponseParser(new NoOpResponseParser("json"))
+    coreAdminRequest.setResponseParser(new InputStreamResponseParser("json"))
     val coreAdminResponse : CoreAdminResponse = coreAdminRequest.process(cloudSolrClient)
-    val rawString : String = coreAdminResponse.getResponse.get("response").asInstanceOf[String]
+    val rawString : String = InputStreamResponseParser.consumeResponseToString(coreAdminResponse.getResponse)
     parse(rawString).extract[SolrCoreAdminResponse]
   }
 }

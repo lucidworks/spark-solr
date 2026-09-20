@@ -1,7 +1,7 @@
 package com.lucidworks.spark.example.query;
 
 import com.lucidworks.spark.util.SolrQuerySupport;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.junit.Test;
 
 import java.net.URLEncoder;

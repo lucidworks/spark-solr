@@ -9,9 +9,10 @@ import com.lucidworks.spark.LazyLogging
 import com.lucidworks.spark.rdd.{SelectSolrRDD, StreamingSolrRDD}
 import org.apache.solr.client.solrj.request.GenericSolrRequest
 import org.apache.solr.client.solrj.request.RequestWriter.StringPayloadContentWriter
-import org.apache.solr.client.solrj.{SolrQuery, SolrRequest}
+import org.apache.solr.client.solrj.SolrRequest
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.common.SolrDocument
-import org.apache.solr.common.params.CommonParams
+import org.apache.solr.common.params.{CommonParams, SolrParams}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.sources._
@@ -717,7 +718,7 @@ object SolrRelationUtil extends LazyLogging {
     val configJson = "{\"set-property\":{\"updateHandler.autoSoftCommit.maxTime\":\""+softAutoCommitMs+"\"}}";
 
     logger.info("POSTing: " + configJson + " to collection " + collection)
-    val solrRequest = new GenericSolrRequest(SolrRequest.METHOD.POST, "/config", null)
+    val solrRequest = new GenericSolrRequest(SolrRequest.METHOD.POST, "/config", null: SolrParams)
     solrRequest.setContentWriter(new StringPayloadContentWriter(configJson, CommonParams.JSON_MIME))
 
     try {

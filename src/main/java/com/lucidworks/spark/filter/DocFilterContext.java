@@ -1,7 +1,7 @@
 package com.lucidworks.spark.filter;
 
 import org.apache.commons.cli.CommandLine;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 

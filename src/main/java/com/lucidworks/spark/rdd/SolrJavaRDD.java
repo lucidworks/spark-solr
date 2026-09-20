@@ -1,6 +1,6 @@
 package com.lucidworks.spark.rdd;
 
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;

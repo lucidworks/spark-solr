@@ -8,18 +8,19 @@ import java.util.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
 
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.client.solrj.request.CollectionAdminRequest;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import com.lucidworks.spark.util.SolrSupport;
 import org.apache.solr.cloud.MiniSolrCloudCluster;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.cloud.*;
 import org.apache.solr.common.params.CollectionParams;
 import org.apache.solr.common.params.CoreAdminParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
-import org.eclipse.jetty.servlet.ServletHolder;
+import org.apache.solr.embedded.JettyConfig;
 import org.junit.BeforeClass;
 import org.junit.AfterClass;
 import org.noggit.CharArr;
@@ -83,18 +84,19 @@ public class TestSolrCloudClusterSupport {
       testWorkingDir.mkdirs();
     }
 
-    // need the schema stuff
-    final SortedMap<ServletHolder,String> extraServlets = new TreeMap<ServletHolder,String>();
+    // MiniSolrCloudCluster's constructor no longer takes raw hostContext/extraServlets/extraFilters
+    // params directly (Solr 10); they're now folded into a JettyConfig instance instead. This test
+    // doesn't actually register any extra servlets/filters, so the defaults are fine here.
+    JettyConfig jettyConfig = JettyConfig.builder().build();
 
-    cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
-            testWorkingDir.toPath(), solrXmlContents, extraServlets, null);
+    cluster = new MiniSolrCloudCluster(1, testWorkingDir.toPath(), solrXmlContents, jettyConfig);
 
     final List<String> zkHosts = Collections.singletonList(cluster.getZkServer().getZkAddress());
     final Optional<String> zkChroot = Optional.empty();
     cloudSolrServer = new CloudSolrClient.Builder(zkHosts, zkChroot).sendUpdatesOnlyToShardLeaders().build();
     cloudSolrServer.connect();
 
-    assertTrue(!cloudSolrServer.getZkStateReader().getClusterState().getLiveNodes().isEmpty());
+    assertTrue(!SolrSupport.getZkStateReader(cloudSolrServer).getClusterState().getLiveNodes().isEmpty());
   }
 
   @AfterClass
@@ -141,12 +143,11 @@ public class TestSolrCloudClusterSupport {
       // Aggressively kill any existing collections
       deleteCollection(collectionName);
 
-      // upload the test configs
-      SolrZkClient zkClient = cloudSolrServer.getZkStateReader().getZkClient();
-      ZkConfigManager zkConfigManager =
-        new ZkConfigManager(zkClient);
-
-      zkConfigManager.uploadConfigDir(confDir.toPath(), confName);
+      // upload the test configs. ZkConfigManager was removed in Solr 10;
+      // ZkMaintenanceUtils.uploadToZK is its replacement.
+      SolrZkClient zkClient = SolrSupport.getZkStateReader(cloudSolrServer).getZkClient();
+      ZkMaintenanceUtils.uploadToZK(zkClient, confDir.toPath(), ZkMaintenanceUtils.CONFIGS_ZKNODE + "/" + confName,
+        ZkMaintenanceUtils.UPLOAD_FILENAME_EXCLUDE_PATTERN);
     }
 
     ModifiableSolrParams modParams = new ModifiableSolrParams();
@@ -165,7 +166,7 @@ public class TestSolrCloudClusterSupport {
   protected static void ensureAllReplicasAreActive(String testCollectionName, int shards, int rf, int maxWaitSecs) throws Exception {
     long startMs = System.currentTimeMillis();
 
-    ZkStateReader zkr = cloudSolrServer.getZkStateReader();
+    ZkStateReader zkr = SolrSupport.getZkStateReader(cloudSolrServer);
     zkr.updateLiveNodes(); // force the state to be fresh
 
     ClusterState cs = zkr.getClusterState();
@@ -179,10 +180,10 @@ public class TestSolrCloudClusterSupport {
       // refresh state every 2 secs
       if (waitMs % 2000 == 0) {
         log.info("Updating ClusterState");
-        cloudSolrServer.getZkStateReader().updateLiveNodes();
+        SolrSupport.getZkStateReader(cloudSolrServer).updateLiveNodes();
       }
 
-      cs = cloudSolrServer.getZkStateReader().getClusterState();
+      cs = SolrSupport.getZkStateReader(cloudSolrServer).getClusterState();
       assertNotNull(cs);
       allReplicasUp = true; // assume true
       for (Slice shard : cs.getCollection(testCollectionName).getActiveSlices()) {
@@ -222,14 +223,14 @@ public class TestSolrCloudClusterSupport {
   }
 
   protected static String printClusterStateInfo(String collection) throws Exception {
-    cloudSolrServer.getZkStateReader().updateLiveNodes();
+    SolrSupport.getZkStateReader(cloudSolrServer).updateLiveNodes();
     String cs = null;
-    ClusterState clusterState = cloudSolrServer.getZkStateReader().getClusterState();
+    ClusterState clusterState = SolrSupport.getZkStateReader(cloudSolrServer).getClusterState();
     if (collection != null) {
       cs = clusterState.getCollection(collection).toString();
     } else {
       Map<String,DocCollection> map = new HashMap<String,DocCollection>();
-      for (String coll : clusterState.getCollectionsMap().keySet())
+      for (String coll : clusterState.getCollectionNames())
         map.put(coll, clusterState.getCollection(coll));
       CharArr out = new CharArr();
       new JSONWriter(out, 2).write(map);

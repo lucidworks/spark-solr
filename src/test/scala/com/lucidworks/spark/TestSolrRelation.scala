@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import com.lucidworks.spark.util.SolrRelationUtil
 import org.apache.commons.lang3.StringEscapeUtils
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.spark.sql.sources.{And, EqualTo, Or}
 import org.apache.spark.sql.types._
 

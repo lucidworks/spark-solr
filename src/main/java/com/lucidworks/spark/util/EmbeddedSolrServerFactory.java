@@ -8,7 +8,8 @@ import java.util.Map;
 
 import org.apache.solr.client.solrj.embedded.EmbeddedSolrServer;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
-import org.apache.solr.common.cloud.ZkConfigManager;
+import org.apache.solr.common.cloud.DocCollection;
+import org.apache.solr.common.cloud.ZkMaintenanceUtils;
 import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
@@ -56,11 +57,12 @@ public class EmbeddedSolrServerFactory implements Serializable {
     CloudSolrClient cloudClient = SolrSupport.getCachedCloudClient(zkHost);
     cloudClient.connect();
 
-    ZkStateReader zkStateReader = cloudClient.getZkStateReader();
+    ZkStateReader zkStateReader = SolrSupport.getZkStateReader(cloudClient);
     if (!zkStateReader.getClusterState().hasCollection(collection))
       throw new IllegalStateException("Collection '"+collection+"' not found!");
 
-    String configName = zkStateReader.readConfigName(collection);
+    DocCollection docCollection = zkStateReader.getClusterState().getCollection(collection);
+    String configName = docCollection != null ? docCollection.getConfigName() : null;
     if (configName == null)
       throw new IllegalStateException("No configName found for Collection: "+collection);
 
@@ -79,9 +81,8 @@ public class EmbeddedSolrServerFactory implements Serializable {
     FileUtils.forceMkdir(instanceDir);
 
     File confDir = new File(instanceDir, "conf");
-    ZkConfigManager zkConfigManager =
-      new ZkConfigManager(cloudClient.getZkStateReader().getZkClient());
-    zkConfigManager.downloadConfigDir(configName, confDir.toPath());
+    // ZkConfigManager was removed in Solr 10; ZkMaintenanceUtils.downloadFromZK is its replacement.
+    ZkMaintenanceUtils.downloadFromZK(zkStateReader.getZkClient(), "/configs/" + configName, confDir.toPath());
     if (!confDir.isDirectory())
       throw new IOException("Failed to download /configs/"+configName+" from ZooKeeper!");
 

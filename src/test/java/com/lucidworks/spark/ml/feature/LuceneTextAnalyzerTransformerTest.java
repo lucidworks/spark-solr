@@ -43,7 +43,8 @@ public class LuceneTextAnalyzerTransformerTest {
     SparkConf conf = new SparkConf()
         .setMaster("local")
         .setAppName("JavaLuceneAnalyzerTest")
-        .set("spark.default.parallelism", "1");
+        .set("spark.default.parallelism", "1")
+        .set("spark.ui.enabled", "false");
     sparkSession = SparkSession.builder().config(conf).getOrCreate();
     jsc = new JavaSparkContext(sparkSession.sparkContext());
   }
@@ -87,7 +88,7 @@ public class LuceneTextAnalyzerTransformerTest {
         new TokenizerTestData("some-dashed-phrase", new String[]{"some", "dashed", "phrase"})));
 
     String analysisSchema2 = json("{\n" +
-        "'defaultLuceneMatchVersion': '7.0.0',\n" +
+        "'defaultLuceneMatchVersion': '9.0.0',\n" +
         "'analyzers': [{\n" +
         "  'name': 'StdTok_max3',\n" +
         "  'tokenizer': {\n" +

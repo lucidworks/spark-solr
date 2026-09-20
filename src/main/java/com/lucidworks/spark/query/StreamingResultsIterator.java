@@ -2,10 +2,10 @@ package com.lucidworks.spark.query;
 
 import com.lucidworks.spark.util.SolrQuerySupport;
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.StreamingResponseCallback;
-import org.apache.solr.client.solrj.impl.HttpSolrClient;
+import org.apache.solr.client.solrj.response.StreamingResponseCallback;
+import org.apache.solr.client.solrj.jetty.HttpJettySolrClient;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.slf4j.Logger;
@@ -50,8 +50,8 @@ public class StreamingResultsIterator extends ResultsIterator<SolrDocument> {
     this.solrServer = solrServer;
 
     // get some identifier for this solr server
-    if (solrServer instanceof HttpSolrClient) {
-      HttpSolrClient httpSolrClient = (HttpSolrClient)solrServer;
+    if (solrServer instanceof HttpJettySolrClient) {
+      HttpJettySolrClient httpSolrClient = (HttpJettySolrClient)solrServer;
       solrId = httpSolrClient.getBaseURL();
     } else {
       solrId = solrServer.toString();

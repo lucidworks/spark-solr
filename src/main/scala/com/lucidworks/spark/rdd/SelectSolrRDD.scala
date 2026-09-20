@@ -4,7 +4,7 @@ import com.lucidworks.spark.query.StreamingResultsIterator
 import com.lucidworks.spark.util.QueryConstants._
 import com.lucidworks.spark.util.{SolrQuerySupport, SolrSupport}
 import com.lucidworks.spark._
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.common.SolrDocument
 import org.apache.solr.common.params.ShardParams
 import org.apache.spark.annotation.DeveloperApi

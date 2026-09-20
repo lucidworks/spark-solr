@@ -8,10 +8,10 @@ import com.lucidworks.spark.util.{EventsimUtil, SolrCloudUtil, SolrSupport}
 import org.apache.commons.io.FileUtils
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.cloud.MiniSolrCloudCluster
+import org.apache.solr.embedded.JettyConfig
 import org.apache.spark.SparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.udf
-import org.eclipse.jetty.servlet.ServletHolder
 import org.junit.Assert._
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, Suite}
 
@@ -37,15 +37,16 @@ trait SolrCloudTestBuilder extends BeforeAndAfterAll with LazyLogging { this: Su
     if (!testWorkingDir.isDirectory)
       testWorkingDir.mkdirs
 
-    // need the schema stuff
-    val extraServlets: java.util.SortedMap[ServletHolder, String] = new java.util.TreeMap[ServletHolder, String]()
+    // MiniSolrCloudCluster's constructor no longer takes raw hostContext/extraServlets/extraFilters
+    // params directly (Solr 10); they're now folded into a JettyConfig instance instead. This test
+    // doesn't actually register any extra servlets/filters, so the defaults are fine here.
+    val jettyConfig = JettyConfig.builder().build()
 
-    cluster = new MiniSolrCloudCluster(1, null /* hostContext */,
-      testWorkingDir.toPath, solrXmlContents, extraServlets, null /* extra filters */)
+    cluster = new MiniSolrCloudCluster(1, testWorkingDir.toPath, solrXmlContents, jettyConfig)
     cloudClient = cluster.getSolrClient
     cloudClient.connect()
 
-    assertTrue(!cloudClient.getZkStateReader.getClusterState.getLiveNodes.isEmpty)
+    assertTrue(!SolrSupport.getZkStateReader(cloudClient).getClusterState.getLiveNodes.isEmpty)
     zkHost = cluster.getZkServer.getZkAddress
   }
 

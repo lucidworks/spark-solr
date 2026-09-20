@@ -28,13 +28,18 @@ import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder.LOGIN_CONFIG_PROP;
 
 /**
  * Command-line utility for implementing Spark applications; reduces
  * boilerplate code for implementing multiple Spark applications.
  */
 public class SparkApp implements Serializable {
+
+  // Krb5HttpClientBuilder (and its LOGIN_CONFIG_PROP constant) was removed in Solr 10's SolrJ
+  // along with the rest of the pluggable Apache-HttpClient-based auth builder framework. This is
+  // simply the standard JAAS login config system property name, inlined here since there's no
+  // longer a SolrJ-provided constant for it.
+  private static final String LOGIN_CONFIG_PROP = "java.security.auth.login.config";
 
   private static final String sparkExecutorExtraJavaOptionsParam = "spark.executor.extraJavaOptions";
 

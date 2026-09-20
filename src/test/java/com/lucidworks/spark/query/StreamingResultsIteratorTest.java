@@ -3,7 +3,7 @@ package com.lucidworks.spark.query;
 import com.lucidworks.spark.RDDProcessorTestBase;
 import com.lucidworks.spark.util.SolrQuerySupport;
 import com.lucidworks.spark.util.SolrRelationUtil;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.client.solrj.impl.CloudSolrClient;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
@@ -29,7 +29,8 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
     String zkHost = cluster.getZkServer().getZkAddress();
     String testCollection = "testStreamingResultsIterator";
     buildCollection(zkHost, testCollection, null, 1);
-    cloudSolrClient.setDefaultCollection(testCollection);
+    // CloudSolrClient#setDefaultCollection was removed in Solr 10; pass the collection
+    // explicitly to each request instead (see cloudSolrClient.add(...) below).
 
     final Random random = new Random(5150);
     final int numDocs = 100;
@@ -46,7 +47,7 @@ public class StreamingResultsIteratorTest extends RDDProcessorTestBase {
           SolrInputDocument doc = new SolrInputDocument();
           doc.setField("id", ids.get(i));
           try {
-            cloudSolrClient.add(doc, 50);
+            cloudSolrClient.add(testCollection, doc, 50);
           } catch (Exception e) {
             throw new RuntimeException(e);
           }

@@ -91,7 +91,7 @@ public class ShardIndexPartitioner extends Partitioner implements Serializable {
 
   protected final synchronized DocCollection getDocCollection() {
     if (docCollection == null) {
-      ZkStateReader zkStateReader = getCloudSolrServer().getZkStateReader();
+      ZkStateReader zkStateReader = SolrSupport.getZkStateReader(getCloudSolrServer());
       docCollection = zkStateReader.getClusterState().getCollection(collection);
 
       // do basic checks once

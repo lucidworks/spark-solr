@@ -2,7 +2,7 @@ package com.lucidworks.spark
 
 import com.lucidworks.spark.util.SolrSupport
 import com.lucidworks.spark.util.SolrSupport.WorkerShardSplit
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 
 // Unit tests for testing splits for select and export handler
 class TestShardSplits extends SparkSolrFunSuite{

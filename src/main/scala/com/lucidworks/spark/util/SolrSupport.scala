@@ -15,13 +15,15 @@ import com.lucidworks.spark.util.SolrSupport.{CloudClientParams, ShardInfo}
 import com.lucidworks.spark.{BatchSizeType, LazyLogging, SolrReplica, SolrShard, SparkSolrAccumulator}
 import org.apache.http.NoHttpResponseException
 import org.apache.solr.client.solrj.impl.{CloudSolrClient, _}
+import org.apache.solr.client.solrj.jetty.{HttpJettySolrClient, PreemptiveBasicAuthClientCustomizer}
 import org.apache.solr.client.solrj.request.UpdateRequest
 import org.apache.solr.client.solrj.response.QueryResponse
-import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
+import org.apache.solr.client.solrj.{SolrClient, SolrServerException}
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.params.ModifiableSolrParams
-import org.apache.solr.common.util.SimpleOrderedMap
+import org.apache.solr.common.util.{NamedList, SimpleOrderedMap}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
@@ -54,21 +56,21 @@ object CacheCloudSolrClient {
 }
 
 object CacheHttpSolrClient {
-  private val loader = new CacheLoader[ShardInfo, HttpSolrClient]() {
-    def load(shardUrl: ShardInfo): HttpSolrClient = {
+  private val loader = new CacheLoader[ShardInfo, HttpJettySolrClient]() {
+    def load(shardUrl: ShardInfo): HttpJettySolrClient = {
       SolrSupport.getNewHttpSolrClient(shardUrl.shardUrl, shardUrl.zkHost)
     }
   }
 
-  private val listener = new RemovalListener[ShardInfo, HttpSolrClient]() {
-    def onRemoval(rn: RemovalNotification[ShardInfo, HttpSolrClient]): Unit = {
+  private val listener = new RemovalListener[ShardInfo, HttpJettySolrClient]() {
+    def onRemoval(rn: RemovalNotification[ShardInfo, HttpJettySolrClient]): Unit = {
       if (rn != null && rn.getValue != null) {
         rn.getValue.close()
       }
     }
   }
 
-  val cache: LoadingCache[ShardInfo, HttpSolrClient] = CacheBuilder
+  val cache: LoadingCache[ShardInfo, HttpJettySolrClient] = CacheBuilder
     .newBuilder()
     .removalListener(listener)
     .build(loader)
@@ -86,7 +88,10 @@ object SolrSupport extends LazyLogging {
     val baseUrl = getSolrBaseUrl(zkHost)
     val httpSolrClient = getHttpSolrClient(baseUrl, zkHost)
     val rsp = httpSolrClient.query(sysQuery)
-    String.valueOf(rsp.getResponse.get("lucene").asInstanceOf[SimpleOrderedMap[_]].get("solr-spec-version"))
+    // SimpleOrderedMap now also exposes a get(Any) overload alongside NamedList's inherited
+    // get(String), which is ambiguous from Scala for a String literal; force NamedList's overload.
+    val luceneInfo: NamedList[_] = rsp.getResponse.get("lucene").asInstanceOf[SimpleOrderedMap[_]]
+    String.valueOf(luceneInfo.get("solr-spec-version"))
   }
 
   def isSolrVersionAtleast(solrVersion: String, major: Int, minor: Int, trivial: Int): Boolean = {
@@ -137,8 +142,16 @@ object SolrSupport extends LazyLogging {
     None
   }
 
+  // Solr 8's Krb5HttpClientBuilder is gone in Solr 10's SolrJ (the Apache-HttpClient-based
+  // pluggable auth builder framework was dropped entirely in favor of the Jetty HttpClient).
+  // There's no client-side Kerberos/SPNEGO builder hook to replicate 1:1 anymore; callers
+  // that need Kerberos must configure it at the JVM/JAAS level. We keep this constant (the
+  // standard JAAS system property name) and the check below purely to preserve the prior
+  // detection/logging behavior.
+  private val KERBEROS_LOGIN_CONFIG_PROP = "java.security.auth.login.config"
+
   def isKerberosNeeded(zkHost: String): Boolean = synchronized {
-    val loginProp = System.getProperty(Krb5HttpClientBuilder.LOGIN_CONFIG_PROP)
+    val loginProp = System.getProperty(KERBEROS_LOGIN_CONFIG_PROP)
     if (loginProp != null && loginProp.nonEmpty) {
       return true
     }
@@ -146,8 +159,8 @@ object SolrSupport extends LazyLogging {
   }
 
   def isBasicAuthNeeded(zkHost: String): Boolean = synchronized {
-    val credentials = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_BASIC_AUTH_CREDENTIALS)
-    val configFile = System.getProperty(PreemptiveBasicAuthClientBuilderFactory.SYS_PROP_HTTP_CLIENT_CONFIG)
+    val credentials = System.getProperty(PreemptiveBasicAuthClientCustomizer.SYS_PROP_BASIC_AUTH_CREDENTIALS)
+    val configFile = System.getProperty(PreemptiveBasicAuthClientCustomizer.SYS_PROP_HTTP_CLIENT_CONFIG)
     if (credentials != null || configFile != null) {
       if (configFile != null) {
         logger.debug("Basic auth configured with config file {}", configFile)
@@ -163,31 +176,35 @@ object SolrSupport extends LazyLogging {
     logger.debug("Contents: {}", new String(Files.readAllBytes(Paths.get(path))))
   }
 
-  private def getHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+  // Returns the ZkStateReader backing a CloudSolrClient. CloudSolrClient#getZkStateReader was
+  // removed in Solr 10; the reader now hangs off the ZK-based ClusterStateProvider.
+  def getZkStateReader(client: CloudSolrClient): ZkStateReader = {
+    client.getClusterStateProvider.asInstanceOf[ZkClientClusterStateProvider].getZkStateReader
+  }
+
+  private def getHttpSolrClient(shardUrl: String, zkHost: String): HttpJettySolrClient = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
       val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
       if (authHttpClientBuilder.isDefined) {
         logger.info("Custom http client defined: {}", authHttpClientBuilder)
         return authHttpClientBuilder.get
-          .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
           .withBaseSolrUrl(shardUrl).build()
       }
     }
-    new HttpSolrClient.Builder()
+    new HttpJettySolrClient.Builder()
       .withBaseSolrUrl(shardUrl)
-      .withHttpClient(getCachedCloudClient(zkHost).getHttpClient)
       .build()
   }
 
   case class ShardInfo(shardUrl: String, zkHost: String)
   case class CloudClientParams(zkHost: String, zkClientTimeout: Int=30000, zkConnectTimeout: Int=60000, solrParams: Option[ModifiableSolrParams] = None)
 
-  def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+  def getNewHttpSolrClient(shardUrl: String, zkHost: String): HttpJettySolrClient = {
     getHttpSolrClient(shardUrl, zkHost)
   }
 
-  def getCachedHttpSolrClient(shardUrl: String, zkHost: String): HttpSolrClient = {
+  def getCachedHttpSolrClient(shardUrl: String, zkHost: String): HttpJettySolrClient = {
     CacheHttpSolrClient.cache.get(ShardInfo(shardUrl, zkHost))
   }
 
@@ -195,37 +212,40 @@ object SolrSupport extends LazyLogging {
   private def getSolrCloudClient(cloudClientParams: CloudClientParams): CloudSolrClient =  {
     val zkHost = cloudClientParams.zkHost
     logger.info(s"Creating a new SolrCloudClient for zkhost $zkHost")
-    val solrClientBuilder = new CloudSolrClient.Builder().withZkHost(zkHost)
+    val stateProvider = new ZkClientClusterStateProvider(zkHost)
+    stateProvider.setZkClientTimeout(cloudClientParams.zkClientTimeout)
+    stateProvider.setZkConnectTimeout(cloudClientParams.zkConnectTimeout)
+    val solrClientBuilder = new CloudSolrClient.Builder(stateProvider)
     val authHttpClientBuilder = getAuthHttpClientBuilder(zkHost)
     if (authHttpClientBuilder.isDefined) {
       if (authHttpClientBuilder.get != null) {
         logger.info("Configured auth http client builder")
-        solrClientBuilder.withLBHttpSolrClientBuilder(
-          new LBHttpSolrClient.Builder().withHttpSolrClientBuilder(authHttpClientBuilder.get))
+        solrClientBuilder.withInternalClientBuilder(authHttpClientBuilder.get)
       } else {
         logger.error("No custom builder found for configured zkhost")
       }
     }
-    val params = new ModifiableSolrParams(cloudClientParams.solrParams.orNull)
-    params.set(HttpClientUtil.PROP_FOLLOW_REDIRECTS, false)
+    // NOTE: Solr 10's SolrJ removed the global HttpClientUtil/Krb5HttpClientBuilder/
+    // PreemptiveBasicAuthClientBuilderFactory framework used here previously. Preemptive
+    // basic auth configured via the well-known system properties below is now applied
+    // automatically by HttpJettySolrClient itself (see PreemptiveBasicAuthClientCustomizer
+    // and HttpJettySolrClient.CLIENT_CUSTOMIZER_SYSPROP), so no explicit wiring is required
+    // here anymore. Kerberos has no client-side builder replacement; see isKerberosNeeded.
     if (isKerberosNeeded(zkHost)) {
-      val krb5HttpClientBuilder = new Krb5HttpClientBuilder().getHttpClientBuilder(java.util.Optional.empty())
-      HttpClientUtil.setHttpClientBuilder(krb5HttpClientBuilder)
+      logger.warn("Kerberos login config ({}) is set, but Solr 10's SolrJ no longer exposes a " +
+        "pluggable client-side Kerberos/SPNEGO HTTP client builder. Configure Kerberos via the " +
+        "JVM/JAAS layer instead.", KERBEROS_LOGIN_CONFIG_PROP)
     }
     if (isBasicAuthNeeded(zkHost)) {
-      val basicAuthBuilder = new PreemptiveBasicAuthClientBuilderFactory().getHttpClientBuilder(java.util.Optional.empty())
-      HttpClientUtil.setHttpClientBuilder(basicAuthBuilder)
+      logger.debug("Basic auth system properties detected; HttpJettySolrClient will apply them automatically")
     }
-    val httpClient = HttpClientUtil.createClient(params)
-    val solrClient = solrClientBuilder.withHttpClient(httpClient).build()
-    solrClient.setZkClientTimeout(cloudClientParams.zkClientTimeout)
-    solrClient.setZkConnectTimeout(cloudClientParams.zkConnectTimeout)
+    val solrClient = solrClientBuilder.build()
     solrClient.connect()
     logger.debug(s"Created new SolrCloudClient for zkhost $zkHost")
     solrClient
   }
 
-  private def getAuthHttpClientBuilder(zkHost: String): Option[HttpSolrClient.Builder] = {
+  private def getAuthHttpClientBuilder(zkHost: String): Option[HttpJettySolrClient.Builder] = {
     val fusionAuthClass = getFusionAuthClass(AUTH_CONFIGURER_CLASS)
     if (fusionAuthClass.isDefined) {
       logger.info("Custom class '{}' configured for auth", fusionAuthClass.get)
@@ -252,11 +272,11 @@ object SolrSupport extends LazyLogging {
 
   def getSolrBaseUrl(zkHost: String): String = {
     val solrClient = getCachedCloudClient(zkHost)
-    val liveNodes = solrClient.getZkStateReader.getClusterState.getLiveNodes
+    val liveNodes = getZkStateReader(solrClient).getClusterState.getLiveNodes
     if (liveNodes.isEmpty) {
       throw new RuntimeException("No live nodes found for cluster: " + zkHost)
     }
-    var solrBaseUrl = solrClient.getZkStateReader.getBaseUrlForNodeName(liveNodes.iterator().next())
+    var solrBaseUrl = getZkStateReader(solrClient).getBaseUrlForNodeName(liveNodes.iterator().next())
     if (!solrBaseUrl.endsWith("?")) solrBaseUrl += "/"
     solrBaseUrl
   }
@@ -684,7 +704,7 @@ object SolrSupport extends LazyLogging {
 
   def buildShardList(zkHost: String, collection: String, shardsTolerant: Boolean): List[SolrShard] = {
     val solrClient = getCachedCloudClient(zkHost)
-    val zkStateReader: ZkStateReader = solrClient.getZkStateReader
+    val zkStateReader: ZkStateReader = getZkStateReader(solrClient)
     val clusterState: ClusterState = zkStateReader.getClusterState
     var collections = Array.empty[String]
     for(col <- collection.split(",")) {

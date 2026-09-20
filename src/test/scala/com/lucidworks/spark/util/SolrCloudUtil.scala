@@ -3,7 +3,7 @@ package com.lucidworks.spark.util
 import java.io.File
 
 import com.lucidworks.spark.LazyLogging
-import org.apache.solr.client.solrj.SolrQuery
+import org.apache.solr.client.solrj.request.SolrQuery
 import org.apache.solr.client.solrj.impl.CloudSolrClient
 import org.apache.solr.client.solrj.request.{CollectionAdminRequest, QueryRequest, UpdateRequest}
 import org.apache.solr.client.solrj.response.QueryResponse
@@ -46,9 +46,10 @@ object SolrCloudUtil extends LazyLogging {
       assertTrue("Specified Solr config directory '" + confDir.getAbsolutePath + "' not found!", confDir.isDirectory)
       // upload test configs
 
-      val zkClient = cloudClient.getZkStateReader.getZkClient
-      val zkConfigManager = new ZkConfigManager(zkClient)
-      zkConfigManager.uploadConfigDir(confDir.toPath, confName)
+      // ZkConfigManager was removed in Solr 10; ZkMaintenanceUtils.uploadToZK is its replacement.
+      val zkClient = SolrSupport.getZkStateReader(cloudClient).getZkClient
+      ZkMaintenanceUtils.uploadToZK(zkClient, confDir.toPath, ZkMaintenanceUtils.CONFIGS_ZKNODE + "/" + confName,
+        ZkMaintenanceUtils.UPLOAD_FILENAME_EXCLUDE_PATTERN)
     }
 
     val modParams = new ModifiableSolrParams()
@@ -70,7 +71,7 @@ object SolrCloudUtil extends LazyLogging {
                                  maxWaitSecs: Int,
                                  cloudClient: CloudSolrClient): Unit = {
     val startMs: Long = System.currentTimeMillis()
-    val zkr: ZkStateReader = cloudClient.getZkStateReader
+    val zkr: ZkStateReader = SolrSupport.getZkStateReader(cloudClient)
     zkr.updateLiveNodes() // force the state to be fresh
 
     var cs: ClusterState = zkr.getClusterState
@@ -84,10 +85,10 @@ object SolrCloudUtil extends LazyLogging {
       // refresh state every 2 secs
       if (waitMs % 2000 == 0) {
         logger.info("Updating ClusterState")
-        cloudClient.getZkStateReader.updateLiveNodes()
+        SolrSupport.getZkStateReader(cloudClient).updateLiveNodes()
       }
 
-      cs = cloudClient.getZkStateReader.getClusterState
+      cs = SolrSupport.getZkStateReader(cloudClient).getClusterState
       assertNotNull(cs)
       allReplicasUp = true // assume true
       for (shard: Slice <- cs.getCollection(collectionName).getActiveSlices) {
@@ -128,14 +129,14 @@ object SolrCloudUtil extends LazyLogging {
   }
 
   def printClusterStateInfo(collectionName: String, cloudClient: CloudSolrClient): String = {
-    cloudClient.getZkStateReader.updateLiveNodes()
+    SolrSupport.getZkStateReader(cloudClient).updateLiveNodes()
     var cs: String = null
-    val clusterState: ClusterState = cloudClient.getZkStateReader.getClusterState
+    val clusterState: ClusterState = SolrSupport.getZkStateReader(cloudClient).getClusterState
     if (collectionName != null) {
       cs = clusterState.getCollection(collectionName).toString
     } else {
       val map = Map.empty[String, DocCollection]
-      clusterState.getCollectionsMap.keySet().foreach(coll => {
+      clusterState.getCollectionNames.foreach(coll => {
         map + (coll -> clusterState.getCollection(coll))
       })
       val out: CharArr = new CharArr()

@@ -4,7 +4,7 @@ import com.lucidworks.spark.SparkApp;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 

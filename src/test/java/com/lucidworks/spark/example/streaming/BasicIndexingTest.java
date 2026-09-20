@@ -8,7 +8,7 @@ import com.lucidworks.spark.BatchSizeType;
 import com.lucidworks.spark.StreamProcessorTestBase;
 import com.lucidworks.spark.rdd.SolrJavaRDD;
 import com.lucidworks.spark.util.SolrSupport;
-import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.request.SolrQuery;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.spark.api.java.JavaRDD;

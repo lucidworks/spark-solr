@@ -25,20 +25,26 @@ import org.apache.http.entity.ContentProducer;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.EntityTemplate;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.Credentials;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.config.AuthSchemes;
+import org.apache.http.config.Lookup;
+import org.apache.http.config.RegistryBuilder;
 import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.cookie.BasicClientCookie;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
-import org.apache.solr.client.solrj.impl.HttpClientUtil;
-import org.apache.solr.client.solrj.impl.Krb5HttpClientBuilder;
-import org.apache.solr.client.solrj.impl.SolrHttpClientBuilder;
 import org.apache.solr.common.SolrException;
 
 import java.io.*;
+import java.security.Principal;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
 import java.net.SocketException;
@@ -66,8 +72,36 @@ public class FusionPipelineClient {
         System.setProperty("sun.security.krb5.debug", "true");
         System.setProperty("java.security.auth.login.config", jassFile);
         System.setProperty("solr.kerberos.jaas.appname", appname);
-        SolrHttpClientBuilder httpClientBuilder = new Krb5HttpClientBuilder().getBuilder();
-        HttpClientUtil.setHttpClientBuilder(httpClientBuilder);
+        // Solr 10's SolrJ removed Krb5HttpClientBuilder/HttpClientUtil/SolrHttpClientBuilder
+        // (the whole pluggable Apache-HttpClient-based auth builder framework this used to
+        // delegate to). This client talks to Fusion's own pipeline REST API over a plain Apache
+        // HttpClient (not through SolrJ at all), so the Kerberos/SPNEGO client is now built
+        // directly below with Apache HttpClient's own SPNegoSchemeFactory instead.
+    }
+
+    // Builds a JAAS/SPNEGO-authenticating Apache HttpClient, replacing what used to be
+    // constructed via SolrJ's now-removed Krb5HttpClientBuilder + HttpClientUtil.createClient().
+    private static CloseableHttpClient buildKerberosHttpClient() {
+        Credentials useJaasCreds = new Credentials() {
+            public String getPassword() {
+                return null;
+            }
+
+            public Principal getUserPrincipal() {
+                return null;
+            }
+        };
+        CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+        credentialsProvider.setCredentials(new AuthScope(null, -1, null), useJaasCreds);
+
+        Lookup<org.apache.http.auth.AuthSchemeProvider> authSchemeRegistry = RegistryBuilder.<org.apache.http.auth.AuthSchemeProvider>create()
+                .register(AuthSchemes.SPNEGO, new SPNegoSchemeFactory(true))
+                .build();
+
+        return HttpClientBuilder.create()
+                .setDefaultAuthSchemeRegistry(authSchemeRegistry)
+                .setDefaultCredentialsProvider(credentialsProvider)
+                .build();
     }
 
     // for basic auth to the pipeline service
@@ -140,7 +174,7 @@ public class FusionPipelineClient {
         String lwwJaasFile = System.getProperty(LWWW_JAAS_FILE);
         if (lwwJaasFile != null && !lwwJaasFile.isEmpty()) {
             setSecurityConfig(lwwJaasFile);
-            httpClient = HttpClientUtil.createClient(null);
+            httpClient = buildKerberosHttpClient();
             isKerberos = true;
         } else {
             HttpClientBuilder httpClientBuilder = HttpClientBuilder.create();
