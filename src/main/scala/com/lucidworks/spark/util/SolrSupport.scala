@@ -21,7 +21,7 @@ import org.apache.solr.client.solrj.{SolrClient, SolrQuery, SolrServerException}
 import org.apache.solr.common.cloud._
 import org.apache.solr.common.{SolrDocument, SolrException, SolrInputDocument}
 import org.apache.solr.common.params.ModifiableSolrParams
-import org.apache.solr.common.util.SimpleOrderedMap
+import org.apache.solr.common.util.{NamedList, SimpleOrderedMap}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.zookeeper.KeeperException.{OperationTimeoutException, SessionExpiredException}
@@ -86,7 +86,22 @@ object SolrSupport extends LazyLogging {
     val baseUrl = getSolrBaseUrl(zkHost)
     val httpSolrClient = getHttpSolrClient(baseUrl, zkHost)
     val rsp = httpSolrClient.query(sysQuery)
-    String.valueOf(rsp.getResponse.get("lucene").asInstanceOf[SimpleOrderedMap[_]].get("solr-spec-version"))
+    extractSolrSpecVersion(rsp.getResponse.get("lucene"))
+  }
+
+  // SOLR-16458 migrated /admin/info/system to a JAX-RS/typed response starting in Solr 10.1, so
+  // the nested "lucene" entry deserializes as a plain LinkedHashMap there instead of the
+  // SimpleOrderedMap (a NamedList) that older Solr (including 10.0.0) still returns. Handle both
+  // shapes rather than pinning to one Solr line.
+  private[util] def extractSolrSpecVersion(lucene: AnyRef): String = {
+    val specVersion = lucene match {
+      case nl: NamedList[_] => nl.get("solr-spec-version")
+      case m: java.util.Map[_, _] => m.get("solr-spec-version")
+      case other =>
+        throw new IllegalStateException(
+          s"Unexpected type for 'lucene' entry in /admin/info/system response: ${other.getClass}")
+    }
+    String.valueOf(specVersion)
   }
 
   def isSolrVersionAtleast(solrVersion: String, major: Int, minor: Int, trivial: Int): Boolean = {
